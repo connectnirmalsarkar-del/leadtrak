@@ -151,7 +151,7 @@ export default function PlatformOrgsPage() {
   const closeDialog = () => {
     setShowDialog(false);
     setCreated(null);
-    setForm({ organization_name: '', industry: 'education', admin_name: '', admin_email: '', admin_password: '', subscription_plan: 'starter' });
+    setForm({ organization_name: '', industry: 'education', admin_name: '', admin_email: '', admin_mobile: '', admin_password: '', subscription_plan: 'starter' });
   };
 
   const openManualPayment = (org) => {
@@ -285,6 +285,10 @@ export default function PlatformOrgsPage() {
                   <div className="space-y-1.5">
                     <Label>Admin Email *</Label>
                     <Input type="email" value={form.admin_email} onChange={(e) => setForm({ ...form, admin_email: e.target.value })} placeholder="admin@apex.com" data-testid="admin-email-field" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Admin Mobile / Phone</Label>
+                    <Input type="tel" value={form.admin_mobile} onChange={(e) => setForm({ ...form, admin_mobile: e.target.value })} placeholder="+91 98765 43210" data-testid="admin-mobile-field" />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Admin Password *</Label>

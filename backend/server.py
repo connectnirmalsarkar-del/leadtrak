@@ -4389,6 +4389,7 @@ class PlatformOrgCreate(BaseModel):
     industry: Optional[str] = "education"
     admin_name: str
     admin_email: EmailStr
+    admin_mobile: Optional[str] = None
     admin_password: str
     subscription_plan: Optional[str] = "starter"
 
@@ -4474,6 +4475,7 @@ async def create_organization(data: PlatformOrgCreate, current_user: dict = Depe
         "email": email,
         "password_hash": hash_password(data.admin_password),
         "name": data.admin_name,
+        "mobile": (data.admin_mobile or "").strip() or None,
         "role": "org_admin",
         "organization_id": org_id,
         "active": True,
