@@ -196,10 +196,16 @@ export default function DashboardPage() {
     }).catch((e) => console.error(e));
   }, []);
 
-  // Build sparkline data from monthly trend
-  const sparkData = monthlyTrend.length > 0
-    ? monthlyTrend.slice(-6).map((m, i) => ({ v: m.count }))
-    : [1, 3, 2, 5, 4, 7].map((v) => ({ v }));
+  // Build sparkline data from monthly trend (with safe fallback when data is sparse)
+  const sparkData = (() => {
+    const fallback = [1, 3, 2, 5, 4, 7].map((v) => ({ v }));
+    if (!monthlyTrend || monthlyTrend.length < 2) return fallback;
+    const points = monthlyTrend.slice(-6).map((m) => ({ v: Number(m.count) || 0 }));
+    // If every point is 0 or identical, the area chart looks empty — use fallback shape
+    const distinct = new Set(points.map((p) => p.v));
+    if (distinct.size <= 1) return fallback;
+    return points;
+  })();
 
   return (
     <div className="max-w-[1440px] mx-auto space-y-6" data-testid="dashboard-page">
