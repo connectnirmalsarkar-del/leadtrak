@@ -34,6 +34,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useTerminology } from '@/lib/terminology';
+import OnboardingWizard from '@/components/onboarding/OnboardingWizard';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -402,6 +403,7 @@ export default function DashboardLayout({ children }) {
         {/* Page Content */}
         <main className="p-6">{children}</main>
       </div>
+      <OnboardingWizard />
     </div>
   );
 }

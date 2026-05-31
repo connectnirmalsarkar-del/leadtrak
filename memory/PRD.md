@@ -229,6 +229,15 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Lead Add form: **State** and **City** are now cascading Select dropdowns (city options re-populate when state changes)
 - ✅ New page **/platform/locations** for Super Admin — search, state filter, toggle active/inactive, edit, delete, custom vs default badges
 
+### Completed 2026-05-31 — Onboarding Wizard
+- ✅ 5-step guided setup wizard for new org admins (Welcome → Services → Team → Lead Source → First Lead)
+- ✅ Smart auto-detection — pre-marks steps as complete if data already exists (services in catalog, additional users, leads imported)
+- ✅ Per-step inline forms — add a service (with floor price), invite a team member (auto temp password Welcome@123), pick lead source (Widget/FB/Google → deep-link), add first lead
+- ✅ Endpoints (org_admin only, counselor gets 403): `GET /api/onboarding/state`, `POST /api/onboarding/advance`, `POST /api/onboarding/skip`, `POST /api/onboarding/reset`
+- ✅ Auto-mounted globally in `DashboardLayout` — dismissable with "Skip" or X; "Re-show wizard" button in Settings
+- ✅ Gradient violet→fuchsia header with progress dots, step counter, completion percentage
+- ✅ Persists to `organizations.onboarding.{completed_steps, completed_at, skipped, skipped_at}`
+
 ### Completed 2026-05-31 — Final QA Pass + 3 LOW-priority polish
 - ✅ **Iteration 9 final QA — 100% pass:** 83/83 backend tests (25 new + 58 regression) + 14/14 frontend flows + RBAC + tenant isolation + mobile responsiveness
 - ✅ Verified end-to-end: Auth (3 roles), Dashboard, Leads CRUD with cascading State/City + industry extras, Follow-ups, Demos, Admissions, Tasks, Reports, Services, Users, Integrations, Webhook Health (NEW), Lead Widget (services-connected dropdown + state/city + Powered by Leadtrak), Subscription, Support, Activity Logs, Platform Orgs (4 tabs), Platform Locations (36 states / 386 cities incl. WB 186)

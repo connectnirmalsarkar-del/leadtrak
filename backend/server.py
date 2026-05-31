@@ -2760,6 +2760,102 @@ async def platform_delete_city(city_id: str, current_user: dict = Depends(get_cu
 
 
 
+# ==================== Onboarding Wizard ====================
+ONBOARDING_STEPS = [
+    "welcome",     # 0 — confirm industry / branding (auto-done on signup)
+    "services",    # 1 — add at least one service
+    "team",        # 2 — invite first team member (or skip)
+    "lead_source", # 3 — review a lead source (Widget / FB / Google)
+    "first_lead",  # 4 — add first lead (or skip)
+]
+
+
+class OnboardingAdvance(BaseModel):
+    step: str  # name from ONBOARDING_STEPS
+    data: Optional[dict] = None
+
+
+@api_router.get("/onboarding/state")
+async def onboarding_state(current_user: dict = Depends(get_current_user)):
+    """Return current org's onboarding progress."""
+    if current_user["role"] not in ("org_admin", "super_admin"):
+        return {"completed": True, "step_index": len(ONBOARDING_STEPS), "completed_steps": ONBOARDING_STEPS}
+    org_id = ObjectId(current_user["organization_id"])
+    org = await db.organizations.find_one({"_id": org_id}, {"onboarding": 1, "name": 1, "created_at": 1, "industry": 1})
+    onb = org.get("onboarding") or {}
+    completed_steps = onb.get("completed_steps") or []
+    skipped = onb.get("skipped", False)
+    completed = bool(onb.get("completed_at")) or skipped
+    # Auto-detect partial completion from existing data (for orgs created before onboarding existed)
+    if not completed and "welcome" not in completed_steps and org.get("industry"):
+        completed_steps.append("welcome")
+    if not completed and "services" not in completed_steps:
+        if await db.services.count_documents({"organization_id": org_id, "active": {"$ne": False}}) > 0:
+            completed_steps.append("services")
+    if not completed and "team" not in completed_steps:
+        # Anyone besides the original admin
+        if await db.users.count_documents({"organization_id": org_id}) > 1:
+            completed_steps.append("team")
+    if not completed and "first_lead" not in completed_steps:
+        if await db.leads.count_documents({"organization_id": org_id}) > 0:
+            completed_steps.append("first_lead")
+    step_index = next((i for i, s in enumerate(ONBOARDING_STEPS) if s not in completed_steps), len(ONBOARDING_STEPS))
+    return {
+        "completed": step_index >= len(ONBOARDING_STEPS) or completed,
+        "skipped": skipped,
+        "step_index": step_index,
+        "completed_steps": completed_steps,
+        "all_steps": ONBOARDING_STEPS,
+        "industry": org.get("industry"),
+        "org_name": org.get("name"),
+    }
+
+
+@api_router.post("/onboarding/advance")
+async def onboarding_advance(data: OnboardingAdvance, current_user: dict = Depends(get_current_user)):
+    """Mark a step as completed."""
+    if current_user["role"] not in ("org_admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only Org Admin can advance onboarding")
+    if data.step not in ONBOARDING_STEPS:
+        raise HTTPException(status_code=400, detail="Invalid step")
+    org_id = ObjectId(current_user["organization_id"])
+    now = datetime.now(timezone.utc)
+    await db.organizations.update_one(
+        {"_id": org_id},
+        {"$addToSet": {"onboarding.completed_steps": data.step},
+         "$set": {"onboarding.last_advanced_at": now}}
+    )
+    # If all steps done, mark completed
+    org = await db.organizations.find_one({"_id": org_id}, {"onboarding": 1})
+    completed_steps = (org.get("onboarding") or {}).get("completed_steps", [])
+    if all(s in completed_steps for s in ONBOARDING_STEPS):
+        await db.organizations.update_one({"_id": org_id}, {"$set": {"onboarding.completed_at": now}})
+    return {"status": "ok", "completed_steps": completed_steps}
+
+
+@api_router.post("/onboarding/skip")
+async def onboarding_skip(current_user: dict = Depends(get_current_user)):
+    """Permanently dismiss the wizard."""
+    if current_user["role"] not in ("org_admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only Org Admin can skip onboarding")
+    org_id = ObjectId(current_user["organization_id"])
+    await db.organizations.update_one(
+        {"_id": org_id},
+        {"$set": {"onboarding.skipped": True, "onboarding.skipped_at": datetime.now(timezone.utc)}}
+    )
+    return {"status": "ok"}
+
+
+@api_router.post("/onboarding/reset")
+async def onboarding_reset(current_user: dict = Depends(get_current_user)):
+    """Re-show the wizard (useful for re-onboarding)."""
+    if current_user["role"] not in ("org_admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only Org Admin can reset onboarding")
+    org_id = ObjectId(current_user["organization_id"])
+    await db.organizations.update_one({"_id": org_id}, {"$unset": {"onboarding": ""}})
+    return {"status": "ok"}
+
+
 # ==================== Reports Routes ====================
 @api_router.get("/reports/lead-summary")
 async def get_lead_summary_report(

@@ -148,6 +148,25 @@ export default function SettingsPage() {
         <p className="text-sm text-slate-600 mt-1">Manage your company profile, lead sources, and integrations.</p>
       </div>
 
+      <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-violet-900">Onboarding Guide</p>
+          <p className="text-xs text-violet-700 mt-0.5">Re-run the 5-step setup wizard to revisit any skipped step.</p>
+        </div>
+        <button
+          onClick={async () => {
+            try {
+              await axios.post(`${API}/onboarding/reset`);
+              toast.success('Setup guide re-enabled — reload the page to see it.');
+            } catch (e) { toast.error('Failed'); }
+          }}
+          className="text-sm font-semibold text-violet-700 hover:text-violet-900 px-3 py-1.5 rounded-md hover:bg-violet-100 transition-colors"
+          data-testid="reopen-onboarding-btn"
+        >
+          Re-show wizard →
+        </button>
+      </div>
+
       <Tabs defaultValue="company">
         <TabsList className="bg-slate-100">
           <TabsTrigger value="company" data-testid="tab-company"><Building2 className="w-4 h-4 mr-1.5" />Company Profile</TabsTrigger>
