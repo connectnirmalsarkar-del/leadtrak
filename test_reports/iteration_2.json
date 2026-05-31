@@ -1,0 +1,37 @@
+{
+  "summary": "Backend testing for Support Ticket System refinement. 19/19 pytest tests passed covering Cloudinary uploads (size/type/count), role-based ticket visibility (super_admin/org_admin/manager/counselor/telecaller), notification creation on reply & status change, and super-admin-only reply deletion. Real Cloudinary uploads succeeded (file actually stored). No bugs found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/support-tickets", "issue": "Ticket number generation uses count_documents({}) which can produce duplicate ticket_no under race condition or after deletions; consider a counter collection or unique index. Non-blocking."},
+      {"endpoint": "POST /api/uploads/ticket-attachment", "issue": "Uploaded file is not linked to a ticket at upload time, so an uploaded blob is never cleaned up if user abandons the form (orphan in Cloudinary). Minor cost/cleanup concern."},
+      {"endpoint": "PUT /api/support-tickets/{tid}/status", "issue": "No validation that data.status is one of the allowed values (open/in_progress/resolved/closed). Any arbitrary string is persisted."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_support_tickets.py",
+    "/app/test_reports/pytest/iteration_2_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Validate status enum in PUT /api/support-tickets/{tid}/status to reject unknown values.",
+    "(Optional) Add a unique index on support_tickets.ticket_no and switch to atomic counter to avoid collision risk under load.",
+    "(Optional) Provide a way to delete orphaned Cloudinary uploads (e.g., delete attachment endpoint or TTL-based cleanup)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~1888 lines — well above the 700-line guideline. Consider splitting into routers/modules (auth, tickets, leads, etc.) for maintainability.",
+    "ticket_no derivation via count_documents is not atomic; vulnerable to duplicates if two tickets are created concurrently or after deletions.",
+    "TicketStatusUpdate.status has no enum validation — any string accepted (would also produce a generic notification message).",
+    "_can_access_ticket only checks creator for non-admin roles, which matches the spec; however, there is no concept of assignee — fine for current requirements but flagging for future feature.",
+    "upload_ticket_attachment reads entire file into memory before checking size; for large rejected files this still pulls bytes into RAM. Acceptable since max is 200KB but worth noting.",
+    "Notification documents store organization_id as ObjectId (from ticket) — confirmed get_notifications projects it out, so no ObjectId serialization issues observed."
+  ],
+  "updated_files": ["/app/backend/tests/test_support_tickets.py"],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "Used demo creds from /app/memory/test_credentials.md — all 5 roles login successful with httpOnly cookie session.",
+  "seed_data_creation": "Created 2 test tickets (TEST_Counselor ticket, TEST_Telecaller ticket) plus replies and 1 Cloudinary image upload (~10KB PNG). Not cleaned up — may appear in dashboards as TEST_ prefixed tickets.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Support ticket backend is fully working as specified: Cloudinary upload + size/mime validation, role-based visibility, notifications, super-admin reply delete. Test seed: a few TEST_ prefixed tickets exist in demo org. If frontend testing is added, focus on attachment UI (5-file/200KB client guard), reply form, status dropdown for admins only, and delete-reply icon visible only to super_admin.",
+  "rca of the issue": "No bugs encountered. All requested behaviors verified end-to-end against the live preview backend."
+}
