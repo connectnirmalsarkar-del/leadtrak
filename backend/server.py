@@ -19,6 +19,8 @@ import bcrypt
 import jwt
 import razorpay
 import secrets
+import cloudinary
+import cloudinary.uploader
 from openpyxl import Workbook
 
 # MongoDB connection
@@ -32,6 +34,14 @@ JWT_ALGORITHM = "HS256"
 
 # Razorpay Configuration
 razorpay_client = razorpay.Client(auth=(os.environ.get("RAZORPAY_KEY_ID", ""), os.environ.get("RAZORPAY_KEY_SECRET", "")))
+
+# Cloudinary Configuration
+cloudinary.config(
+    cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.environ.get("CLOUDINARY_API_KEY"),
+    api_secret=os.environ.get("CLOUDINARY_API_SECRET"),
+    secure=True,
+)
 
 # Create the main app
 app = FastAPI()
@@ -1634,21 +1644,64 @@ async def delete_organization(org_id: str, current_user: dict = Depends(get_curr
     return {"message": "Organization and all related data deleted"}
 
 # ==================== Support Tickets ====================
+ALLOWED_TICKET_MIME = {
+    "image/jpeg", "image/jpg", "image/png", "image/webp",
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+}
+MAX_TICKET_FILE_SIZE = 200 * 1024  # 200 KB
+MAX_TICKET_FILES = 5
+
 class TicketCreate(BaseModel):
     subject: str
     category: str
     priority: str = "Medium"
     message: str
+    attachments: Optional[List[Dict[str, Any]]] = []
 
 class TicketReply(BaseModel):
     message: str
+    attachments: Optional[List[Dict[str, Any]]] = []
 
 class TicketStatusUpdate(BaseModel):
     status: str
 
+@api_router.post("/uploads/ticket-attachment")
+async def upload_ticket_attachment(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    if not os.environ.get("CLOUDINARY_CLOUD_NAME"):
+        raise HTTPException(status_code=500, detail="File uploads not configured. Please add Cloudinary credentials.")
+    if file.content_type not in ALLOWED_TICKET_MIME:
+        raise HTTPException(status_code=400, detail=f"File type {file.content_type} not allowed. Use JPG, PNG, PDF, or Excel.")
+    content = await file.read()
+    if len(content) > MAX_TICKET_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Max 200 KB allowed.")
+    is_image = file.content_type.startswith("image/")
+    resource_type = "image" if is_image else "raw"
+    folder = f"educrm/tickets/{current_user['organization_id']}"
+    try:
+        result = cloudinary.uploader.upload(
+            content,
+            folder=folder,
+            resource_type=resource_type,
+        )
+    except Exception as e:
+        logger.error(f"Cloudinary upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Upload failed")
+    return {
+        "url": result.get("secure_url"),
+        "public_id": result.get("public_id"),
+        "resource_type": resource_type,
+        "filename": file.filename,
+        "size": len(content),
+        "mime_type": file.content_type,
+    }
+
 @api_router.post("/support-tickets")
 async def create_ticket(data: TicketCreate, current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
+    if data.attachments and len(data.attachments) > MAX_TICKET_FILES:
+        raise HTTPException(status_code=400, detail=f"Maximum {MAX_TICKET_FILES} attachments allowed")
     ticket_count = await db.support_tickets.count_documents({})
     ticket_no = f"TKT{ticket_count + 1:05d}"
     doc = {
@@ -1658,10 +1711,12 @@ async def create_ticket(data: TicketCreate, current_user: dict = Depends(get_cur
         "priority": data.priority,
         "status": "open",
         "messages": [{
+            "id": secrets.token_urlsafe(8),
             "sender_id": current_user["id"],
             "sender_name": current_user["name"],
             "sender_role": current_user["role"],
             "message": data.message,
+            "attachments": data.attachments or [],
             "timestamp": datetime.now(timezone.utc),
         }],
         "organization_id": org_id,
@@ -1678,26 +1733,43 @@ async def create_ticket(data: TicketCreate, current_user: dict = Depends(get_cur
 
 @api_router.get("/support-tickets")
 async def list_tickets(current_user: dict = Depends(get_current_user)):
-    if current_user["role"] == "super_admin":
+    role = current_user["role"]
+    if role == "super_admin":
         query = {}
-    else:
+    elif role == "org_admin":
         query = {"organization_id": ObjectId(current_user["organization_id"])}
+    else:
+        # manager/counselor/telecaller — only their own tickets
+        query = {
+            "organization_id": ObjectId(current_user["organization_id"]),
+            "created_by": current_user["id"],
+        }
     tickets = await db.support_tickets.find(query, {"messages": 0}).sort("updated_at", -1).to_list(500)
     for t in tickets:
         t["_id"] = str(t["_id"])
         t["organization_id"] = str(t.get("organization_id", ""))
-        # Populate org name for super admin
-        if current_user["role"] == "super_admin":
+        if role == "super_admin":
             org = await db.organizations.find_one({"_id": ObjectId(t["organization_id"])}, {"name": 1})
             t["organization_name"] = org["name"] if org else ""
     return tickets
+
+def _can_access_ticket(ticket: dict, current_user: dict) -> bool:
+    role = current_user["role"]
+    if role == "super_admin":
+        return True
+    if str(ticket["organization_id"]) != current_user["organization_id"]:
+        return False
+    if role == "org_admin":
+        return True
+    # other roles — only the creator
+    return ticket.get("created_by") == current_user["id"]
 
 @api_router.get("/support-tickets/{tid}")
 async def get_ticket(tid: str, current_user: dict = Depends(get_current_user)):
     ticket = await db.support_tickets.find_one({"_id": ObjectId(tid)})
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    if current_user["role"] != "super_admin" and str(ticket["organization_id"]) != current_user["organization_id"]:
+    if not _can_access_ticket(ticket, current_user):
         raise HTTPException(status_code=403, detail="Not authorized")
     ticket["_id"] = str(ticket["_id"])
     ticket["organization_id"] = str(ticket["organization_id"])
@@ -1713,32 +1785,90 @@ async def reply_ticket(tid: str, data: TicketReply, current_user: dict = Depends
     ticket = await db.support_tickets.find_one({"_id": ObjectId(tid)})
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    if current_user["role"] != "super_admin" and str(ticket["organization_id"]) != current_user["organization_id"]:
+    if not _can_access_ticket(ticket, current_user):
         raise HTTPException(status_code=403, detail="Not authorized")
+    if data.attachments and len(data.attachments) > MAX_TICKET_FILES:
+        raise HTTPException(status_code=400, detail=f"Maximum {MAX_TICKET_FILES} attachments allowed")
     new_msg = {
+        "id": secrets.token_urlsafe(8),
         "sender_id": current_user["id"],
         "sender_name": current_user["name"],
         "sender_role": current_user["role"],
         "message": data.message,
+        "attachments": data.attachments or [],
         "timestamp": datetime.now(timezone.utc),
     }
     await db.support_tickets.update_one(
         {"_id": ObjectId(tid)},
         {"$push": {"messages": new_msg}, "$set": {"updated_at": datetime.now(timezone.utc)}},
     )
+    # Notify the creator if reply is from staff (super_admin / org_admin)
+    if current_user["role"] in ("super_admin", "org_admin") and ticket.get("created_by") != current_user["id"]:
+        await db.notifications.insert_one({
+            "user_id": ticket["created_by"],
+            "message": f"New reply on your ticket {ticket['ticket_no']}: {ticket['subject']}",
+            "type": "ticket_reply",
+            "ticket_id": str(ticket["_id"]),
+            "read": False,
+            "organization_id": ticket["organization_id"],
+            "created_at": datetime.now(timezone.utc),
+        })
     return {"message": "Reply added"}
+
+@api_router.delete("/support-tickets/{tid}/messages/{msg_id}")
+async def delete_ticket_message(tid: str, msg_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Only super admin can delete replies")
+    ticket = await db.support_tickets.find_one({"_id": ObjectId(tid)})
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    # Find message to optionally clean up Cloudinary attachments
+    msg = next((m for m in ticket.get("messages", []) if m.get("id") == msg_id), None)
+    if msg:
+        for att in msg.get("attachments", []) or []:
+            try:
+                pid = att.get("public_id")
+                if pid:
+                    cloudinary.uploader.destroy(pid, resource_type=att.get("resource_type", "image"), invalidate=True)
+            except Exception as e:
+                logger.warning(f"Cloudinary delete failed: {e}")
+    await db.support_tickets.update_one(
+        {"_id": ObjectId(tid)},
+        {"$pull": {"messages": {"id": msg_id}}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+    )
+    return {"message": "Reply deleted"}
 
 @api_router.put("/support-tickets/{tid}/status")
 async def update_ticket_status(tid: str, data: TicketStatusUpdate, current_user: dict = Depends(get_current_user)):
     ticket = await db.support_tickets.find_one({"_id": ObjectId(tid)})
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    if current_user["role"] not in ["super_admin", "org_admin"] and str(ticket["organization_id"]) != current_user["organization_id"]:
+    if current_user["role"] not in ("super_admin", "org_admin"):
         raise HTTPException(status_code=403, detail="Not authorized")
+    if current_user["role"] == "org_admin" and str(ticket["organization_id"]) != current_user["organization_id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    old_status = ticket.get("status")
     await db.support_tickets.update_one(
         {"_id": ObjectId(tid)},
         {"$set": {"status": data.status, "updated_at": datetime.now(timezone.utc)}},
     )
+    # Notify creator on status change
+    if old_status != data.status and ticket.get("created_by") != current_user["id"]:
+        status_msg = {
+            "resolved": "✅ Your ticket has been resolved",
+            "in_progress": "🔄 Your ticket is now in progress",
+            "closed": "Your ticket has been closed",
+            "open": "Your ticket has been reopened",
+        }.get(data.status, f"Ticket status changed to {data.status}")
+        await db.notifications.insert_one({
+            "user_id": ticket["created_by"],
+            "message": f"{status_msg}: {ticket['subject']}",
+            "type": "ticket_status",
+            "ticket_id": str(ticket["_id"]),
+            "read": False,
+            "organization_id": ticket["organization_id"],
+            "created_at": datetime.now(timezone.utc),
+        })
     return {"status": data.status}
 
 # Include the router in the main app

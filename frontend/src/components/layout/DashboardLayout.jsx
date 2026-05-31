@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/context/AuthContext';
+import axios from 'axios';
+import { useAuth, API } from '@/context/AuthContext';
 import {
   LayoutDashboard,
   Users,
@@ -62,6 +63,40 @@ export default function DashboardLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchNotifs = () => {
+      axios.get(`${API}/notifications`).then(({ data }) => setNotifications(data)).catch(() => {});
+    };
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const markAllRead = async () => {
+    const unread = notifications.filter((n) => !n.read);
+    await Promise.all(unread.map((n) => axios.put(`${API}/notifications/${n._id}/read`).catch(() => {})));
+    setNotifications(notifications.map((n) => ({ ...n, read: true })));
+  };
+
+  const openNotif = async (notif) => {
+    if (!notif.read) {
+      await axios.put(`${API}/notifications/${notif._id}/read`).catch(() => {});
+    }
+    setShowNotifPanel(false);
+    if (notif.type === 'ticket_status' || notif.type === 'ticket_reply') {
+      navigate('/support');
+    } else if (notif.type === 'lead_assigned') {
+      navigate('/leads');
+    } else if (notif.type === 'task_assigned') {
+      navigate('/tasks');
+    }
+  };
 
   const isAdmin = user && ['super_admin', 'org_admin', 'manager'].includes(user.role);
   const isSuperAdmin = user && user.role === 'super_admin';
@@ -206,9 +241,49 @@ export default function DashboardLayout({ children }) {
           </div>
 
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" data-testid="notifications-btn">
-              <Bell className="w-5 h-5 text-slate-600" />
-            </Button>
+            <div className="relative">
+              <Button variant="ghost" size="icon" onClick={() => setShowNotifPanel(!showNotifPanel)} data-testid="notifications-btn">
+                <Bell className="w-5 h-5 text-slate-600" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center" data-testid="notif-badge">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </Button>
+              {showNotifPanel && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowNotifPanel(false)}></div>
+                  <div className="absolute right-0 top-12 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-40 max-h-[480px] overflow-hidden flex flex-col" data-testid="notif-panel">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+                      <p className="text-sm font-semibold text-slate-900">Notifications</p>
+                      {unreadCount > 0 && (
+                        <button onClick={markAllRead} className="text-xs text-violet-700 hover:text-violet-800 font-medium" data-testid="mark-all-read-btn">Mark all read</button>
+                      )}
+                    </div>
+                    <div className="overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="py-8 px-4 text-center text-sm text-slate-400">No notifications</div>
+                      ) : (
+                        notifications.slice(0, 20).map((n) => (
+                          <button
+                            key={n._id}
+                            onClick={() => openNotif(n)}
+                            className={`w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-100 ${!n.read ? 'bg-violet-50/40' : ''}`}
+                            data-testid={`notif-${n._id}`}
+                          >
+                            <div className="flex items-start gap-2">
+                              {!n.read && <span className="w-2 h-2 rounded-full bg-violet-600 mt-1.5 flex-shrink-0"></span>}
+                              <p className={`text-xs ${n.read ? 'text-slate-600' : 'text-slate-900 font-medium'} flex-1`}>{n.message}</p>
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
