@@ -70,6 +70,23 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Frontend `SupportTicketsPage.jsx` — full UI with file uploader, attachment previews, status dropdown, role-based controls
 - ✅ Backend testing: 19/19 pytest tests passed (iteration_2.json)
 
+### Phase 5 — Lead 360° Intelligence (2026-05-31) ✅ COMPLETE
+- ✅ **`lead_timeline` collection** — every meaningful event auto-logged with actor, role, timestamp, payload
+  - Events: `lead_created`, `status_changed`, `assigned`, `transferred`, `followup_added`, `admission_recorded`, `lead_lost`
+  - Helper `log_lead_event()` wired into create/update/transfer/followup/admission flows
+- ✅ **GET `/api/leads/{id}/timeline`** — chronological feed, tenant-isolated
+- ✅ **Duplicate hard-block** — POST `/api/leads` returns 409 on mobile OR email match with existing_lead payload
+- ✅ **GET `/api/leads/check-duplicate`** — live check used on Add Lead form blur
+- ✅ **POST `/api/leads/{id}/transfer`** — RBAC enforced (only manager/org_admin/super_admin), logs `transferred` event with from/to/reason, notifies new assignee
+- ✅ **Voice recording upload** — POST `/api/uploads/voice-recording` to Cloudinary (3 MB / 180 sec max, mime whitelist, role-gated)
+- ✅ **Followup** model + endpoint extended with `voice_recording_url`, `voice_recording_public_id`, `voice_recording_duration`
+- ✅ **Frontend `VoiceRecorder` component** (`/app/frontend/src/components/VoiceRecorder.jsx`) — MediaRecorder API, 3-min timer auto-stop, preview before upload, inline playback after upload
+- ✅ **Frontend `LeadTimeline` component** (`/app/frontend/src/components/LeadTimeline.jsx`) — vertical event feed with color-coded icons per event type, audio playback inline
+- ✅ **LeadsPage refactored** — Detail Sheet now has Details + Timeline tabs, Transfer dialog with reason field, Assigned-To row shows current owner + transfer button (manager+admin only), Add Lead form does live duplicate check on mobile/email blur with inline red warning and disabled submit
+- ✅ **FollowupsPage cards** show inline voice playback when a voice note is attached
+- ✅ Mongo indexes added: `leads(org_id, mobile)`, `leads(org_id, email)`, `lead_timeline(lead_id, created_at)`, `lead_timeline(org_id, created_at desc)`
+- ✅ Backend testing: **60/60 tests passed** (24 new + 36 regression) — iteration_4.json
+
 ### Phase 4 — Multi-Industry Foundation + Rebrand (2026-05-31) ✅ COMPLETE
 - ✅ 9 industry templates: Education, IT/Software, Real Estate, Healthcare, Insurance, Travel, Retail, Fitness, Generic
 - ✅ `industry_config.py` central registry (terms, default sources/statuses/pipeline stages, icons, taglines)
