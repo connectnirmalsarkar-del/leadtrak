@@ -137,6 +137,14 @@ async def record_failed_attempt(identifier: str):
 async def clear_failed_attempts(identifier: str):
     await db.login_attempts.delete_one({"identifier": identifier})
 
+
+def safe_object_id(value: str, field: str = "id") -> ObjectId:
+    """Convert a string to ObjectId or raise HTTP 400 (instead of bson InvalidId → 500)."""
+    try:
+        return ObjectId(value)
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"Invalid {field}")
+
 # ==================== Lead Timeline Helper ====================
 async def log_lead_event(
     lead_id, event_type: str, payload: dict, user: dict, organization_id
@@ -236,7 +244,7 @@ class AdmissionCreate(BaseModel):
     # New service catalog + discount fields (Phase 6)
     service_id: Optional[str] = None
     base_price: Optional[float] = None
-    discount_amount: Optional[float] = 0
+    discount_amount: Optional[float] = Field(0, ge=0)
     discount_reason: Optional[str] = ""
 
 class ServiceCreate(BaseModel):
@@ -704,13 +712,14 @@ async def create_service(data: ServiceCreate, current_user: dict = Depends(get_c
 async def update_service(service_id: str, data: ServiceUpdate, current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ("super_admin", "org_admin", "manager"):
         raise HTTPException(status_code=403, detail="Only managers and admins can manage services")
+    sid = safe_object_id(service_id, "service_id")
     org_id = ObjectId(current_user["organization_id"])
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     if not update_data:
         raise HTTPException(status_code=400, detail="No data to update")
     # Validate min_price ≤ base_price if both being modified, else against existing
     if "min_price" in update_data or "base_price" in update_data:
-        existing = await db.services.find_one({"_id": ObjectId(service_id), "organization_id": org_id})
+        existing = await db.services.find_one({"_id": sid, "organization_id": org_id})
         if not existing:
             raise HTTPException(status_code=404, detail="Service not found")
         base = update_data.get("base_price", existing.get("base_price", 0))
@@ -718,7 +727,7 @@ async def update_service(service_id: str, data: ServiceUpdate, current_user: dic
         if mn > base:
             raise HTTPException(status_code=400, detail="Min price cannot exceed base price")
     result = await db.services.update_one(
-        {"_id": ObjectId(service_id), "organization_id": org_id},
+        {"_id": sid, "organization_id": org_id},
         {"$set": update_data},
     )
     if result.matched_count == 0:
@@ -730,8 +739,9 @@ async def update_service(service_id: str, data: ServiceUpdate, current_user: dic
 async def delete_service(service_id: str, current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ("super_admin", "org_admin", "manager"):
         raise HTTPException(status_code=403, detail="Only managers and admins can manage services")
+    sid = safe_object_id(service_id, "service_id")
     org_id = ObjectId(current_user["organization_id"])
-    result = await db.services.delete_one({"_id": ObjectId(service_id), "organization_id": org_id})
+    result = await db.services.delete_one({"_id": sid, "organization_id": org_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Service not found")
     return {"message": "Service deleted"}
@@ -1261,27 +1271,39 @@ async def create_admission(data: AdmissionCreate, current_user: dict = Depends(g
     # Validate against service min_price (Phase 6) if a service is referenced
     service = None
     if data.service_id:
-        service = await db.services.find_one({"_id": ObjectId(data.service_id), "organization_id": org_id})
+        sid = safe_object_id(data.service_id, "service_id")
+        service = await db.services.find_one({"_id": sid, "organization_id": org_id})
         if not service:
             raise HTTPException(status_code=404, detail="Service not found")
+        # Server-side authoritative pricing: base from service, discount from input, recompute fees
+        service_base = service.get("base_price", 0)
+        base_price = data.base_price if data.base_price is not None else service_base
+        discount = data.discount_amount or 0
+        # Trust server-recomputed final price (= base − discount), ignore client-sent fees
+        computed_fees = max(0.0, base_price - discount)
         min_price = service.get("min_price", 0)
-        if data.fees < min_price:
+        if computed_fees < min_price:
             raise HTTPException(
                 status_code=400,
-                detail=f"Final price ₹{data.fees:,.0f} is below the minimum allowed (₹{min_price:,.0f}) for this service. Increase the price or reduce the discount.",
+                detail=f"Final price ₹{computed_fees:,.0f} is below the minimum allowed (₹{min_price:,.0f}) for this service. Increase the price or reduce the discount.",
             )
+        final_fees = computed_fees
+    else:
+        base_price = data.base_price
+        discount = data.discount_amount or 0
+        final_fees = data.fees
 
     admission_doc = {
         "student_name": data.student_name,
         "mobile": data.mobile,
         "course": data.course,
-        "fees": data.fees,
+        "fees": final_fees,
         "admission_date": data.admission_date,
         "lead_id": data.lead_id,
         "service_id": data.service_id,
         "service_name": service.get("name") if service else None,
-        "base_price": data.base_price,
-        "discount_amount": data.discount_amount or 0,
+        "base_price": base_price,
+        "discount_amount": discount,
         "discount_reason": data.discount_reason or "",
         "counselor_name": current_user["name"],
         "organization_id": org_id,
@@ -1305,9 +1327,9 @@ async def create_admission(data: AdmissionCreate, current_user: dict = Depends(g
             {
                 "admission_id": admission_doc["_id"],
                 "offering": service.get("name") if service else data.course,
-                "amount": data.fees,
-                "base_price": data.base_price,
-                "discount_amount": data.discount_amount or 0,
+                "amount": final_fees,
+                "base_price": base_price,
+                "discount_amount": discount,
                 "discount_reason": data.discount_reason or "",
                 "date": data.admission_date,
             },

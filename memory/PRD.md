@@ -70,6 +70,30 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Frontend `SupportTicketsPage.jsx` — full UI with file uploader, attachment previews, status dropdown, role-based controls
 - ✅ Backend testing: 19/19 pytest tests passed (iteration_2.json)
 
+### Phase 6 — Services Catalog & Discount Workflow (2026-05-31) ✅ COMPLETE
+- ✅ **`services` collection** + full CRUD endpoints (`GET/POST/PUT/DELETE /api/services`)
+  - Fields: name, category, base_price, **min_price** (discount floor), description, duration, active toggle
+  - RBAC: only manager/org_admin/super_admin can create/edit/delete
+  - Validation: `min_price ≤ base_price` enforced on create + update
+- ✅ **Industry-wise default services** auto-seeded at signup (5 per major industry)
+  - Education: MBA/BBA/PGDM/MCA/BTech CSE
+  - Real Estate: 1/2/3 BHK Apartment, Villa, Commercial
+  - IT/Software: Website, Mobile App, Custom SaaS, DevOps, AMC
+  - Healthcare, Insurance, Travel, Retail, Fitness all seeded
+- ✅ **Existing orgs backfilled** via `seed_services_for_existing_orgs()` migration on startup
+- ✅ **AdmissionCreate** model extended: `service_id`, `base_price`, `discount_amount` (Pydantic `Field(ge=0)`), `discount_reason`
+- ✅ **Server-side authoritative pricing** — when `service_id` provided, backend recomputes `fees = base_price − discount` (ignores client-sent fees to prevent tampering)
+- ✅ **Min-price floor hard-enforced** — POST `/api/admissions` returns 400 if `final_price < service.min_price`
+- ✅ Timeline `admission_recorded` event now carries `base_price`, `discount_amount`, `discount_reason`, `offering` (service name)
+- ✅ **Voice upload limits raised to 5 MB / 5 min** — better suited to "counselor records on phone → uploads from desktop" workflow
+- ✅ **`safe_object_id()` helper** — malformed `ObjectId` strings now return 400 instead of 500 (hardening from code review)
+- ✅ **Frontend `ServicesPage`** at `/services` — full CRUD UI with Add/Edit/Delete dialogs, base/min price columns, active toggle
+- ✅ **Frontend `VoiceRecorder` rewritten** with tabbed UI — **Upload from phone (primary)** + **Record live (secondary)**
+- ✅ **Frontend `AdmissionsPage` rewritten** — service dropdown from catalog, base-price auto-fill, discount input + reason field, live final-price preview (green/red below-floor warning), submit disabled when below floor
+- ✅ Sidebar nav has new "Services & Pricing" item under Admin section
+- ✅ Backend testing: **79/79 tests passed** (19 new + 60 prior regression) — iteration_5.json
+- ✅ Post-test hardening: malformed-ObjectId 400, negative-discount 422, server-side fees recompute — all verified manually
+
 ### Phase 5 — Lead 360° Intelligence (2026-05-31) ✅ COMPLETE
 - ✅ **`lead_timeline` collection** — every meaningful event auto-logged with actor, role, timestamp, payload
   - Events: `lead_created`, `status_changed`, `assigned`, `transferred`, `followup_added`, `admission_recorded`, `lead_lost`
