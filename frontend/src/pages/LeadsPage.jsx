@@ -127,7 +127,31 @@ export default function LeadsPage() {
     fetchLeads();
     fetchUsers();
     fetchServices();
+    fetchStates();
   }, [filterStatus, search]);
+
+  const [states, setStates] = useState([]);
+  const [citiesForState, setCitiesForState] = useState([]);
+
+  const fetchStates = async () => {
+    try {
+      const { data } = await axios.get(`${API}/locations/states`);
+      setStates(data);
+    } catch (e) { /* silent */ }
+  };
+
+  const fetchCitiesForState = async (state) => {
+    if (!state) { setCitiesForState([]); return; }
+    try {
+      const { data } = await axios.get(`${API}/locations/cities`, { params: { state } });
+      setCitiesForState(data.map((c) => c.city));
+    } catch (e) { setCitiesForState([]); }
+  };
+
+  const onStateChange = (state) => {
+    setNewLead({ ...newLead, state, city: '' });
+    fetchCitiesForState(state);
+  };
 
   const fetchLeads = async () => {
     try {
@@ -169,6 +193,7 @@ export default function LeadsPage() {
         name: '', mobile: '', email: '', course_interested: '', state: '', city: '',
         lead_source: 'Website', assigned_to: '', status: 'New', temperature: 'warm'
       });
+      setCitiesForState([]);
       fetchLeads();
     } catch (e) {
       const detail = e.response?.data?.detail;
@@ -438,11 +463,21 @@ export default function LeadsPage() {
               </div>
               <div className="space-y-2">
                 <Label>State</Label>
-                <Input value={newLead.state} onChange={(e) => setNewLead({...newLead, state: e.target.value})} data-testid="lead-state-input" />
+                <Select value={newLead.state || ''} onValueChange={onStateChange}>
+                  <SelectTrigger data-testid="lead-state-select"><SelectValue placeholder="Select state" /></SelectTrigger>
+                  <SelectContent>
+                    {states.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label>City</Label>
-                <Input value={newLead.city} onChange={(e) => setNewLead({...newLead, city: e.target.value})} data-testid="lead-city-input" />
+                <Select value={newLead.city || ''} onValueChange={(v) => setNewLead({ ...newLead, city: v })} disabled={!newLead.state}>
+                  <SelectTrigger data-testid="lead-city-select"><SelectValue placeholder={newLead.state ? 'Select city' : 'Select state first'} /></SelectTrigger>
+                  <SelectContent>
+                    {citiesForState.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label>{t.lead} Source</Label>

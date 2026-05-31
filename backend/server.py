@@ -23,6 +23,7 @@ import secrets
 import cloudinary
 import cloudinary.uploader
 from openpyxl import Workbook
+from india_locations import INDIA_LOCATIONS
 from industry_config import INDUSTRY_CONFIG, SUPPORTED_INDUSTRIES, get_industry, get_terms, get_lead_statuses, list_industries, get_default_services
 
 # MongoDB connection
@@ -576,6 +577,27 @@ async def seed_services_for_existing_orgs():
                 await db.services.insert_many(services_seed)
                 logger.info(f"Seeded {len(services_seed)} default services for org {org['_id']}")
 
+async def seed_locations():
+    """Seed cities/states from india_locations.py on first boot. Idempotent."""
+    existing = await db.locations.count_documents({})
+    if existing > 0:
+        return
+    docs = []
+    for state, cities in INDIA_LOCATIONS.items():
+        for city in cities:
+            docs.append({
+                "state": state,
+                "city": city,
+                "is_active": True,
+                "is_default": True,
+                "created_at": datetime.now(timezone.utc),
+            })
+    if docs:
+        await db.locations.insert_many(docs)
+        logger.info(f"Seeded {len(docs)} locations across {len(INDIA_LOCATIONS)} states")
+
+
+
 
 async def seed_demo_timeline_lead():
     """Create a fully-progressed demo lead inside the Bright Future Coaching org so users
@@ -695,6 +717,9 @@ async def startup_db():
     # Subscription orders index
     await db.subscription_orders.create_index([("organization_id", 1), ("created_at", -1)])
     await db.subscription_orders.create_index("status")
+    # Locations
+    await seed_locations()
+    await db.locations.create_index([("state", 1), ("city", 1)], unique=True)
     logger.info("Database initialized and indexes created")
 
 # ==================== Auth Routes ====================
@@ -2556,6 +2581,128 @@ async def extend_trial(org_id: str, days: int = 7, current_user: dict = Depends(
         }}
     )
     return {"trial_end_date": new_end.isoformat(), "days_added": days}
+
+# ==================== Locations (States & Cities) ====================
+class CityCreate(BaseModel):
+    state: str
+    city: str
+
+
+class CityUpdate(BaseModel):
+    state: Optional[str] = None
+    city: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@api_router.get("/locations/states")
+async def list_states(current_user: dict = Depends(get_current_user)):
+    """Distinct list of states that have at least one active city."""
+    states = await db.locations.distinct("state", {"is_active": True})
+    return sorted(states)
+
+
+@api_router.get("/locations/cities")
+async def list_cities(state: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """Cities of a given state (or all active cities if state omitted)."""
+    query = {"is_active": True}
+    if state:
+        query["state"] = state
+    cursor = db.locations.find(query, {"city": 1, "state": 1}).sort("city", 1)
+    rows = []
+    async for d in cursor:
+        rows.append({"id": str(d["_id"]), "state": d["state"], "city": d["city"]})
+    return rows
+
+
+@api_router.get("/platform/locations")
+async def platform_list_locations(current_user: dict = Depends(get_current_user)):
+    """Super Admin: full list of all cities (active + inactive) for management UI."""
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    cursor = db.locations.find({}).sort([("state", 1), ("city", 1)])
+    rows = []
+    async for d in cursor:
+        rows.append({
+            "id": str(d["_id"]),
+            "state": d.get("state", ""),
+            "city": d.get("city", ""),
+            "is_active": d.get("is_active", True),
+            "is_default": d.get("is_default", False),
+            "created_at": d["created_at"].isoformat() if isinstance(d.get("created_at"), datetime) else None,
+        })
+    return rows
+
+
+@api_router.post("/platform/locations/cities")
+async def platform_add_city(data: CityCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    state = (data.state or "").strip()
+    city = (data.city or "").strip()
+    if not state or not city:
+        raise HTTPException(status_code=400, detail="state and city are required")
+    # Case-insensitive dedupe
+    existing = await db.locations.find_one({
+        "state": {"$regex": f"^{state}$", "$options": "i"},
+        "city": {"$regex": f"^{city}$", "$options": "i"},
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail=f"{city}, {state} already exists")
+    doc = {
+        "state": state,
+        "city": city,
+        "is_active": True,
+        "is_default": False,
+        "created_at": datetime.now(timezone.utc),
+        "created_by": ObjectId(current_user["id"]),
+    }
+    result = await db.locations.insert_one(doc)
+    return {"id": str(result.inserted_id), "state": state, "city": city, "is_active": True}
+
+
+@api_router.put("/platform/locations/cities/{city_id}")
+async def platform_update_city(city_id: str, data: CityUpdate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    oid = safe_object_id(city_id, "city_id")
+    existing = await db.locations.find_one({"_id": oid})
+    if not existing:
+        raise HTTPException(status_code=404, detail="City not found")
+    updates = {}
+    if data.state is not None:
+        updates["state"] = data.state.strip()
+    if data.city is not None:
+        updates["city"] = data.city.strip()
+    if data.is_active is not None:
+        updates["is_active"] = data.is_active
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    # Dedupe if name/state changed
+    if "state" in updates or "city" in updates:
+        new_state = updates.get("state", existing["state"])
+        new_city = updates.get("city", existing["city"])
+        dup = await db.locations.find_one({
+            "_id": {"$ne": oid},
+            "state": {"$regex": f"^{new_state}$", "$options": "i"},
+            "city": {"$regex": f"^{new_city}$", "$options": "i"},
+        })
+        if dup:
+            raise HTTPException(status_code=400, detail=f"{new_city}, {new_state} already exists")
+    await db.locations.update_one({"_id": oid}, {"$set": updates})
+    return {"id": city_id, **updates}
+
+
+@api_router.delete("/platform/locations/cities/{city_id}")
+async def platform_delete_city(city_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    oid = safe_object_id(city_id, "city_id")
+    result = await db.locations.delete_one({"_id": oid})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="City not found")
+    return {"deleted": True}
+
+
 
 # ==================== Reports Routes ====================
 @api_router.get("/reports/lead-summary")

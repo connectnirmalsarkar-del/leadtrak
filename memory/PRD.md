@@ -221,6 +221,13 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Industry-specific Lead Status dropdowns (e.g. "Counseling Done", "Application Sent" for Education; "Proposal Sent", "Negotiation" for IT) — dynamic via `user.lead_statuses` from `/api/auth/me`
 - ✅ 24/24 backend pytest pass (`/app/backend/tests/test_saas_billing.py`)
 
+### Completed 2026-05-31 — Locations (State / City)
+- ✅ Seeded `locations` collection with 36 Indian states/UTs and ~250 default cities (`india_locations.py`)
+- ✅ Public endpoints: `GET /api/locations/states`, `GET /api/locations/cities?state=…` — used by lead capture forms
+- ✅ Super Admin CRUD: `GET /api/platform/locations`, `POST /api/platform/locations/cities`, `PUT /api/platform/locations/cities/{id}`, `DELETE /api/platform/locations/cities/{id}` with case-insensitive dedupe
+- ✅ Lead Add form: **State** and **City** are now cascading Select dropdowns (city options re-populate when state changes)
+- ✅ New page **/platform/locations** for Super Admin — search, state filter, toggle active/inactive, edit, delete, custom vs default badges
+
 ### P2 — Future
 - ⏳ Workflow automation (drip campaigns)
 - ⏳ Custom report builder

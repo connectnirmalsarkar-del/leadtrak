@@ -26,6 +26,7 @@ import {
   Zap,
   Tag,
   Video,
+  MapPin,
   Sparkles,
   AlertTriangle,
 } from 'lucide-react';
@@ -64,6 +65,7 @@ const adminNavItems = [
 
 const platformNavItems = [
   { path: '/platform/organizations', label: 'Organizations', icon: Layers, testId: 'nav-platform-orgs' },
+  { path: '/platform/locations', label: 'Locations', icon: MapPin, testId: 'nav-platform-locations' },
 ];
 
 const supportNavItem = { path: '/support', label: 'Support', icon: LifeBuoy, testId: 'nav-support' };
