@@ -38,19 +38,19 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center p-8 bg-white">
         <div className="w-full max-w-md space-y-8">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-blue-600 rounded-md flex items-center justify-center">
+            <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center shadow-lg shadow-violet-200">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-semibold text-slate-900" style={{fontFamily: 'Outfit'}}>EduCRM</span>
+            <span className="text-xl font-bold text-slate-900" style={{fontFamily: 'Sora'}}>EduCRM</span>
           </Link>
 
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-900" style={{fontFamily: 'Outfit'}}>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>
               Welcome back
             </h1>
             <p className="text-sm text-slate-600 mt-2">
               Don't have an account?{' '}
-              <Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium" data-testid="link-to-register">
+              <Link to="/register" className="text-violet-700 hover:text-violet-800 font-medium" data-testid="link-to-register">
                 Sign up
               </Link>
             </p>
@@ -93,7 +93,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white"
+              className="w-full h-11 bg-violet-700 hover:bg-violet-800 text-white shadow-lg shadow-violet-200"
               disabled={loading}
               data-testid="login-submit-btn"
             >
@@ -111,12 +111,12 @@ export default function LoginPage() {
       </div>
 
       {/* Right side - Image/Brand */}
-      <div className="hidden lg:flex flex-1 bg-slate-900 items-center justify-center p-12 relative overflow-hidden">
+      <div className="hidden lg:flex flex-1 bg-gradient-to-br from-slate-900 via-violet-900 to-slate-900 items-center justify-center p-12 relative overflow-hidden">
         <div className="relative z-10 max-w-md text-white">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-600/20 border border-blue-500/30 rounded-full mb-6">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">Trusted by 500+ institutions</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-violet-500/20 border border-violet-400/30 rounded-full mb-6 backdrop-blur">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-200">Trusted by 500+ institutions</span>
           </div>
-          <h2 className="text-4xl font-semibold tracking-tight mb-4" style={{fontFamily: 'Outfit'}}>
+          <h2 className="text-4xl font-bold tracking-tight mb-4" style={{fontFamily: 'Sora'}}>
             Convert more leads into admissions.
           </h2>
           <p className="text-base text-slate-300 leading-relaxed">
@@ -125,11 +125,11 @@ export default function LoginPage() {
 
           <div className="mt-12 grid grid-cols-2 gap-6">
             <div>
-              <p className="text-3xl font-semibold font-mono">2.5x</p>
+              <p className="text-4xl font-bold" style={{fontFamily: 'Sora'}}>2.5x</p>
               <p className="text-sm text-slate-400 mt-1">Conversion increase</p>
             </div>
             <div>
-              <p className="text-3xl font-semibold font-mono">70%</p>
+              <p className="text-4xl font-bold" style={{fontFamily: 'Sora'}}>70%</p>
               <p className="text-sm text-slate-400 mt-1">Time saved on follow-ups</p>
             </div>
           </div>

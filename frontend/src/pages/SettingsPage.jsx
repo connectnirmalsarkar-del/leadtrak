@@ -63,7 +63,7 @@ export default function SettingsPage() {
     <div className="space-y-6" data-testid="settings-page">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Configuration</p>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900" style={{fontFamily: 'Outfit'}}>Settings</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Settings</h1>
         <p className="text-sm text-slate-600 mt-1">Configure your workspace</p>
       </div>
 
@@ -75,8 +75,8 @@ export default function SettingsPage() {
         </TabsList>
 
         <TabsContent value="organization" className="space-y-4 mt-4">
-          <div className="bg-white border border-slate-200 rounded-md p-6 max-w-2xl">
-            <h3 className="text-lg font-medium text-slate-900 mb-4" style={{fontFamily: 'Outfit'}}>Organization Details</h3>
+          <div className="bg-white border border-slate-200 rounded-xl p-6 max-w-2xl">
+            <h3 className="text-lg font-medium text-slate-900 mb-4" style={{fontFamily: 'Sora'}}>Organization Details</h3>
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Organization Name</Label>
@@ -86,14 +86,14 @@ export default function SettingsPage() {
                 <Label>Subscription Plan</Label>
                 <Input value={organization.subscription_plan || 'starter'} disabled />
               </div>
-              <Button onClick={handleSaveOrg} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="save-org-btn">Save Changes</Button>
+              <Button onClick={handleSaveOrg} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="save-org-btn">Save Changes</Button>
             </div>
           </div>
         </TabsContent>
 
         <TabsContent value="sources" className="space-y-4 mt-4">
-          <div className="bg-white border border-slate-200 rounded-md p-6 max-w-2xl">
-            <h3 className="text-lg font-medium text-slate-900 mb-4" style={{fontFamily: 'Outfit'}}>Custom Lead Sources</h3>
+          <div className="bg-white border border-slate-200 rounded-xl p-6 max-w-2xl">
+            <h3 className="text-lg font-medium text-slate-900 mb-4" style={{fontFamily: 'Sora'}}>Custom Lead Sources</h3>
             <div className="flex gap-2 mb-4">
               <Input
                 placeholder="Add new source (e.g., LinkedIn Ads)"
@@ -102,7 +102,7 @@ export default function SettingsPage() {
                 onKeyDown={(e) => e.key === 'Enter' && handleAddSource()}
                 data-testid="new-source-input"
               />
-              <Button onClick={handleAddSource} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="add-source-btn">
+              <Button onClick={handleAddSource} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="add-source-btn">
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
@@ -122,13 +122,13 @@ export default function SettingsPage() {
 
         <TabsContent value="integrations" className="space-y-4 mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-white border border-slate-200 rounded-md p-6">
+            <div className="bg-white border border-slate-200 rounded-xl p-6">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 bg-emerald-50 rounded-md flex items-center justify-center">
                   <MessageSquare className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div>
-                  <h3 className="font-medium text-slate-900" style={{fontFamily: 'Outfit'}}>WhatsApp (Twilio)</h3>
+                  <h3 className="font-medium text-slate-900" style={{fontFamily: 'Sora'}}>WhatsApp (Twilio)</h3>
                   <p className="text-xs text-slate-500">Send messages via Twilio API</p>
                 </div>
               </div>
@@ -137,13 +137,13 @@ export default function SettingsPage() {
                 Status: Not configured - add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER
               </div>
             </div>
-            <div className="bg-white border border-slate-200 rounded-md p-6">
+            <div className="bg-white border border-slate-200 rounded-xl p-6">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 bg-blue-50 rounded-md flex items-center justify-center">
                   <Building2 className="w-5 h-5 text-blue-600" />
                 </div>
                 <div>
-                  <h3 className="font-medium text-slate-900" style={{fontFamily: 'Outfit'}}>Facebook Lead Ads</h3>
+                  <h3 className="font-medium text-slate-900" style={{fontFamily: 'Sora'}}>Facebook Lead Ads</h3>
                   <p className="text-xs text-slate-500">Auto-import leads from Meta</p>
                 </div>
               </div>

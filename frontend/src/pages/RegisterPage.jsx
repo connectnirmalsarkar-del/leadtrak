@@ -41,19 +41,19 @@ export default function RegisterPage() {
       <div className="flex-1 flex items-center justify-center p-8 bg-white">
         <div className="w-full max-w-md space-y-8">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-blue-600 rounded-md flex items-center justify-center">
+            <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center shadow-lg shadow-violet-200">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-semibold text-slate-900" style={{fontFamily: 'Outfit'}}>EduCRM</span>
+            <span className="text-xl font-bold text-slate-900" style={{fontFamily: 'Sora'}}>EduCRM</span>
           </Link>
 
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-900" style={{fontFamily: 'Outfit'}}>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>
               Create your account
             </h1>
             <p className="text-sm text-slate-600 mt-2">
               Already have an account?{' '}
-              <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium" data-testid="link-to-login">
+              <Link to="/login" className="text-violet-700 hover:text-violet-800 font-medium" data-testid="link-to-login">
                 Sign in
               </Link>
             </p>
@@ -125,7 +125,7 @@ export default function RegisterPage() {
 
             <Button
               type="submit"
-              className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white"
+              className="w-full h-11 bg-violet-700 hover:bg-violet-800 text-white shadow-lg shadow-violet-200"
               disabled={loading}
               data-testid="register-submit-btn"
             >
@@ -157,15 +157,15 @@ export default function RegisterPage() {
               'Integrate WhatsApp and Facebook Ads',
             ].map((item, i) => (
               <li key={i} className="flex items-center gap-3 text-sm">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                <CheckCircle2 className="w-5 h-5 text-violet-300" />
                 {item}
               </li>
             ))}
           </ul>
         </div>
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute top-20 left-20 w-72 h-72 bg-blue-500 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-20 right-20 w-72 h-72 bg-indigo-500 rounded-full blur-3xl"></div>
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute top-20 left-20 w-72 h-72 bg-violet-500 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-20 right-20 w-72 h-72 bg-fuchsia-500 rounded-full blur-3xl"></div>
         </div>
       </div>
     </div>

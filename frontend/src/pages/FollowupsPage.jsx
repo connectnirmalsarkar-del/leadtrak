@@ -12,7 +12,7 @@ const FollowupCard = ({ followup, onComplete, type }) => {
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-md p-4 hover:border-slate-300 transition-colors" data-testid={`followup-card-${followup._id}`}>
+    <div className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors" data-testid={`followup-card-${followup._id}`}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
@@ -110,7 +110,7 @@ export default function FollowupsPage() {
     <div className="space-y-6" data-testid="followups-page">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Engagement</p>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900" style={{fontFamily: 'Outfit'}}>Follow-ups</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Follow-ups</h1>
         <p className="text-sm text-slate-600 mt-1">Stay on top of every prospect interaction.</p>
       </div>
 

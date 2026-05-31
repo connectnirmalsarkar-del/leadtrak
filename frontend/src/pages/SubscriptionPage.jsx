@@ -35,7 +35,7 @@ export default function SubscriptionPage() {
     <div className="space-y-6" data-testid="subscription-page">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Billing</p>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900" style={{fontFamily: 'Outfit'}}>Subscription Plans</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Subscription Plans</h1>
         <p className="text-sm text-slate-600 mt-1">Choose the plan that fits your organization</p>
       </div>
 
@@ -63,17 +63,17 @@ export default function SubscriptionPage() {
           return (
             <div
               key={plan.name}
-              className={`relative p-8 bg-white rounded-md ${isPopular ? 'border-2 border-blue-600 shadow-lg' : 'border border-slate-200'}`}
+              className={`relative p-8 bg-white rounded-xl ${isPopular ? 'border-2 border-violet-600 shadow-xl shadow-violet-100' : 'border border-slate-200'}`}
               data-testid={`plan-card-${plan.name.toLowerCase()}`}
             >
               {isPopular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-medium px-3 py-1 rounded-full">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-violet-700 text-white text-xs font-medium px-3 py-1 rounded-full">
                   Most popular
                 </div>
               )}
-              <h3 className="text-2xl font-semibold text-slate-900 mb-2" style={{fontFamily: 'Outfit'}}>{plan.name}</h3>
+              <h3 className="text-2xl font-bold text-slate-900 mb-2" style={{fontFamily: 'Sora'}}>{plan.name}</h3>
               <div className="mb-6">
-                <span className="text-4xl font-semibold text-slate-900 font-mono">₹{price.toLocaleString('en-IN')}</span>
+                <span className="text-4xl font-bold text-slate-900" style={{fontFamily: 'Sora'}}>₹{price.toLocaleString('en-IN')}</span>
                 <span className="text-sm text-slate-500">/month</span>
                 {billingCycle === 'annual' && (
                   <p className="text-xs text-slate-500 mt-1">Billed annually (₹{plan.price_annual.toLocaleString('en-IN')})</p>
@@ -88,7 +88,7 @@ export default function SubscriptionPage() {
                 ))}
               </ul>
               <Button
-                className={`w-full ${isPopular ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
+                className={`w-full ${isPopular ? 'bg-violet-700 hover:bg-violet-800 text-white' : ''}`}
                 variant={isPopular ? 'default' : 'outline'}
                 onClick={() => handleSubscribe(plan._id)}
                 data-testid={`subscribe-${plan.name.toLowerCase()}-btn`}

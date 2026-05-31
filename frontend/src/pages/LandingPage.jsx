@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   GraduationCap,
   Users,
@@ -12,299 +13,674 @@ import {
   Zap,
   Shield,
   MessageSquare,
-  CreditCard,
+  Sparkles,
+  Lock,
+  Award,
+  Globe,
+  Star,
+  ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+const ROTATING_WORDS = ['admission teams', 'coaching institutes', 'university counselors', 'admission consultants'];
+const INDUSTRIES = [
+  { id: 'schools', label: 'Schools & K-12', desc: 'Capture parent inquiries, schedule campus visits, and run admission cycles end-to-end.', stats: ['3x faster admissions', '60% less manual work', '24/7 lead capture'] },
+  { id: 'coaching', label: 'Coaching Institutes', desc: 'Convert walk-ins and ad inquiries into batch enrollments with smart follow-ups.', stats: ['40% higher batch fill', '2x counselor productivity', 'Multi-batch tracking'] },
+  { id: 'universities', label: 'Universities & Colleges', desc: 'Manage multi-campus, multi-program admissions with department-level visibility.', stats: ['Multi-campus support', 'Program-wise pipelines', 'Compliance ready'] },
+  { id: 'consultancies', label: 'Education Consultancies', desc: 'Track student leads from inquiry to enrollment across multiple partner institutions.', stats: ['Partner management', 'Commission tracking', 'Visa workflow'] },
+];
+
 export default function LandingPage() {
   const navigate = useNavigate();
+  const [wordIndex, setWordIndex] = useState(0);
+  const [activeIndustry, setActiveIndustry] = useState('schools');
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setWordIndex((i) => (i + 1) % ROTATING_WORDS.length);
+    }, 2200);
+    return () => clearInterval(interval);
+  }, []);
+
+  const currentIndustry = INDUSTRIES.find((i) => i.id === activeIndustry);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white overflow-x-hidden">
       {/* Header */}
-      <header className="border-b border-slate-200 sticky top-0 bg-white/95 backdrop-blur-sm z-50">
+      <header className="border-b border-slate-100 sticky top-0 bg-white/90 backdrop-blur-xl z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-blue-600 rounded-md flex items-center justify-center">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center shadow-lg shadow-violet-200">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-semibold tracking-tight text-slate-900" style={{fontFamily: 'Outfit'}}>
+            <span className="text-xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>
               EduCRM
             </span>
           </div>
-          <nav className="hidden md:flex items-center gap-8 text-sm text-slate-600">
-            <a href="#features" className="hover:text-slate-900 transition-colors">Features</a>
-            <a href="#pricing" className="hover:text-slate-900 transition-colors">Pricing</a>
-            <a href="#testimonials" className="hover:text-slate-900 transition-colors">Customers</a>
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
+            <a href="#features" className="hover:text-violet-700 transition-colors">Features</a>
+            <a href="#industries" className="hover:text-violet-700 transition-colors">Industries</a>
+            <a href="#pricing" className="hover:text-violet-700 transition-colors">Pricing</a>
+            <a href="#customers" className="hover:text-violet-700 transition-colors">Customers</a>
           </nav>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={() => navigate('/login')} data-testid="landing-login-btn">
               Sign in
             </Button>
-            <Button onClick={() => navigate('/register')} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="landing-register-btn">
-              Start free
+            <Button
+              onClick={() => navigate('/register')}
+              className="bg-violet-700 hover:bg-violet-800 text-white shadow-lg shadow-violet-200"
+              data-testid="landing-register-btn"
+            >
+              Book a demo
+              <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-6 pt-20 pb-24">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          <div className="space-y-8 animate-fade-up">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full">
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">
-                Built for Education
-              </span>
-            </div>
-            <h1 className="text-5xl lg:text-6xl font-semibold tracking-tight text-slate-900 leading-[1.05]" style={{fontFamily: 'Outfit'}}>
-              The Education CRM<br />
-              <span className="text-blue-600">that converts.</span>
-            </h1>
-            <p className="text-lg text-slate-600 leading-relaxed max-w-xl">
-              Stop losing leads to spreadsheets. EduCRM helps schools, colleges, and coaching institutes capture every inquiry, automate follow-ups, and convert prospects into admissions.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button
-                size="lg"
-                onClick={() => navigate('/register')}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-base px-8"
-                data-testid="hero-cta-btn"
-              >
-                Start 14-day free trial
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => navigate('/login')}
-                className="text-base px-8 border-slate-300"
-                data-testid="hero-demo-btn"
-              >
-                Sign in
-              </Button>
-            </div>
-            <div className="flex items-center gap-6 pt-4 text-sm text-slate-500">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                No credit card required
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                Cancel anytime
-              </div>
-            </div>
-          </div>
+      <section className="relative pt-24 pb-32 overflow-hidden">
+        {/* Background blobs */}
+        <div className="absolute inset-0 -z-10">
+          <div className="absolute top-20 left-1/4 w-96 h-96 bg-violet-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+          <div className="absolute top-40 right-1/4 w-96 h-96 bg-indigo-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" style={{ animationDelay: '2s' }}></div>
+          <div className="absolute bottom-20 left-1/3 w-96 h-96 bg-fuchsia-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" style={{ animationDelay: '4s' }}></div>
+        </div>
 
-          {/* Hero Visual */}
-          <div className="relative animate-fade-up stagger-2">
-            <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg p-6 shadow-2xl">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                <span className="text-xs text-slate-400 ml-3 font-mono">educrm.app/dashboard</span>
+        <div className="max-w-7xl mx-auto px-6 text-center relative">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="inline-flex items-center gap-2 px-4 py-1.5 bg-violet-50 border border-violet-200 rounded-full mb-8"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-violet-600" />
+            <span className="text-xs font-semibold tracking-wide text-violet-700">
+              AI-POWERED EDUCATION CRM
+            </span>
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.1 }}
+            className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 max-w-5xl mx-auto leading-[1.05]"
+            style={{ fontFamily: 'Sora' }}
+          >
+            The CRM built for{' '}
+            <span className="relative inline-block">
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={wordIndex}
+                  initial={{ opacity: 0, y: 20, rotateX: -90 }}
+                  animate={{ opacity: 1, y: 0, rotateX: 0 }}
+                  exit={{ opacity: 0, y: -20, rotateX: 90 }}
+                  transition={{ duration: 0.5 }}
+                  className="inline-block gradient-text animate-gradient-x bg-gradient-to-r from-violet-600 via-fuchsia-500 to-indigo-600"
+                  style={{
+                    backgroundClip: 'text',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
+                  {ROTATING_WORDS[wordIndex]}
+                </motion.span>
+              </AnimatePresence>
+            </span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto mt-8"
+          >
+            Capture every inquiry, automate follow-ups, and convert prospects into admissions — all from one intelligent platform built for education.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="flex flex-col sm:flex-row gap-3 justify-center mt-10"
+          >
+            <Button
+              size="lg"
+              onClick={() => navigate('/register')}
+              className="bg-violet-700 hover:bg-violet-800 text-white text-base px-8 h-12 shadow-xl shadow-violet-300/40"
+              data-testid="hero-cta-btn"
+            >
+              Start free trial
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => navigate('/login')}
+              className="text-base px-8 h-12 border-slate-300"
+              data-testid="hero-demo-btn"
+            >
+              Book a demo
+            </Button>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+            className="flex items-center justify-center gap-8 mt-8 text-sm text-slate-500"
+          >
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              14-day free trial
+            </div>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              No credit card
+            </div>
+            <div className="hidden sm:flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              Setup in 5 minutes
+            </div>
+          </motion.div>
+
+          {/* Dashboard Preview Mockup */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
+            className="mt-20 relative max-w-5xl mx-auto"
+          >
+            <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-violet-200/50 border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-800 p-3">
+              <div className="flex items-center gap-2 mb-3 px-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-400"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
+                <span className="text-xs text-slate-400 ml-2 font-mono">educrm.app/dashboard</span>
               </div>
-              <div className="bg-slate-50 rounded-md p-6 space-y-4">
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: 'Total Leads', value: '2,847', trend: '+18%' },
-                    { label: 'Conversion', value: '34.2%', trend: '+5%' },
-                    { label: 'Admissions', value: '973', trend: '+22%' },
-                  ].map((stat, i) => (
-                    <div key={i} className="bg-white rounded-md p-3 border border-slate-200">
-                      <p className="text-xs text-slate-500 uppercase tracking-wider">{stat.label}</p>
-                      <p className="text-xl font-semibold text-slate-900 mt-1 font-mono">{stat.value}</p>
-                      <p className="text-xs text-emerald-600 mt-1">{stat.trend}</p>
+              <div className="bg-slate-50 rounded-lg p-6 grid grid-cols-12 gap-4">
+                <div className="col-span-3 bg-slate-900 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-violet-600 rounded-md"></div>
+                    <span className="text-xs text-white font-medium">EduCRM</span>
+                  </div>
+                  {['Dashboard', 'Leads', 'Follow-ups', 'Admissions', 'Reports'].map((item, i) => (
+                    <div key={item} className={`text-xs px-2 py-1.5 rounded-md ${i === 0 ? 'bg-violet-600 text-white' : 'text-slate-400'}`}>
+                      {item}
                     </div>
                   ))}
                 </div>
-                <div className="bg-white rounded-md p-4 border border-slate-200">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-3">Monthly Lead Trend</p>
-                  <div className="flex items-end gap-2 h-20">
-                    {[40, 65, 45, 80, 55, 90, 70, 95, 60, 100, 85, 75].map((h, i) => (
-                      <div key={i} className="flex-1 bg-blue-500 rounded-sm" style={{ height: `${h}%` }}></div>
+                <div className="col-span-9 space-y-3">
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { l: 'Total Leads', v: '2,847', t: '+18%' },
+                      { l: 'Today', v: '142', t: '+24%' },
+                      { l: 'Follow-ups', v: '38', t: '-5%' },
+                      { l: 'Admissions', v: '973', t: '+22%' },
+                    ].map((s) => (
+                      <div key={s.l} className="bg-white rounded-md p-2.5 border border-slate-200">
+                        <p className="text-[9px] text-slate-500 uppercase">{s.l}</p>
+                        <p className="text-base font-bold text-slate-900 mt-0.5 font-mono">{s.v}</p>
+                        <p className="text-[10px] text-emerald-600">{s.t}</p>
+                      </div>
                     ))}
+                  </div>
+                  <div className="bg-white rounded-md p-3 border border-slate-200">
+                    <p className="text-[10px] text-slate-500 uppercase mb-2">Lead Trend</p>
+                    <div className="flex items-end gap-1 h-16">
+                      {[40, 55, 45, 70, 60, 80, 65, 90, 75, 100, 85, 95].map((h, i) => (
+                        <div
+                          key={i}
+                          className="flex-1 bg-gradient-to-t from-violet-600 to-violet-400 rounded-sm"
+                          style={{ height: `${h}%` }}
+                        ></div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="absolute -bottom-6 -right-6 bg-white rounded-md p-4 border border-slate-200 shadow-lg w-56 hidden md:block">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-100 rounded-md flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-900">New Admission</p>
-                  <p className="text-xs text-slate-500">+₹45,000 revenue</p>
-                </div>
+            {/* Floating cards */}
+            <motion.div
+              animate={{ y: [0, -8, 0] }}
+              transition={{ duration: 4, repeat: Infinity }}
+              className="absolute -left-6 top-1/3 bg-white rounded-xl p-3 border border-slate-200 shadow-xl hidden md:flex items-center gap-2.5"
+            >
+              <div className="w-9 h-9 bg-emerald-100 rounded-md flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-emerald-600" />
               </div>
-            </div>
-          </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-900">New Admission</p>
+                <p className="text-[10px] text-slate-500">+₹45,000</p>
+              </div>
+            </motion.div>
+            <motion.div
+              animate={{ y: [0, 8, 0] }}
+              transition={{ duration: 4, repeat: Infinity, delay: 1 }}
+              className="absolute -right-6 bottom-1/3 bg-white rounded-xl p-3 border border-slate-200 shadow-xl hidden md:flex items-center gap-2.5"
+            >
+              <div className="w-9 h-9 bg-violet-100 rounded-md flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-violet-600" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-900">AI Lead Score</p>
+                <p className="text-[10px] text-slate-500">87% likely to convert</p>
+              </div>
+            </motion.div>
+          </motion.div>
         </div>
       </section>
 
       {/* Trust Section */}
-      <section className="border-y border-slate-200 bg-slate-50 py-12">
+      <section className="border-y border-slate-100 bg-slate-50/50 py-16">
         <div className="max-w-7xl mx-auto px-6">
-          <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-8">
-            Trusted by educational institutions across India
+          <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-10">
+            Trusted by 500+ educational institutions across India
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 items-center justify-items-center text-slate-400">
-            <div className="text-2xl font-semibold tracking-tight" style={{fontFamily: 'Outfit'}}>Apex Coaching</div>
-            <div className="text-2xl font-semibold tracking-tight" style={{fontFamily: 'Outfit'}}>Bright Future</div>
-            <div className="text-2xl font-semibold tracking-tight" style={{fontFamily: 'Outfit'}}>EduPath Univ.</div>
-            <div className="text-2xl font-semibold tracking-tight" style={{fontFamily: 'Outfit'}}>SkillForge</div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section id="features" className="max-w-7xl mx-auto px-6 py-24">
-        <div className="text-center max-w-2xl mx-auto mb-16">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 mb-3">Features</p>
-          <h2 className="text-4xl font-semibold tracking-tight text-slate-900 mb-4" style={{fontFamily: 'Outfit'}}>
-            Everything you need to run admissions
-          </h2>
-          <p className="text-base text-slate-600">
-            From lead capture to enrollment, one platform that ties your entire admissions team together.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[
-            { icon: Users, title: 'Multi-tenant SaaS', desc: 'Each organization gets its own isolated workspace with custom branding and user permissions.' },
-            { icon: Target, title: 'Lead Management', desc: 'Capture, assign, and track leads through every stage of your admissions funnel.' },
-            { icon: Calendar, title: 'Follow-up Automation', desc: 'Never miss a follow-up. Schedule reminders, send WhatsApp, and track every interaction.' },
-            { icon: BarChart3, title: 'Real-time Reports', desc: 'Lead source analytics, conversion funnels, counselor performance—export to Excel or PDF.' },
-            { icon: MessageSquare, title: 'WhatsApp Integration', desc: 'Click-to-WhatsApp, template messages, and follow-up automation built right in.' },
-            { icon: Shield, title: 'Role-based Access', desc: 'Super admin, org admin, manager, counselor, telecaller—everyone sees what they need.' },
-          ].map((feature, i) => {
-            const Icon = feature.icon;
-            return (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8 items-center justify-items-center">
+            {['Apex Coaching', 'Bright Future', 'EduPath', 'SkillForge', 'Aakash Inst.', 'PrepHub'].map((logo) => (
               <div
-                key={i}
-                className="p-6 border border-slate-200 rounded-md bg-white hover:border-blue-300 hover:-translate-y-1 hover:shadow-sm transition-all duration-200"
+                key={logo}
+                className="text-base lg:text-lg font-semibold tracking-tight text-slate-400 hover:text-slate-700 transition-colors"
+                style={{ fontFamily: 'Sora' }}
               >
-                <div className="w-10 h-10 bg-blue-50 rounded-md flex items-center justify-center mb-4">
-                  <Icon className="w-5 h-5 text-blue-600" />
-                </div>
-                <h3 className="text-lg font-medium text-slate-900 mb-2" style={{fontFamily: 'Outfit'}}>{feature.title}</h3>
-                <p className="text-sm text-slate-600 leading-relaxed">{feature.desc}</p>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Pricing Section */}
-      <section id="pricing" className="bg-slate-50 py-24 border-y border-slate-200">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 mb-3">Pricing</p>
-            <h2 className="text-4xl font-semibold tracking-tight text-slate-900 mb-4" style={{fontFamily: 'Outfit'}}>
-              Simple plans that scale with you
-            </h2>
-            <p className="text-base text-slate-600">No hidden fees. Switch plans anytime.</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {[
-              {
-                name: 'Starter',
-                price: '₹999',
-                desc: 'Perfect for small coaching institutes',
-                features: ['5 Users', '1,000 Leads', 'Basic Reports', 'Email Support'],
-                cta: 'Start free trial',
-                popular: false,
-              },
-              {
-                name: 'Growth',
-                price: '₹2,999',
-                desc: 'For growing colleges and consultancies',
-                features: ['20 Users', '5,000 Leads', 'Advanced Reports', 'WhatsApp Integration', 'Priority Support'],
-                cta: 'Start free trial',
-                popular: true,
-              },
-              {
-                name: 'Enterprise',
-                price: '₹9,999',
-                desc: 'For universities and large institutions',
-                features: ['Unlimited Users', 'Unlimited Leads', 'Custom Reports', 'All Integrations', '24/7 Support'],
-                cta: 'Contact sales',
-                popular: false,
-              },
-            ].map((plan, i) => (
-              <div
-                key={i}
-                className={`relative p-8 bg-white rounded-md ${plan.popular ? 'border-2 border-blue-600 shadow-lg' : 'border border-slate-200'}`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-medium px-3 py-1 rounded-full">
-                    Most popular
-                  </div>
-                )}
-                <h3 className="text-2xl font-semibold text-slate-900 mb-2" style={{fontFamily: 'Outfit'}}>{plan.name}</h3>
-                <p className="text-sm text-slate-600 mb-6">{plan.desc}</p>
-                <div className="mb-6">
-                  <span className="text-4xl font-semibold text-slate-900" style={{fontFamily: 'Outfit'}}>{plan.price}</span>
-                  <span className="text-sm text-slate-500">/month</span>
-                </div>
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map((feat, j) => (
-                    <li key={j} className="flex items-center gap-2 text-sm text-slate-700">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                      {feat}
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  className={`w-full ${plan.popular ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
-                  variant={plan.popular ? 'default' : 'outline'}
-                  onClick={() => navigate('/register')}
-                  data-testid={`plan-${plan.name.toLowerCase()}-cta`}
-                >
-                  {plan.cta}
-                </Button>
+                {logo}
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* Outcomes / Stats */}
       <section className="max-w-7xl mx-auto px-6 py-24">
-        <div className="bg-slate-900 rounded-lg p-12 lg:p-16 text-center relative overflow-hidden">
+        <div className="text-center mb-16">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Outcomes</p>
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>
+            Outcomes you can measure
+          </h2>
+        </div>
+        <div className="grid md:grid-cols-3 gap-6">
+          {[
+            { num: '3x', label: 'Faster admission cycles', sub: 'Top coaching institute, Delhi NCR' },
+            { num: '60%', label: 'Lift in counselor productivity', sub: 'Leading university, Bangalore' },
+            { num: '₹2.4Cr', label: 'Additional revenue tracked', sub: 'Mid-size consultancy network' },
+          ].map((stat, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: i * 0.1 }}
+              viewport={{ once: true }}
+              className="bg-gradient-to-br from-violet-50 to-white border border-violet-100 rounded-2xl p-8"
+            >
+              <p className="text-6xl font-bold text-violet-700 mb-3" style={{ fontFamily: 'Sora' }}>
+                {stat.num}
+              </p>
+              <p className="text-base font-semibold text-slate-900 mb-2">{stat.label}</p>
+              <p className="text-sm text-slate-500">{stat.sub}</p>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* Features Bento Grid */}
+      <section id="features" className="max-w-7xl mx-auto px-6 py-24">
+        <div className="text-center max-w-2xl mx-auto mb-16">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Platform</p>
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
+            Everything your admissions team needs
+          </h2>
+          <p className="text-lg text-slate-600">
+            From first inquiry to enrollment, one platform that ties your entire team together.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[
+            { icon: Target, title: 'Smart Lead Pipeline', desc: 'Drag-and-drop pipeline with status-based automation. Never lose a lead again.', big: true },
+            { icon: Sparkles, title: 'AI Lead Scoring', desc: 'Identify high-intent prospects automatically using behavioral signals.' },
+            { icon: Calendar, title: 'Follow-up Automation', desc: 'Schedule, remind, and track every touchpoint.' },
+            { icon: MessageSquare, title: 'WhatsApp Integration', desc: 'Click-to-WhatsApp with templates and bulk messaging.' },
+            { icon: BarChart3, title: 'Real-time Reports', desc: 'Lead source ROI, counselor performance, revenue analytics.', big: true },
+            { icon: Shield, title: 'Role-based Access', desc: 'Granular permissions for every team member.' },
+          ].map((feature, i) => {
+            const Icon = feature.icon;
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: i * 0.05 }}
+                viewport={{ once: true }}
+                className={`p-7 border border-slate-200 rounded-2xl bg-white hover:border-violet-300 hover:shadow-xl hover:shadow-violet-100 hover:-translate-y-1 transition-all duration-300 ${
+                  feature.big ? 'lg:col-span-2' : ''
+                }`}
+              >
+                <div className="w-12 h-12 bg-gradient-to-br from-violet-600 to-violet-800 rounded-xl flex items-center justify-center mb-5 shadow-lg shadow-violet-200">
+                  <Icon className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2" style={{ fontFamily: 'Sora' }}>
+                  {feature.title}
+                </h3>
+                <p className="text-sm text-slate-600 leading-relaxed">{feature.desc}</p>
+              </motion.div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Industries Section */}
+      <section id="industries" className="bg-gradient-to-br from-slate-50 to-violet-50/30 py-24 border-y border-slate-100">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Industries</p>
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
+              Built for every education segment
+            </h2>
+            <p className="text-lg text-slate-600">
+              Pre-configured workflows that fit your business model.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap justify-center gap-2 mb-10">
+            {INDUSTRIES.map((ind) => (
+              <button
+                key={ind.id}
+                onClick={() => setActiveIndustry(ind.id)}
+                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
+                  activeIndustry === ind.id
+                    ? 'bg-violet-700 text-white shadow-lg shadow-violet-200'
+                    : 'bg-white text-slate-700 hover:bg-violet-50 border border-slate-200'
+                }`}
+                data-testid={`industry-tab-${ind.id}`}
+              >
+                {ind.label}
+              </button>
+            ))}
+          </div>
+
+          <motion.div
+            key={activeIndustry}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="grid md:grid-cols-2 gap-8 bg-white rounded-3xl p-8 lg:p-12 border border-slate-200 shadow-sm"
+          >
+            <div>
+              <h3 className="text-3xl font-bold text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
+                {currentIndustry.label}
+              </h3>
+              <p className="text-base text-slate-600 leading-relaxed mb-8">
+                {currentIndustry.desc}
+              </p>
+              <ul className="space-y-3 mb-8">
+                {currentIndustry.stats.map((s, i) => (
+                  <li key={i} className="flex items-start gap-3 text-sm">
+                    <div className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center mt-0.5">
+                      <CheckCircle2 className="w-3 h-3 text-violet-700" />
+                    </div>
+                    <span className="text-slate-700">{s}</span>
+                  </li>
+                ))}
+              </ul>
+              <Button
+                onClick={() => navigate('/register')}
+                className="bg-slate-900 hover:bg-slate-800 text-white"
+                data-testid={`industry-cta-${activeIndustry}`}
+              >
+                Explore {currentIndustry.label}
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+            <div className="rounded-2xl bg-gradient-to-br from-violet-600 to-violet-900 p-8 flex flex-col justify-between min-h-[280px] text-white">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5" />
+                <span className="text-xs uppercase tracking-wider font-semibold">Pre-built workflow</span>
+              </div>
+              <div>
+                <p className="text-4xl font-bold mb-2" style={{ fontFamily: 'Sora' }}>
+                  Live in 5 min
+                </p>
+                <p className="text-violet-200 text-sm">
+                  Plug-and-play templates designed for {currentIndustry.label.toLowerCase()}.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* AI Section */}
+      <section className="max-w-7xl mx-auto px-6 py-24">
+        <div className="text-center max-w-2xl mx-auto mb-16">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Artificial Intelligence</p>
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
+            AI built in. Not bolted on.
+          </h2>
+          <p className="text-lg text-slate-600">
+            Predict intent, automate action, and capture every signal — automatically.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {[
+            { icon: Sparkles, title: 'Smart Lead Scoring', desc: 'AI ranks every lead by conversion probability in real-time.' },
+            { icon: Zap, title: 'Next Best Action', desc: 'Tells counselors exactly what to do next on every lead.' },
+            { icon: MessageSquare, title: 'Conversational AI', desc: 'Chatbots that qualify leads 24/7 on WhatsApp and web.' },
+            { icon: TrendingUp, title: 'Predictive Forecasting', desc: 'Know your admissions pipeline 30 days in advance.' },
+          ].map((ai, i) => {
+            const Icon = ai.icon;
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: i * 0.08 }}
+                viewport={{ once: true }}
+                className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-7 text-white hover:scale-[1.02] transition-transform"
+              >
+                <div className="w-11 h-11 bg-violet-500/20 border border-violet-400/30 rounded-lg flex items-center justify-center mb-5 backdrop-blur">
+                  <Icon className="w-5 h-5 text-violet-300" />
+                </div>
+                <h3 className="text-lg font-bold mb-2" style={{ fontFamily: 'Sora' }}>{ai.title}</h3>
+                <p className="text-sm text-slate-300 leading-relaxed">{ai.desc}</p>
+              </motion.div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section id="customers" className="bg-slate-50 py-24 border-y border-slate-100">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Customers</p>
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>
+              Loved by admission teams
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              { quote: 'Cut our manual data entry by 70%. Counselors now spend time on conversations, not spreadsheets.', name: 'Priya Sharma', role: 'Director, Apex Coaching' },
+              { quote: 'Doubled our batch fill rate within 3 months. The AI lead scoring is a game-changer.', name: 'Rahul Mehta', role: 'COO, Bright Future Inst.' },
+              { quote: 'Finally a CRM built for education, not retrofitted from sales. Our team adopted it in a week.', name: 'Dr. Anjali Verma', role: 'Dean, EduPath University' },
+            ].map((t, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+                viewport={{ once: true }}
+                className="bg-white rounded-2xl p-7 border border-slate-200 shadow-sm"
+              >
+                <div className="flex gap-0.5 mb-4">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star key={s} className="w-4 h-4 fill-amber-400 text-amber-400" />
+                  ))}
+                </div>
+                <p className="text-base text-slate-700 mb-6 leading-relaxed">"{t.quote}"</p>
+                <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-violet-700 flex items-center justify-center text-white font-bold text-sm">
+                    {t.name.split(' ').map((n) => n[0]).join('')}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{t.name}</p>
+                    <p className="text-xs text-slate-500">{t.role}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Security */}
+      <section className="max-w-7xl mx-auto px-6 py-24">
+        <div className="bg-gradient-to-br from-slate-900 via-violet-900 to-slate-900 rounded-3xl p-12 lg:p-16 relative overflow-hidden">
+          <div className="absolute inset-0 opacity-20">
+            <div className="absolute top-10 right-10 w-72 h-72 bg-violet-500 rounded-full blur-3xl"></div>
+          </div>
+          <div className="relative grid lg:grid-cols-2 gap-12 items-center">
+            <div className="text-white">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300 mb-3">Security</p>
+              <h2 className="text-4xl font-bold tracking-tight mb-4" style={{ fontFamily: 'Sora' }}>
+                Enterprise-grade security
+              </h2>
+              <p className="text-violet-200 leading-relaxed">
+                Your data is protected with AES-256 encryption, role-based access controls, and full audit trails. Compliant with global education data standards.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { icon: Lock, title: 'ISO 27001', desc: 'Certified' },
+                { icon: Shield, title: 'DPDP Ready', desc: 'India compliant' },
+                { icon: Award, title: 'SOC 2 Type II', desc: 'Audited' },
+                { icon: Globe, title: 'GDPR', desc: 'EU compliant' },
+              ].map((s, i) => {
+                const Icon = s.icon;
+                return (
+                  <div key={i} className="bg-white/5 backdrop-blur border border-white/10 rounded-xl p-5">
+                    <Icon className="w-6 h-6 text-violet-300 mb-3" />
+                    <p className="text-white font-bold text-sm">{s.title}</p>
+                    <p className="text-violet-200 text-xs mt-0.5">{s.desc}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="max-w-7xl mx-auto px-6 py-24">
+        <div className="text-center max-w-2xl mx-auto mb-16">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Pricing</p>
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
+            Plans that scale with you
+          </h2>
+          <p className="text-lg text-slate-600">No hidden fees. Switch plans anytime.</p>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          {[
+            { name: 'Starter', price: '₹999', desc: 'Small coaching institutes', features: ['5 Users', '1,000 Leads', 'Basic Reports', 'Email Support'], popular: false },
+            { name: 'Growth', price: '₹2,999', desc: 'Growing colleges', features: ['20 Users', '5,000 Leads', 'Advanced Reports', 'WhatsApp', 'Priority Support'], popular: true },
+            { name: 'Enterprise', price: '₹9,999', desc: 'Universities & networks', features: ['Unlimited Users', 'Unlimited Leads', 'Custom Reports', 'All Integrations', '24/7 Support'], popular: false },
+          ].map((plan, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: i * 0.1 }}
+              viewport={{ once: true }}
+              className={`relative p-8 rounded-2xl ${
+                plan.popular
+                  ? 'bg-gradient-to-br from-violet-700 to-violet-900 text-white shadow-2xl shadow-violet-300/40 scale-105'
+                  : 'bg-white border border-slate-200'
+              }`}
+            >
+              {plan.popular && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white text-violet-700 text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                  Most popular
+                </div>
+              )}
+              <h3 className={`text-2xl font-bold mb-2 ${plan.popular ? 'text-white' : 'text-slate-900'}`} style={{ fontFamily: 'Sora' }}>
+                {plan.name}
+              </h3>
+              <p className={`text-sm mb-6 ${plan.popular ? 'text-violet-200' : 'text-slate-600'}`}>{plan.desc}</p>
+              <div className="mb-6">
+                <span className={`text-5xl font-bold ${plan.popular ? 'text-white' : 'text-slate-900'}`} style={{ fontFamily: 'Sora' }}>
+                  {plan.price}
+                </span>
+                <span className={`text-sm ml-1 ${plan.popular ? 'text-violet-200' : 'text-slate-500'}`}>/mo</span>
+              </div>
+              <ul className="space-y-3 mb-8">
+                {plan.features.map((feat, j) => (
+                  <li key={j} className={`flex items-center gap-2 text-sm ${plan.popular ? 'text-violet-100' : 'text-slate-700'}`}>
+                    <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${plan.popular ? 'text-emerald-300' : 'text-emerald-500'}`} />
+                    {feat}
+                  </li>
+                ))}
+              </ul>
+              <Button
+                className={`w-full h-11 ${plan.popular ? 'bg-white text-violet-700 hover:bg-violet-50' : 'bg-violet-700 hover:bg-violet-800 text-white'}`}
+                onClick={() => navigate('/register')}
+                data-testid={`plan-${plan.name.toLowerCase()}-cta`}
+              >
+                Start free trial
+              </Button>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="max-w-7xl mx-auto px-6 py-24">
+        <div className="bg-slate-900 rounded-3xl p-12 lg:p-20 text-center relative overflow-hidden">
+          <div className="absolute inset-0">
+            <div className="absolute top-0 left-1/4 w-96 h-96 bg-violet-600 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
+            <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-fuchsia-600 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
+          </div>
           <div className="relative z-10 max-w-2xl mx-auto">
-            <h2 className="text-4xl font-semibold tracking-tight text-white mb-4" style={{fontFamily: 'Outfit'}}>
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-white mb-4" style={{ fontFamily: 'Sora' }}>
               Ready to transform your admissions?
             </h2>
-            <p className="text-base text-slate-300 mb-8">
-              Join hundreds of educational institutions using EduCRM to convert more leads into students.
+            <p className="text-lg text-slate-300 mb-8">
+              Join 500+ educational institutions converting more leads with EduCRM.
             </p>
-            <Button
-              size="lg"
-              onClick={() => navigate('/register')}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-base px-8"
-              data-testid="bottom-cta-btn"
-            >
-              Get started free
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button
+                size="lg"
+                onClick={() => navigate('/register')}
+                className="bg-white text-violet-700 hover:bg-violet-50 text-base px-8 h-12"
+                data-testid="bottom-cta-btn"
+              >
+                Start free trial
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => navigate('/login')}
+                className="text-base px-8 h-12 border-white/30 text-white hover:bg-white/10"
+              >
+                Book a demo
+              </Button>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 py-12">
+      <footer className="bg-slate-900 text-slate-400 py-12">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-md flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center">
               <GraduationCap className="w-4 h-4 text-white" />
             </div>
-            <span className="text-lg font-semibold text-slate-900" style={{fontFamily: 'Outfit'}}>EduCRM</span>
+            <span className="text-lg font-bold text-white" style={{ fontFamily: 'Sora' }}>EduCRM</span>
           </div>
-          <p className="text-sm text-slate-500">© 2026 EduCRM. All rights reserved.</p>
+          <p className="text-sm">© 2026 EduCRM. All rights reserved.</p>
         </div>
       </footer>
     </div>

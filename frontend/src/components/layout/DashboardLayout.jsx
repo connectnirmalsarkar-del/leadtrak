@@ -79,11 +79,11 @@ export default function DashboardLayout({ children }) {
         data-testid="dashboard-sidebar"
       >
         <div className="flex h-16 items-center justify-between px-6 border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-md flex items-center justify-center">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center shadow-lg shadow-violet-900/50">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-semibold tracking-tight" style={{fontFamily: 'Outfit'}}>EduCRM</span>
+            <span className="text-lg font-bold tracking-tight" style={{fontFamily: 'Sora'}}>EduCRM</span>
           </div>
           <button
             className="lg:hidden text-slate-400 hover:text-white"
@@ -164,7 +164,7 @@ export default function DashboardLayout({ children }) {
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 hover:bg-slate-50 rounded-md p-1.5 transition-colors" data-testid="user-menu-btn">
                   <Avatar className="w-8 h-8">
-                    <AvatarFallback className="bg-blue-600 text-white text-xs">{userInitials}</AvatarFallback>
+                    <AvatarFallback className="bg-gradient-to-br from-violet-600 to-violet-800 text-white text-xs font-semibold">{userInitials}</AvatarFallback>
                   </Avatar>
                   <div className="text-left hidden sm:block">
                     <p className="text-sm font-medium text-slate-900">{user?.name}</p>

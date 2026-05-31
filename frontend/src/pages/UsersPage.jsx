@@ -74,12 +74,12 @@ export default function UsersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Team</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900" style={{fontFamily: 'Outfit'}}>Team Members</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Team Members</h1>
           <p className="text-sm text-slate-600 mt-1">{users.length} active members</p>
         </div>
         <Dialog open={showAddDialog} onOpenChange={(o) => { if(!o) closeDialog(); else setShowAddDialog(true); }}>
           <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="add-user-btn">
+            <Button className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="add-user-btn">
               <Plus className="w-4 h-4 mr-2" />
               Add Member
             </Button>
@@ -128,7 +128,7 @@ export default function UsersPage() {
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={closeDialog}>Cancel</Button>
-                  <Button onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="submit-user-btn">Create</Button>
+                  <Button onClick={handleAdd} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="submit-user-btn">Create</Button>
                 </DialogFooter>
               </>
             )}
@@ -136,7 +136,7 @@ export default function UsersPage() {
         </Dialog>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-md overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50">

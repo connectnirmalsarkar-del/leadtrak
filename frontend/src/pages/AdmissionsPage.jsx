@@ -51,12 +51,12 @@ export default function AdmissionsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Enrollment</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900" style={{fontFamily: 'Outfit'}}>Admissions</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Admissions</h1>
           <p className="text-sm text-slate-600 mt-1">{admissions.length} total enrollments</p>
         </div>
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="add-admission-btn">
+            <Button className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="add-admission-btn">
               <Plus className="w-4 h-4 mr-2" />
               Record Admission
             </Button>
@@ -92,7 +92,7 @@ export default function AdmissionsPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
-              <Button onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="submit-admission-btn">Record</Button>
+              <Button onClick={handleAdd} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="submit-admission-btn">Record</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -100,7 +100,7 @@ export default function AdmissionsPage() {
 
       {/* Revenue card */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white border border-slate-200 rounded-md p-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-emerald-50 rounded-md flex items-center justify-center">
               <IndianRupee className="w-5 h-5 text-emerald-600" />
@@ -111,7 +111,7 @@ export default function AdmissionsPage() {
             </div>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-md p-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-blue-50 rounded-md flex items-center justify-center">
               <GraduationCap className="w-5 h-5 text-blue-600" />
@@ -124,7 +124,7 @@ export default function AdmissionsPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-md overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50">

@@ -71,7 +71,7 @@ export default function TasksPage() {
   const TaskColumn = ({ title, items, status, color }) => (
     <div className="bg-slate-50 rounded-md p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className={`text-sm font-semibold text-slate-700`} style={{fontFamily: 'Outfit'}}>{title}</h3>
+        <h3 className={`text-sm font-semibold text-slate-700`} style={{fontFamily: 'Sora'}}>{title}</h3>
         <span className={`text-xs px-2 py-0.5 rounded-md ${color}`}>{items.length}</span>
       </div>
       <div className="space-y-3">
@@ -113,12 +113,12 @@ export default function TasksPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Productivity</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900" style={{fontFamily: 'Outfit'}}>Tasks</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Tasks</h1>
           <p className="text-sm text-slate-600 mt-1">Manage and track team tasks</p>
         </div>
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="add-task-btn">
+            <Button className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="add-task-btn">
               <Plus className="w-4 h-4 mr-2" />
               Create Task
             </Button>
@@ -166,7 +166,7 @@ export default function TasksPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
-              <Button onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="submit-task-btn">Create</Button>
+              <Button onClick={handleAdd} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="submit-task-btn">Create</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

@@ -145,13 +145,13 @@ export default function LeadsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Pipeline</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900" style={{fontFamily: 'Outfit'}}>Leads</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Leads</h1>
           <p className="text-sm text-slate-600 mt-1">{leads.length} {leads.length === 1 ? 'lead' : 'leads'} total</p>
         </div>
 
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="add-lead-btn">
+            <Button className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="add-lead-btn">
               <Plus className="w-4 h-4 mr-2" />
               Add Lead
             </Button>
@@ -207,14 +207,14 @@ export default function LeadsPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAddDialog(false)} data-testid="cancel-add-lead-btn">Cancel</Button>
-              <Button onClick={handleAddLead} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="submit-add-lead-btn">Create Lead</Button>
+              <Button onClick={handleAddLead} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="submit-add-lead-btn">Create Lead</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-slate-200 rounded-md p-4 flex flex-col sm:flex-row gap-3">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row gap-3">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input
@@ -238,7 +238,7 @@ export default function LeadsPage() {
       </div>
 
       {/* Leads Table */}
-      <div className="bg-white border border-slate-200 rounded-md overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50">
@@ -297,7 +297,7 @@ export default function LeadsPage() {
                   <span className="text-xs font-mono text-slate-500">{selectedLead.lead_id}</span>
                   <Badge variant="outline" className={statusBadgeClass(selectedLead.status)}>{selectedLead.status}</Badge>
                 </div>
-                <SheetTitle className="text-2xl" style={{fontFamily: 'Outfit'}}>{selectedLead.name}</SheetTitle>
+                <SheetTitle className="text-2xl" style={{fontFamily: 'Sora'}}>{selectedLead.name}</SheetTitle>
                 <SheetDescription>{selectedLead.course_interested}</SheetDescription>
               </SheetHeader>
 
@@ -404,7 +404,7 @@ export default function LeadsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowFollowupDialog(false)}>Cancel</Button>
-            <Button onClick={handleAddFollowup} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="submit-followup-btn">Add Follow-up</Button>
+            <Button onClick={handleAddFollowup} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="submit-followup-btn">Add Follow-up</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

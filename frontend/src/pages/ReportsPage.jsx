@@ -38,7 +38,7 @@ export default function ReportsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Analytics</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900" style={{fontFamily: 'Outfit'}}>Reports</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Reports</h1>
           <p className="text-sm text-slate-600 mt-1">Performance insights across your pipeline</p>
         </div>
         <div className="flex gap-2">
@@ -55,7 +55,7 @@ export default function ReportsPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200 rounded-md p-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-blue-50 rounded-md flex items-center justify-center">
               <Users className="w-5 h-5 text-blue-600" />
@@ -64,7 +64,7 @@ export default function ReportsPage() {
           </div>
           <p className="text-3xl font-semibold text-slate-900 font-mono">{summary.total}</p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-md p-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-emerald-50 rounded-md flex items-center justify-center">
               <IndianRupee className="w-5 h-5 text-emerald-600" />
@@ -73,7 +73,7 @@ export default function ReportsPage() {
           </div>
           <p className="text-3xl font-semibold text-slate-900 font-mono">₹{revenue.toLocaleString('en-IN')}</p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-md p-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-amber-50 rounded-md flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-amber-600" />
@@ -86,8 +86,8 @@ export default function ReportsPage() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white border border-slate-200 rounded-md p-6">
-          <h3 className="text-lg font-medium text-slate-900 mb-4" style={{fontFamily: 'Outfit'}}>Leads by Status</h3>
+        <div className="bg-white border border-slate-200 rounded-xl p-6">
+          <h3 className="text-lg font-medium text-slate-900 mb-4" style={{fontFamily: 'Sora'}}>Leads by Status</h3>
           {summary.by_status.length === 0 ? (
             <div className="h-64 flex items-center justify-center text-sm text-slate-400">No data</div>
           ) : (
@@ -103,8 +103,8 @@ export default function ReportsPage() {
           )}
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-md p-6">
-          <h3 className="text-lg font-medium text-slate-900 mb-4" style={{fontFamily: 'Outfit'}}>Leads by Source</h3>
+        <div className="bg-white border border-slate-200 rounded-xl p-6">
+          <h3 className="text-lg font-medium text-slate-900 mb-4" style={{fontFamily: 'Sora'}}>Leads by Source</h3>
           {summary.by_source.length === 0 ? (
             <div className="h-64 flex items-center justify-center text-sm text-slate-400">No data</div>
           ) : (
