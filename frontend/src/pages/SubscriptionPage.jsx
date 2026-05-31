@@ -58,7 +58,12 @@ export default function SubscriptionPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
         {plans.map((plan, i) => {
-          const price = billingCycle === 'monthly' ? plan.price_monthly : Math.round(plan.price_annual / 12);
+          const isMonthly = billingCycle === 'monthly';
+          const basePrice = isMonthly ? plan.price_monthly : Math.round(plan.price_annual / 12);
+          const gstPerMonth = isMonthly
+            ? (plan.gst_monthly ?? Math.round(plan.price_monthly * 0.18 * 100) / 100)
+            : Math.round((plan.gst_annual ?? plan.price_annual * 0.18) / 12 * 100) / 100;
+          const totalPerMonth = Math.round((basePrice + gstPerMonth) * 100) / 100;
           const isPopular = plan.name === 'Growth';
           return (
             <div
@@ -73,10 +78,14 @@ export default function SubscriptionPage() {
               )}
               <h3 className="text-2xl font-bold text-slate-900 mb-2" style={{fontFamily: 'Sora'}}>{plan.name}</h3>
               <div className="mb-6">
-                <span className="text-4xl font-bold text-slate-900" style={{fontFamily: 'Sora'}}>₹{price.toLocaleString('en-IN')}</span>
+                <span className="text-4xl font-bold text-slate-900" style={{fontFamily: 'Sora'}}>₹{basePrice.toLocaleString('en-IN')}</span>
                 <span className="text-sm text-slate-500">/month</span>
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  + 18% GST (₹{gstPerMonth.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})})
+                  · <span className="font-semibold text-slate-700">₹{totalPerMonth.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}/mo incl. tax</span>
+                </p>
                 {billingCycle === 'annual' && (
-                  <p className="text-xs text-slate-500 mt-1">Billed annually (₹{plan.price_annual.toLocaleString('en-IN')})</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Billed annually: ₹{plan.price_annual.toLocaleString('en-IN')} + GST ₹{(plan.gst_annual ?? Math.round(plan.price_annual * 0.18)).toLocaleString('en-IN')} = <strong>₹{(plan.total_annual ?? Math.round(plan.price_annual * 1.18)).toLocaleString('en-IN')}</strong></p>
                 )}
               </div>
               <ul className="space-y-3 mb-8">

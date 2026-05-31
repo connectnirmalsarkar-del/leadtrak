@@ -190,15 +190,21 @@ export default function PlatformOrgsPage() {
   const onSelectPlanForPayment = (planId) => {
     const plan = plans.find((p) => p.id === planId);
     if (plan) {
-      const price = paymentForm.billing_cycle === 'annual' ? plan.price_annual : plan.price_monthly;
-      setPaymentForm({ ...paymentForm, plan_id: planId, amount: String(price) });
+      const totalIncGst = paymentForm.billing_cycle === 'annual'
+        ? (plan.total_annual ?? Math.round(plan.price_annual * 1.18 * 100) / 100)
+        : (plan.total_monthly ?? Math.round(plan.price_monthly * 1.18 * 100) / 100);
+      setPaymentForm({ ...paymentForm, plan_id: planId, amount: String(totalIncGst) });
     }
   };
 
   const onChangeBillingCycle = (cycle) => {
     const plan = plans.find((p) => p.id === paymentForm.plan_id);
-    const price = plan ? (cycle === 'annual' ? plan.price_annual : plan.price_monthly) : '';
-    setPaymentForm({ ...paymentForm, billing_cycle: cycle, amount: price ? String(price) : paymentForm.amount });
+    const totalIncGst = plan
+      ? (cycle === 'annual'
+          ? (plan.total_annual ?? Math.round(plan.price_annual * 1.18 * 100) / 100)
+          : (plan.total_monthly ?? Math.round(plan.price_monthly * 1.18 * 100) / 100))
+      : '';
+    setPaymentForm({ ...paymentForm, billing_cycle: cycle, amount: totalIncGst ? String(totalIncGst) : paymentForm.amount });
   };
 
   const handleExtendTrial = async () => {
@@ -550,7 +556,14 @@ export default function PlatformOrgsPage() {
                   <TableRow key={r.id} data-testid={`order-row-${r.id}`}>
                     <TableCell className="font-medium text-slate-900">{r.organization_name}</TableCell>
                     <TableCell><Badge variant="outline" className={planBadge(r.plan_name)}>{r.plan_name} · {r.billing_cycle}</Badge></TableCell>
-                    <TableCell className="font-mono text-sm">₹{(r.amount || 0).toLocaleString('en-IN')}</TableCell>
+                    <TableCell className="font-mono text-sm">
+                      <div>₹{(r.amount || 0).toLocaleString('en-IN')}</div>
+                      {r.gst_amount > 0 && (
+                        <div className="text-[10px] text-slate-500">
+                          Base ₹{(r.base_amount || 0).toLocaleString('en-IN')} + GST ₹{(r.gst_amount || 0).toLocaleString('en-IN')}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="text-xs capitalize">{(r.payment_method || '').replace('_', ' ')}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={
@@ -617,6 +630,16 @@ export default function PlatformOrgsPage() {
                 <div className="space-y-1.5">
                   <Label>Amount Received (₹) *</Label>
                   <Input type="number" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} placeholder="e.g. 2999" data-testid="payment-amount-input" />
+                  {paymentForm.amount && parseFloat(paymentForm.amount) > 0 && (() => {
+                    const total = parseFloat(paymentForm.amount);
+                    const base = Math.round((total / 1.18) * 100) / 100;
+                    const gst = Math.round((total - base) * 100) / 100;
+                    return (
+                      <p className="text-[11px] text-slate-500" data-testid="payment-gst-breakdown">
+                        Includes 18% GST: Base ₹{base.toLocaleString('en-IN', {minimumFractionDigits: 2})} + GST ₹{gst.toLocaleString('en-IN', {minimumFractionDigits: 2})}
+                      </p>
+                    );
+                  })()}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">

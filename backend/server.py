@@ -369,6 +369,15 @@ class LeadSourceCreate(BaseModel):
     name: str
 
 GST_REGEX = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$")
+GST_RATE = 0.18  # 18% GST applied on all subscription invoices (India)
+
+
+def with_gst(amount: float) -> dict:
+    """Return base/gst/total breakdown for a subscription amount."""
+    base = round(float(amount or 0), 2)
+    gst = round(base * GST_RATE, 2)
+    total = round(base + gst, 2)
+    return {"base_amount": base, "gst_amount": gst, "gst_rate": GST_RATE, "total_amount": total}
 
 class OrganizationUpdate(BaseModel):
     name: Optional[str] = None
@@ -2326,6 +2335,14 @@ async def get_subscription_plans():
     async for p in plans_cursor:
         p["id"] = str(p["_id"])
         p.pop("_id", None)
+        # GST breakdown (18%) — eta upgrade UI ar manual payment dialog use kore
+        base_m = float(p.get("price_monthly", 0) or 0)
+        base_a = float(p.get("price_annual", 0) or 0)
+        p["gst_rate"] = GST_RATE
+        p["gst_monthly"] = round(base_m * GST_RATE, 2)
+        p["gst_annual"] = round(base_a * GST_RATE, 2)
+        p["total_monthly"] = round(base_m + base_m * GST_RATE, 2)
+        p["total_annual"] = round(base_a + base_a * GST_RATE, 2)
         plans.append(p)
     return plans
 
@@ -2338,11 +2355,13 @@ async def create_subscription_order(data: SubscriptionCreate, current_user: dict
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     
-    amount = plan[f"price_{data.billing_cycle}"] * 100  # Convert to paise
+    base_amount = plan[f"price_{data.billing_cycle}"]
+    gst_breakdown = with_gst(base_amount)
+    amount_paise = int(round(gst_breakdown["total_amount"] * 100))  # Total including GST
     
     try:
         order = razorpay_client.order.create({
-            "amount": amount,
+            "amount": amount_paise,
             "currency": "INR",
             "payment_capture": 1
         })
@@ -2352,7 +2371,10 @@ async def create_subscription_order(data: SubscriptionCreate, current_user: dict
             "plan_id": ObjectId(data.plan_id),
             "plan_name": plan.get("name"),
             "billing_cycle": data.billing_cycle,
-            "amount": plan[f"price_{data.billing_cycle}"],
+            "amount": gst_breakdown["total_amount"],
+            "base_amount": gst_breakdown["base_amount"],
+            "gst_rate": GST_RATE,
+            "gst_amount": gst_breakdown["gst_amount"],
             "currency": "INR",
             "status": "pending",
             "payment_method": "online_razorpay",
@@ -2368,7 +2390,10 @@ async def create_subscription_order(data: SubscriptionCreate, current_user: dict
         return {
             "order_id": order["id"],
             "amount": order["amount"],
-            "currency": order["currency"]
+            "currency": order["currency"],
+            "base_amount": gst_breakdown["base_amount"],
+            "gst_amount": gst_breakdown["gst_amount"],
+            "total_amount": gst_breakdown["total_amount"],
         }
     except Exception as e:
         logger.error(f"Razorpay error: {str(e)}")
@@ -2550,6 +2575,10 @@ async def platform_subscription_orders(current_user: dict = Depends(get_current_
             "plan_name": o.get("plan_name", ""),
             "billing_cycle": o.get("billing_cycle", ""),
             "amount": o.get("amount", 0),
+            "base_amount": o.get("base_amount", round(float(o.get("amount", 0)) / (1 + GST_RATE), 2)),
+            "gst_amount": o.get("gst_amount", round(float(o.get("amount", 0)) - float(o.get("amount", 0)) / (1 + GST_RATE), 2)),
+            "gst_rate": o.get("gst_rate", GST_RATE),
+            "receipt_no": o.get("receipt_no", ""),
             "status": o.get("status"),
             "payment_method": o.get("payment_method", ""),
             "reference": o.get("reference", ""),
@@ -2592,12 +2621,20 @@ async def platform_manual_payment(data: ManualPaymentRequest, current_user: dict
     # Generate receipt number
     receipt_no = f"RCP-{now.strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}"
 
+    # GST breakdown — Super Admin enters the AMOUNT RECEIVED (incl. GST). We back-out the base.
+    total_received = float(data.amount or 0)
+    base_amount = round(total_received / (1 + GST_RATE), 2)
+    gst_amount = round(total_received - base_amount, 2)
+
     order_doc = {
         "organization_id": org_oid,
         "plan_id": plan_oid,
         "plan_name": plan.get("name"),
         "billing_cycle": data.billing_cycle,
-        "amount": data.amount,
+        "amount": total_received,
+        "base_amount": base_amount,
+        "gst_rate": GST_RATE,
+        "gst_amount": gst_amount,
         "currency": "INR",
         "status": "paid",
         "payment_method": data.payment_method,
