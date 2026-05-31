@@ -284,6 +284,52 @@ def get_lead_statuses(industry: str) -> list:
     return get_industry(industry).get("default_lead_statuses", [])
 
 
+# Industry-specific widget capture fields
+INDUSTRY_WIDGET_FIELDS = {
+    "education": [
+        {"name": "course_interested", "label": "Course Interested In", "type": "text", "required": False, "placeholder": "e.g. B.Tech CSE, MBA, NEET Prep"},
+    ],
+    "it_software": [
+        {"name": "company_name", "label": "Company Name", "type": "text", "required": False, "placeholder": "Your organization"},
+        {"name": "course_interested", "label": "Service Required", "type": "text", "required": False, "placeholder": "Custom Software / Web App / Mobile App"},
+    ],
+    "real_estate": [
+        {"name": "course_interested", "label": "Property Type", "type": "select", "required": False, "options": ["1 BHK", "2 BHK", "3 BHK", "4+ BHK", "Villa", "Plot", "Commercial"]},
+        {"name": "budget_range", "label": "Budget", "type": "select", "required": False, "options": ["Under ₹25L", "₹25L - ₹50L", "₹50L - ₹1Cr", "₹1Cr - ₹2Cr", "₹2Cr+"]},
+    ],
+    "healthcare": [
+        {"name": "course_interested", "label": "Treatment / Service", "type": "text", "required": False, "placeholder": "Consultation, treatment etc."},
+        {"name": "preferred_date", "label": "Preferred Date", "type": "date", "required": False},
+    ],
+    "insurance": [
+        {"name": "course_interested", "label": "Insurance Type", "type": "select", "required": False, "options": ["Life", "Health", "Motor", "Term", "Travel", "Home", "Business"]},
+        {"name": "budget_range", "label": "Premium Budget (₹/year)", "type": "select", "required": False, "options": ["Under ₹10k", "₹10k - ₹25k", "₹25k - ₹50k", "₹50k - ₹1L", "₹1L+"]},
+    ],
+    "travel": [
+        {"name": "course_interested", "label": "Destination", "type": "text", "required": False, "placeholder": "Goa, Manali, Maldives etc."},
+        {"name": "preferred_date", "label": "Travel Date", "type": "date", "required": False},
+        {"name": "travellers", "label": "Number of Travellers", "type": "select", "required": False, "options": ["1", "2", "3", "4", "5+"]},
+    ],
+    "retail": [
+        {"name": "course_interested", "label": "Product Interested In", "type": "text", "required": False, "placeholder": "Which product?"},
+    ],
+    "fitness": [
+        {"name": "course_interested", "label": "Plan Interested", "type": "select", "required": False, "options": ["Monthly", "Quarterly", "Half-yearly", "Annual", "Personal Training"]},
+    ],
+    "generic": [
+        {"name": "course_interested", "label": "I'm Interested In", "type": "text", "required": False, "placeholder": "What can we help with?"},
+    ],
+}
+
+
+def get_widget_fields(industry: str) -> list:
+    """Return the dynamic field list to render on the public lead capture widget for this industry.
+
+    The returned list is appended after the standard Name + Mobile + Email and before State + City.
+    """
+    return INDUSTRY_WIDGET_FIELDS.get(industry, INDUSTRY_WIDGET_FIELDS["generic"])
+
+
 def list_industries() -> list:
     """Return public industry list (for the signup dropdown)."""
     return [

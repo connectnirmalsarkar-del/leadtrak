@@ -24,7 +24,7 @@ import cloudinary
 import cloudinary.uploader
 from openpyxl import Workbook
 from india_locations import INDIA_LOCATIONS
-from industry_config import INDUSTRY_CONFIG, SUPPORTED_INDUSTRIES, get_industry, get_terms, get_lead_statuses, list_industries, get_default_services
+from industry_config import INDUSTRY_CONFIG, SUPPORTED_INDUSTRIES, get_industry, get_terms, get_lead_statuses, get_widget_fields, list_industries, get_default_services
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -3184,6 +3184,12 @@ class PublicLeadCreate(BaseModel):
     mobile: str
     email: Optional[str] = None
     course_interested: Optional[str] = "Inquiry"
+    state: Optional[str] = ""
+    city: Optional[str] = ""
+    company_name: Optional[str] = None
+    budget_range: Optional[str] = None
+    preferred_date: Optional[str] = None
+    travellers: Optional[str] = None
     message: Optional[str] = ""
 
 @api_router.get("/widget/token")
@@ -3197,6 +3203,42 @@ async def get_widget_token(current_user: dict = Depends(get_current_user)):
         await db.organizations.update_one({"_id": org_id}, {"$set": {"widget_token": token}})
         return {"widget_token": token}
     return {"widget_token": org["widget_token"]}
+
+@api_router.get("/widget/config/{widget_token}")
+async def public_widget_config(widget_token: str):
+    """Public (no-auth) endpoint that returns the org's industry-specific widget configuration.
+    The embeddable JS calls this on load to render the right fields, branding & state list."""
+    org = await db.organizations.find_one({"widget_token": widget_token})
+    if not org:
+        raise HTTPException(status_code=404, detail="Invalid widget token")
+    industry = org.get("industry") or "generic"
+    terms = get_terms(industry)
+    industry_fields = get_widget_fields(industry)
+    # Fetch active states once for the cascading state dropdown
+    states = await db.locations.distinct("state", {"is_active": True})
+    branding = org.get("branding", {}) or {}
+    logo_url = branding.get("logo_url") or org.get("logo_url") or ""
+    return {
+        "org_name": org.get("name", ""),
+        "logo_url": logo_url,
+        "industry": industry,
+        "terms": terms,
+        "primary_color": branding.get("primary_color") or "#7C3AED",
+        "fields": industry_fields,
+        "states": sorted(states),
+    }
+
+
+@api_router.get("/widget/cities/{widget_token}")
+async def public_widget_cities(widget_token: str, state: str):
+    """Public endpoint to fetch cities for a state (used by widget's cascading dropdown)."""
+    org = await db.organizations.find_one({"widget_token": widget_token}, {"_id": 1})
+    if not org:
+        raise HTTPException(status_code=404, detail="Invalid widget token")
+    cursor = db.locations.find({"is_active": True, "state": state}, {"city": 1}).sort("city", 1)
+    cities = [d["city"] async for d in cursor]
+    return {"cities": cities}
+
 
 @api_router.post("/widget/lead/{widget_token}")
 async def public_widget_lead(widget_token: str, data: PublicLeadCreate):
@@ -3220,8 +3262,12 @@ async def public_widget_lead(widget_token: str, data: PublicLeadCreate):
         "mobile": data.mobile,
         "email": data.email,
         "course_interested": data.course_interested or "Inquiry",
-        "state": "",
-        "city": "",
+        "state": data.state or "",
+        "city": data.city or "",
+        "company_name": data.company_name,
+        "budget_range": data.budget_range,
+        "preferred_date": data.preferred_date,
+        "travellers": data.travellers,
         "lead_source": "Website Widget",
         "assigned_to": assignee,
         "status": "New",

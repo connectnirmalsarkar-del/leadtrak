@@ -222,11 +222,21 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ 24/24 backend pytest pass (`/app/backend/tests/test_saas_billing.py`)
 
 ### Completed 2026-05-31 — Locations (State / City)
-- ✅ Seeded `locations` collection with 36 Indian states/UTs and ~250 default cities (`india_locations.py`)
+- ✅ Seeded `locations` collection with 36 Indian states/UTs and ~430+ default cities (`india_locations.py`, West Bengal alone has 186 cities)
 - ✅ Public endpoints: `GET /api/locations/states`, `GET /api/locations/cities?state=…` — used by lead capture forms
 - ✅ Super Admin CRUD: `GET /api/platform/locations`, `POST /api/platform/locations/cities`, `PUT /api/platform/locations/cities/{id}`, `DELETE /api/platform/locations/cities/{id}` with case-insensitive dedupe
+- ✅ `seed_locations()` is **additive** — runs on every boot and only inserts new (state, city) pairs without touching existing entries
 - ✅ Lead Add form: **State** and **City** are now cascading Select dropdowns (city options re-populate when state changes)
 - ✅ New page **/platform/locations** for Super Admin — search, state filter, toggle active/inactive, edit, delete, custom vs default badges
+
+### Completed 2026-05-31 — Lead Capture Widget Redesign
+- ✅ **Industry-aware** fields — config endpoint `GET /api/widget/config/{token}` returns the right field list for tenant's industry (Education → Course; IT → Company + Service; Real Estate → Property Type + Budget; Healthcare → Treatment + Date; Insurance → Type + Premium; Travel → Destination + Date + Travellers; Retail → Product; Fitness → Plan; Generic → Inquiry)
+- ✅ Cascading **State + City** dropdown — public endpoint `GET /api/widget/cities/{token}?state=…` powers it; no auth required
+- ✅ Embed snippet is now **self-configuring** — fetches latest field config + state list at runtime, so changing industry or cities never requires re-pasting the script
+- ✅ Professional UI redesign — gradient brand badge, larger card with `0 8px 30px` shadow, Sora heading, focus rings, helper labels, animated submit state
+- ✅ **Powered by Leadtrak** footer below submit button (links to leadtrak.com)
+- ✅ Brand color & logo respected from organization branding settings
+- ✅ Backend stores `state`, `city`, `company_name`, `budget_range`, `preferred_date`, `travellers` from public submissions
 
 ### P2 — Future
 - ⏳ Workflow automation (drip campaigns)
