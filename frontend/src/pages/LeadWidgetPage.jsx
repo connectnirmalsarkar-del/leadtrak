@@ -72,28 +72,44 @@ export default function LeadWidgetPage() {
     return s;
   }
 
-  // Fetch config then render
-  var xhr=new XMLHttpRequest();
-  xhr.open("GET",API+"/api/widget/config/"+TOKEN,true);
-  xhr.onload=function(){
-    if(xhr.status!==200) return;
-    var cfg=JSON.parse(xhr.responseText);
-    brand=cfg.primary_color||brand;
-    var card=el("div",{style:{maxWidth:"420px",margin:"0 auto",border:"1px solid #E2E8F0",borderRadius:"16px",padding:"28px",background:"#fff",boxShadow:"0 8px 30px rgba(15,23,42,0.08)",fontFamily:"-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"}});
-    // Header
-    var brandTag=el("div",{style:{display:"inline-block",padding:"4px 10px",background:brand+"15",color:brand,fontSize:"10px",fontWeight:"700",letterSpacing:"1.5px",borderRadius:"100px",marginBottom:"10px",textTransform:"uppercase"}},["Request a Callback"]);
-    card.appendChild(brandTag);
-    card.appendChild(el("h3",{style:{margin:"0 0 6px",fontSize:"22px",fontWeight:"700",color:"#0F172A",letterSpacing:"-0.3px"}},["Speak with our team"]));
-    card.appendChild(el("p",{style:{margin:"0 0 22px",fontSize:"13px",color:"#64748B",lineHeight:"1.5"}},["Drop your details and we'll reach out within 1 working hour to help you with "+(cfg.terms&&cfg.terms.offering?cfg.terms.offering.toLowerCase():"your inquiry")+"."]));
-    var form=el("form",{id:"ltf"});
-    form.appendChild(input("name","Your name","text",true,"Full name"));
-    form.appendChild(input("mobile","Mobile number","tel",true,"10-digit mobile"));
-    form.appendChild(input("email","Email","email",false,"name@example.com"));
-    // Industry fields
-    (cfg.fields||[]).forEach(function(f){
-      if(f.type==="select") form.appendChild((function(){var w=el("div",{style:{marginBottom:"12px"}}); w.appendChild(el("label",{style:{display:"block",fontSize:"12px",fontWeight:"600",color:"#475569",marginBottom:"5px"}},[f.label+(f.required?" *":"")])); var s=selectField(f.name,f.label,f.options,f.required); w.appendChild(s); return w; })());
-      else form.appendChild(input(f.name,f.label,f.type||"text",!!f.required,f.placeholder||""));
-    });
+    // Fetch config then render
+    var xhr=new XMLHttpRequest();
+    xhr.open("GET",API+"/api/widget/config/"+TOKEN,true);
+    xhr.onload=function(){
+      if(xhr.status!==200) return;
+      var cfg=JSON.parse(xhr.responseText);
+      brand=cfg.primary_color||brand;
+      var serviceNames=(cfg.services||[]).map(function(s){return s.name;});
+      var card=el("div",{style:{maxWidth:"420px",margin:"0 auto",border:"1px solid #E2E8F0",borderRadius:"16px",padding:"28px",background:"#fff",boxShadow:"0 8px 30px rgba(15,23,42,0.08)",fontFamily:"-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"}});
+      // Header
+      var brandTag=el("div",{style:{display:"inline-block",padding:"4px 10px",background:brand+"15",color:brand,fontSize:"10px",fontWeight:"700",letterSpacing:"1.5px",borderRadius:"100px",marginBottom:"10px",textTransform:"uppercase"}},["Request a Callback"]);
+      card.appendChild(brandTag);
+      card.appendChild(el("h3",{style:{margin:"0 0 6px",fontSize:"22px",fontWeight:"700",color:"#0F172A",letterSpacing:"-0.3px"}},["Speak with our team"]));
+      card.appendChild(el("p",{style:{margin:"0 0 22px",fontSize:"13px",color:"#64748B",lineHeight:"1.5"}},["Drop your details and we'll reach out within 1 working hour to help you with "+(cfg.terms&&cfg.terms.offering?cfg.terms.offering.toLowerCase():"your inquiry")+"."]));
+      var form=el("form",{id:"ltf"});
+      form.appendChild(input("name","Your name","text",true,"Full name"));
+      form.appendChild(input("mobile","Mobile number","tel",true,"10-digit mobile"));
+      form.appendChild(input("email","Email","email",false,"name@example.com"));
+      // Industry fields
+      (cfg.fields||[]).forEach(function(f){
+        if(f.type==="service-select"){
+          if(serviceNames.length>0){
+            var w=el("div",{style:{marginBottom:"12px"}});
+            w.appendChild(el("label",{style:{display:"block",fontSize:"12px",fontWeight:"600",color:"#475569",marginBottom:"5px"}},[f.label+(f.required?" *":"")]));
+            var s=selectField(f.name,f.label,serviceNames,f.required);
+            w.appendChild(s); form.appendChild(w);
+          } else {
+            form.appendChild(input(f.name,f.label,"text",!!f.required,f.placeholder||""));
+          }
+        } else if(f.type==="select"){
+          var w2=el("div",{style:{marginBottom:"12px"}});
+          w2.appendChild(el("label",{style:{display:"block",fontSize:"12px",fontWeight:"600",color:"#475569",marginBottom:"5px"}},[f.label+(f.required?" *":"")]));
+          var s2=selectField(f.name,f.label,f.options,f.required);
+          w2.appendChild(s2); form.appendChild(w2);
+        } else {
+          form.appendChild(input(f.name,f.label,f.type||"text",!!f.required,f.placeholder||""));
+        }
+      });
     // State + City cascading
     var stateRow=el("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}});
     var stateWrap=el("div"); stateWrap.appendChild(el("label",{style:{display:"block",fontSize:"12px",fontWeight:"600",color:"#475569",marginBottom:"5px"}},["State"]));
@@ -175,6 +191,18 @@ export default function LeadWidgetPage() {
         <p className="text-sm text-slate-500 mt-1">
           Industry-aware form auto-renders <strong>{config?.industry || '…'}</strong>-specific fields. Paste the snippet on any website.
         </p>
+        {config && (config.services || []).length === 0 && (
+          <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium" data-testid="no-services-warning">
+            <Sparkles className="w-3 h-3" />
+            No services in your catalog yet — the "Service" field will fall back to text. <a href="/services" className="underline font-semibold">Add services</a>
+          </div>
+        )}
+        {config && (config.services || []).length > 0 && (
+          <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium" data-testid="services-connected-pill">
+            <Check className="w-3 h-3" />
+            Connected to your Services catalog · {(config.services || []).length} item{(config.services || []).length === 1 ? '' : 's'}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -232,19 +260,34 @@ export default function LeadWidgetPage() {
                 <input className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none" placeholder="name@example.com" />
               </div>
               {/* Industry-specific fields */}
-              {(config?.fields || []).map((f) => (
-                <div key={f.name}>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">{f.label}{f.required ? ' *' : ''}</label>
-                  {f.type === 'select' ? (
-                    <select className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none bg-white">
-                      <option>Select…</option>
-                      {(f.options || []).map((o) => <option key={o}>{o}</option>)}
-                    </select>
-                  ) : (
-                    <input type={f.type || 'text'} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none" placeholder={f.placeholder || ''} />
-                  )}
-                </div>
-              ))}
+              {(config?.fields || []).map((f) => {
+                const isServiceSelect = f.type === 'service-select';
+                const serviceNames = (config?.services || []).map((s) => s.name);
+                const fallbackToText = isServiceSelect && serviceNames.length === 0;
+                return (
+                  <div key={f.name}>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">
+                      {f.label}{f.required ? ' *' : ''}
+                    </label>
+                    {(isServiceSelect && !fallbackToText) ? (
+                      <select className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none bg-white">
+                        <option>Select…</option>
+                        {serviceNames.map((s) => <option key={s}>{s}</option>)}
+                      </select>
+                    ) : f.type === 'select' ? (
+                      <select className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none bg-white">
+                        <option>Select…</option>
+                        {(f.options || []).map((o) => <option key={o}>{o}</option>)}
+                      </select>
+                    ) : (
+                      <input type={f.type === 'service-select' ? 'text' : (f.type || 'text')} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none" placeholder={f.placeholder || ''} />
+                    )}
+                    {fallbackToText && (
+                      <p className="text-[10px] text-amber-700 mt-1">No services in catalog yet — falls back to text input. Add services in <strong>Services</strong> page.</p>
+                    )}
+                  </div>
+                );
+              })}
               {/* State + City */}
               <div className="grid grid-cols-2 gap-2.5">
                 <div>

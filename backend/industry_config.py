@@ -287,37 +287,37 @@ def get_lead_statuses(industry: str) -> list:
 # Industry-specific widget capture fields
 INDUSTRY_WIDGET_FIELDS = {
     "education": [
-        {"name": "course_interested", "label": "Course Interested In", "type": "text", "required": False, "placeholder": "e.g. B.Tech CSE, MBA, NEET Prep"},
+        {"name": "course_interested", "label": "Course Interested In", "type": "service-select", "required": False, "placeholder": "e.g. B.Tech CSE, MBA, NEET Prep"},
     ],
     "it_software": [
         {"name": "company_name", "label": "Company Name", "type": "text", "required": False, "placeholder": "Your organization"},
-        {"name": "course_interested", "label": "Service Required", "type": "text", "required": False, "placeholder": "Custom Software / Web App / Mobile App"},
+        {"name": "course_interested", "label": "Service Required", "type": "service-select", "required": False, "placeholder": "Pick a service"},
     ],
     "real_estate": [
-        {"name": "course_interested", "label": "Property Type", "type": "select", "required": False, "options": ["1 BHK", "2 BHK", "3 BHK", "4+ BHK", "Villa", "Plot", "Commercial"]},
+        {"name": "course_interested", "label": "Property Type", "type": "service-select", "required": False, "placeholder": "Pick a property type"},
         {"name": "budget_range", "label": "Budget", "type": "select", "required": False, "options": ["Under ₹25L", "₹25L - ₹50L", "₹50L - ₹1Cr", "₹1Cr - ₹2Cr", "₹2Cr+"]},
     ],
     "healthcare": [
-        {"name": "course_interested", "label": "Treatment / Service", "type": "text", "required": False, "placeholder": "Consultation, treatment etc."},
+        {"name": "course_interested", "label": "Treatment / Service", "type": "service-select", "required": False, "placeholder": "Pick a service"},
         {"name": "preferred_date", "label": "Preferred Date", "type": "date", "required": False},
     ],
     "insurance": [
-        {"name": "course_interested", "label": "Insurance Type", "type": "select", "required": False, "options": ["Life", "Health", "Motor", "Term", "Travel", "Home", "Business"]},
+        {"name": "course_interested", "label": "Insurance Type", "type": "service-select", "required": False, "placeholder": "Pick a plan"},
         {"name": "budget_range", "label": "Premium Budget (₹/year)", "type": "select", "required": False, "options": ["Under ₹10k", "₹10k - ₹25k", "₹25k - ₹50k", "₹50k - ₹1L", "₹1L+"]},
     ],
     "travel": [
-        {"name": "course_interested", "label": "Destination", "type": "text", "required": False, "placeholder": "Goa, Manali, Maldives etc."},
+        {"name": "course_interested", "label": "Package / Destination", "type": "service-select", "required": False, "placeholder": "Pick a package"},
         {"name": "preferred_date", "label": "Travel Date", "type": "date", "required": False},
         {"name": "travellers", "label": "Number of Travellers", "type": "select", "required": False, "options": ["1", "2", "3", "4", "5+"]},
     ],
     "retail": [
-        {"name": "course_interested", "label": "Product Interested In", "type": "text", "required": False, "placeholder": "Which product?"},
+        {"name": "course_interested", "label": "Product Interested In", "type": "service-select", "required": False, "placeholder": "Pick a product"},
     ],
     "fitness": [
-        {"name": "course_interested", "label": "Plan Interested", "type": "select", "required": False, "options": ["Monthly", "Quarterly", "Half-yearly", "Annual", "Personal Training"]},
+        {"name": "course_interested", "label": "Plan Interested", "type": "service-select", "required": False, "placeholder": "Pick a plan"},
     ],
     "generic": [
-        {"name": "course_interested", "label": "I'm Interested In", "type": "text", "required": False, "placeholder": "What can we help with?"},
+        {"name": "course_interested", "label": "I'm Interested In", "type": "service-select", "required": False, "placeholder": "Pick a service"},
     ],
 }
 

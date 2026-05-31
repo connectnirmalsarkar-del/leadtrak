@@ -231,10 +231,12 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 
 ### Completed 2026-05-31 — Lead Capture Widget Redesign
 - ✅ **Industry-aware** fields — config endpoint `GET /api/widget/config/{token}` returns the right field list for tenant's industry (Education → Course; IT → Company + Service; Real Estate → Property Type + Budget; Healthcare → Treatment + Date; Insurance → Type + Premium; Travel → Destination + Date + Travellers; Retail → Product; Fitness → Plan; Generic → Inquiry)
+- ✅ **Services Catalog connection** — primary Service/Course/Plan/Product field is `service-select` type, dropdown auto-populated from the org's active services collection (Education shows actual courses; IT shows actual services etc.). Falls back to text input if catalog is empty.
 - ✅ Cascading **State + City** dropdown — public endpoint `GET /api/widget/cities/{token}?state=…` powers it; no auth required
-- ✅ Embed snippet is now **self-configuring** — fetches latest field config + state list at runtime, so changing industry or cities never requires re-pasting the script
+- ✅ Embed snippet is now **self-configuring** — fetches latest field config + services + state list at runtime, so changing industry, adding services, or adding cities never requires re-pasting the script
 - ✅ Professional UI redesign — gradient brand badge, larger card with `0 8px 30px` shadow, Sora heading, focus rings, helper labels, animated submit state
 - ✅ **Powered by Leadtrak** footer below submit button (links to leadtrak.com)
+- ✅ Status pill on LeadWidgetPage shows whether services catalog is connected
 - ✅ Brand color & logo respected from organization branding settings
 - ✅ Backend stores `state`, `city`, `company_name`, `budget_range`, `preferred_date`, `travellers` from public submissions
 

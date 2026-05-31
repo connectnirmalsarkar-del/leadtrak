@@ -3216,6 +3216,18 @@ async def public_widget_config(widget_token: str):
     industry_fields = get_widget_fields(industry)
     # Fetch active states once for the cascading state dropdown
     states = await db.locations.distinct("state", {"is_active": True})
+    # Fetch active services for service-select fields
+    services_cursor = db.services.find(
+        {"organization_id": org["_id"], "active": {"$ne": False}},
+        {"name": 1, "category": 1, "base_price": 1}
+    ).sort("name", 1)
+    services = []
+    async for s in services_cursor:
+        services.append({
+            "name": s.get("name", ""),
+            "category": s.get("category", ""),
+            "base_price": s.get("base_price", 0),
+        })
     branding = org.get("branding", {}) or {}
     logo_url = branding.get("logo_url") or org.get("logo_url") or ""
     return {
@@ -3226,6 +3238,7 @@ async def public_widget_config(widget_token: str):
         "primary_color": branding.get("primary_color") or "#7C3AED",
         "fields": industry_fields,
         "states": sorted(states),
+        "services": services,
     }
 
 
