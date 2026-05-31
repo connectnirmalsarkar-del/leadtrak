@@ -578,23 +578,32 @@ async def seed_services_for_existing_orgs():
                 logger.info(f"Seeded {len(services_seed)} default services for org {org['_id']}")
 
 async def seed_locations():
-    """Seed cities/states from india_locations.py on first boot. Idempotent."""
-    existing = await db.locations.count_documents({})
-    if existing > 0:
-        return
-    docs = []
+    """Seed/refresh cities from india_locations.py. Inserts only missing (state, city) pairs.
+    Existing entries (incl. inactive/edited ones) are left untouched."""
+    new_count = 0
     for state, cities in INDIA_LOCATIONS.items():
         for city in cities:
-            docs.append({
-                "state": state,
-                "city": city,
-                "is_active": True,
-                "is_default": True,
-                "created_at": datetime.now(timezone.utc),
-            })
-    if docs:
-        await db.locations.insert_many(docs)
-        logger.info(f"Seeded {len(docs)} locations across {len(INDIA_LOCATIONS)} states")
+            try:
+                result = await db.locations.update_one(
+                    {
+                        "state": {"$regex": f"^{state}$", "$options": "i"},
+                        "city": {"$regex": f"^{city}$", "$options": "i"},
+                    },
+                    {"$setOnInsert": {
+                        "state": state,
+                        "city": city,
+                        "is_active": True,
+                        "is_default": True,
+                        "created_at": datetime.now(timezone.utc),
+                    }},
+                    upsert=True,
+                )
+                if result.upserted_id is not None:
+                    new_count += 1
+            except Exception as e:
+                logger.warning(f"seed_locations skip {state}/{city}: {e}")
+    if new_count:
+        logger.info(f"seed_locations: inserted {new_count} new default cities")
 
 
 
