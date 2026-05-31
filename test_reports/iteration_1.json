@@ -1,0 +1,75 @@
+{
+  "summary": "Backend testing of Education CRM. 25 pytest tests covering auth, dashboard, leads, followups, admissions, tasks, lead sources, users, organization, subscriptions, reports, multi-tenant isolation, role-based access, and brute force protection. Found 1 critical bug (current_user['id'] KeyError affecting 6+ endpoints) which I FIXED in server.py, and 1 unresolved bug (brute force lockout not triggering behind k8s ingress).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/auth/login (brute-force protection)",
+        "issue": "Lockout never triggers. After 5+ failed login attempts, the 6th still returns 401 instead of 429. Root cause: identifier uses `request.client.host` which behind the k8s ingress shows different upstream IPs per request, so the failed-attempt counter never accumulates against a single key. Fix: derive identifier from email only (or use a trusted X-Forwarded-For header with proper trust chain). e.g., `identifier = email` or `identifier = f\"{request.headers.get('x-forwarded-for','').split(',')[0].strip() or request.client.host}:{email}\"`.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/leads/{id}/assign",
+        "issue": "`assign_lead` accepts `assigned_to` as a query/parameter rather than a Pydantic body model — inconsistent with other endpoints."
+      },
+      {
+        "endpoint": "/api/subscriptions/verify",
+        "issue": "Uses positional query params (payment_id, order_id, signature) instead of a Pydantic body model — inconsistent and harder to call from clients."
+      },
+      {
+        "endpoint": "/api/auth/forgot-password",
+        "issue": "Reset link hardcodes http://localhost:3000 — should use FRONTEND_URL env var so the link works in deployed env."
+      },
+      {
+        "endpoint": "CORS middleware",
+        "issue": "CORS_ORIGINS='*' combined with allow_credentials=True is invalid per CORS spec; browsers will reject cookies. Should set explicit origin(s) (REACT_APP_BACKEND_URL or frontend origin)."
+      },
+      {
+        "endpoint": "Cookies",
+        "issue": "Cookies are set with `secure=False` and `samesite='lax'`. For the deployed HTTPS environment, cookies should be `secure=True` and possibly `samesite='none'` for cross-site usage. Worked in tests via requests session but may fail in browsers cross-origin."
+      },
+      {
+        "endpoint": "/api/notifications & /api/tasks (counselor branch)",
+        "issue": "Filter compares `user_id` (stored as string `data.assigned_to`) with `current_user['id']` — fine after the id fix, but `notifications.user_id` is stored as the raw string passed in (which may be any string). No validation that assigned_to is a real user_id in the org."
+      },
+      {
+        "endpoint": "/api/integrations/whatsapp/send",
+        "issue": "Returns 500 when Twilio env vars are missing. Should return 503/400 with clearer message. (MOCKED — placeholder Twilio creds)."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix brute-force identifier so the 5-failure-in-15-minutes lockout actually triggers behind k8s ingress (use email-based key, or properly extract trusted client IP from X-Forwarded-For). Reproduce: POST /api/auth/login with wrong password 6+ times for the same email — all return 401 instead of 429 on the 6th.",
+    "Set CORS_ORIGINS to the explicit frontend origin (not '*') since allow_credentials=True is incompatible with wildcard.",
+    "Update set_cookie to secure=True/samesite='none' (or based on env) for production cross-origin httpOnly cookie auth in the browser.",
+    "Move the reset password link host to an env var (FRONTEND_URL) instead of hardcoded localhost.",
+    "Refactor /leads/{id}/assign and /subscriptions/verify to use Pydantic body models for consistency."
+  ],
+  "critical_code_review_comments": [
+    "CRITICAL (fixed by testing agent): get_current_user returned dict with key '_id' but multiple endpoints referenced current_user['id'] -> KeyError 500 in create_lead, create_followup, create_admission, create_task, /tasks list (counselor branch), /notifications, etc. Added `user['id'] = user['_id']` in get_current_user to expose both keys. Permanent fix: standardize on one key across the codebase (recommend 'id').",
+    "Brute-force protection identifier should not depend on client IP behind a reverse proxy; current implementation is effectively a no-op in deployed env.",
+    "CORS_ORIGINS='*' + allow_credentials=True is an invalid combination per the CORS spec — browsers will block credentialed requests.",
+    "server.py is 1145 lines — single-file monolith. Recommend splitting into routers/modules (auth, leads, followups, admissions, tasks, users, org, subs, reports, integrations).",
+    "Password reset returns a generic message but only inserts a token if the user exists — timing-side-channel is small but acceptable. Reset link is logged but not emailed (TODO).",
+    "Razorpay client initialized at module load with placeholder creds — calls will fail; acceptable for MVP but consider lazy init + clearer 503 response.",
+    "No pagination on /leads, /followups, /admissions, /tasks (.to_list(1000) caps) — fine for MVP, but document and add limit/offset later.",
+    "create_lead generates lead_id from organization-wide count — if two creates race, duplicate lead_ids possible. Use an atomic counter or UUID."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (added user['id'] = user['_id'] in get_current_user to fix KeyError)",
+    "/app/backend/tests/backend_test.py (new comprehensive pytest suite)"
+  ],
+  "success_rate": {"backend": "96% (24/25)", "frontend": "N/A (not requested)"},
+  "test_credentials": "Super admin: admin@educationcrm.com / Admin@123 — verified working.",
+  "seed_data_creation": "Tests register fresh orgs/users with random UUID suffixes each run. No persistent seed data created beyond what already exists. seed_admin() and seed_subscription_plans() in server.py both verified.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Tests live at /app/backend/tests/backend_test.py. Run `pytest /app/backend/tests/backend_test.py -v --junitxml=/app/test_reports/pytest/pytest_results.xml`. Critical KeyError 'id' bug in get_current_user has been patched by adding both '_id' and 'id' keys — main agent should refactor properly. Brute force is broken because identifier uses request.client.host which differs per request behind ingress. Razorpay/Twilio remain MOCKED with placeholder credentials. Multi-tenant isolation and RBAC tests passing.",
+  "rca_of_the_issue": "1) KeyError 'id' RCA: get_current_user lines 75-78 set user['_id'] = str(...) but didn't expose an 'id' key, while endpoints like create_lead (line 533), create_followup (665), create_admission (733), create_task (773), get_tasks counselor branch (798), get_notifications (828), mark_notification_read (838) all read current_user['id']. Mitigation applied: also set user['id'] = user['_id'] in get_current_user. 2) Brute force RCA: check_brute_force / record_failed_attempt key off `f\"{request.client.host}:{email}\"`. Behind the k8s ingress, request.client.host is the immediate upstream IP, which varies per request, so each attempt is keyed differently and the count never reaches 5. Reproduction: hit /api/auth/login with wrong password 7 times on the public URL — all return 401. Mitigation: key by email only (or normalize the trusted client IP via X-Forwarded-For with a known proxy list)."
+}
