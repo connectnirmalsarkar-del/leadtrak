@@ -1,95 +1,132 @@
 {
-  "project_name": "Education CRM SaaS",
-  "domain": "Enterprise SaaS / Education",
-  "theme": "LIGHT",
-  "archetype": "4 (Swiss & High-Contrast)",
-  "rationale": "For an educational CRM designed to handle dense data, leads, and multi-tenant management, the interface needs to project authority, clarity, and precision. Archetype 4 (Swiss & High-Contrast) provides a highly functional, legible, and objective aesthetic that prioritizes progressive disclosure, information hierarchy, and data visualization without unnecessary decorative distractions.",
-  "typography": {
-    "heading_font": "Outfit",
-    "body_font": "IBM Plex Sans",
-    "installation_instructions": "Import both fonts via next/font/google in Next.js. Avoid using 'Inter' or 'Space Grotesk'.",
-    "hierarchy": {
-      "h1": "text-4xl sm:text-5xl font-semibold tracking-tight text-slate-900",
-      "h2": "text-2xl sm:text-3xl font-medium tracking-tight text-slate-900",
-      "h3": "text-xl font-medium text-slate-800",
-      "h4": "text-lg font-medium text-slate-800",
-      "body": "text-sm text-slate-600 leading-relaxed",
-      "labels": "text-xs font-semibold uppercase tracking-[0.2em] text-slate-500",
-      "data_numbers": "text-base font-mono font-medium text-slate-900"
-    }
-  },
+  "theme": "light",
+  "archetype": "5 (Luxury / Corporate Premium)",
+  "design_direction": "LeadSquared-inspired Enterprise CRM. High-contrast, dense data presentation, premium enterprise aesthetics, distinctive deep purple brand color, dark sidebar with light main content area for the dashboard, and a rich, deep-gradient hero section for the marketing page.",
   "colors": {
+    "primary": {
+      "DEFAULT": "#5B3CC4",
+      "50": "#F5F3FF",
+      "100": "#EDE9FE",
+      "200": "#DDD6FE",
+      "300": "#C4B5FD",
+      "400": "#A78BFA",
+      "500": "#8B5CF6",
+      "600": "#7C3AED",
+      "700": "#6D28D9",
+      "800": "#5B21B6",
+      "900": "#4C1D95",
+      "950": "#2E1065"
+    },
     "background": {
-      "app": "#F8FAFC",
-      "surface": "#FFFFFF",
+      "marketing": "#FFFFFF",
+      "dashboard": "#F8FAFC",
       "sidebar": "#0F172A"
+    },
+    "surface": {
+      "DEFAULT": "#FFFFFF",
+      "glass": "rgba(255, 255, 255, 0.7)",
+      "dark_glass": "rgba(15, 23, 42, 0.6)"
     },
     "text": {
       "primary": "#0F172A",
       "secondary": "#475569",
       "muted": "#94A3B8",
-      "inverse": "#FFFFFF"
+      "inverse": "#FFFFFF",
+      "sidebar": "#CBD5E1",
+      "sidebar_active": "#FFFFFF"
     },
-    "brand": {
-      "primary": "#2563EB",
-      "primary_hover": "#1D4ED8",
-      "accent": "#002FA7"
+    "border": {
+      "DEFAULT": "#E2E8F0",
+      "sidebar": "#1E293B"
     },
-    "status": {
-      "success_admitted": "#10B981",
-      "warning_followup": "#F59E0B",
-      "danger_lost": "#EF4444",
-      "info_new": "#3B82F6"
+    "accent": {
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "danger": "#EF4444",
+      "info": "#3B82F6"
+    }
+  },
+  "typography": {
+    "headings": {
+      "family": "'Sora', sans-serif",
+      "weight": "600, 700",
+      "tracking": "tight"
     },
-    "borders": {
-      "default": "#E2E8F0",
-      "focus": "#93C5FD"
+    "body": {
+      "family": "'Plus Jakarta Sans', sans-serif",
+      "weight": "400, 500"
+    },
+    "mono": {
+      "family": "'JetBrains Mono', monospace"
     }
   },
   "spacing_and_layout": {
-    "dashboard_grid": "The 'Control Room' grid layout. grid-cols-1 md:grid-cols-3 lg:grid-cols-4 or 12-column grid. Tight gaps (gap-4 or gap-6). Ensure all widget containers use h-full.",
-    "container_padding": "p-6 or p-8 inside cards/sections to prevent text collision. Mobile-first padding.",
-    "alignment": "Left-align dense content, tables, and forms. Use optical alignment for buttons with icons.",
-    "radius": "Minimal. max 6px (rounded-md) across all cards, inputs, and buttons to reinforce the functional/Swiss aesthetic. Avoid pill shapes."
-  },
-  "components": {
-    "cards": "Cardless flat design or 1px subtle borders (border-slate-200), pure white backgrounds. No heavy drop shadows. Hover states get slight lift (-translate-y-1) and shadow-sm.",
-    "tables": "Progressive disclosure structure. Show top metrics above table. Use Shadcn Table. Essential columns only (Name, Stage, Source, Next Step, Status). Use a right-side drawer (Sheet) for full Lead details to avoid leaving the page.",
-    "buttons": "Flat solid primary color for main CTA. Outline or Ghost for secondary. Always explicitly define hover text color. Example: hover:bg-blue-700 hover:text-white.",
-    "forms": "Use Shadcn Form, Input, Select. Labels must be bold and concise. Inputs should have subtle 1px borders, active state needs ring-2 ring-blue-300 ring-offset-1.",
-    "navigation": "Sidebar for dashboard navigation with dark theme (bg-slate-900, text-slate-300). Active states use bright blue indicator and white text.",
-    "icons": "Use lucide-react (default). Dense, clean, functional."
-  },
-  "motion": {
-    "hover_states": "Quick, functional transitions. transition-colors duration-150 ease-in-out.",
-    "entrance": "Staggered fade-up for table rows or dashboard cards. Minimal, non-distracting.",
-    "interactive": "Buttons get subtle scale down (active:scale-[0.98])."
-  },
-  "images": {
-    "auth_background": {
-      "url": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/1b9ac9ad28e4873ab57e3c73b45e719c3783326392e95f2c112eb4883d67f77c.png",
-      "description": "Abstract geometric composition representing data flow and education.",
-      "usage": "Use as the split-screen image or background on the Login/Registration/Auth pages."
+    "marketing": {
+      "padding": "py-24",
+      "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+      "hero_padding": "pt-32 pb-20"
     },
-    "landing_hero_campus": {
-      "url": "https://images.unsplash.com/photo-1774600787713-bc405e935202?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjB1bml2ZXJzaXR5JTIwY2FtcHVzfGVufDB8fHx8MTc4MDIxMjYzN3ww&ixlib=rb-4.1.0&q=85",
-      "description": "Modern university glass building.",
-      "usage": "Use in the marketing/landing page hero section or About section."
+    "dashboard": {
+      "sidebar_width": "w-64",
+      "header_height": "h-16",
+      "content_padding": "p-6 lg:p-8"
     },
-    "team_advisor_meeting": {
-      "url": "https://images.unsplash.com/photo-1551836022-d5d88e9218df?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHwzfHxzdHVkZW50JTIwYWR2aXNvciUyMG1lZXRpbmd8ZW58MHx8fHwxNzgwMjEyNjM3fDA&ixlib=rb-4.1.0&q=85",
-      "description": "Student advisor meeting.",
-      "usage": "Use in the 'Features' or 'Target Audience' section of the landing page to illustrate counselors working."
+    "border_radius": {
+      "card": "rounded-xl",
+      "button": "rounded-lg",
+      "input": "rounded-md"
     }
   },
-  "instructions_to_main_agent": [
-    "Strictly follow the color hex codes provided. Do NOT use default Tailwind colors blindly unless mapped to the palette.",
-    "Build the dashboard using a layout with a fixed sidebar (dark mode sidebar) and a light content area.",
-    "Implement multi-tenant logic abstractly in the UI (e.g., Organization switcher dropdown in the header/sidebar).",
-    "For the Lead Management table, implement progressive disclosure: a main table with key columns, and clicking a row opens a Shadcn Sheet (Right Drawer) with full lead details, follow-up notes, and activity timeline.",
-    "Add 'data-testid' to ALL interactive elements (buttons, inputs, menu items, table rows) using kebab-case and role-based naming (e.g., data-testid=\"lead-table-row\", data-testid=\"add-lead-submit\").",
-    "Use pure HTML/Tailwind for marketing/landing pages for creative freedom, but use Shadcn UI strictly for the dashboard, CRM tables, and settings forms.",
-    "Do not use generic font Inter for headings; stick to Outfit for headings and IBM Plex Sans for body.",
-    "Use Next.js 15 App router. Make the components client/server aware appropriately."
-  ]
+  "components": {
+    "marketing": {
+      "hero": {
+        "style": "Center-aligned, massive H1 text (text-5xl to text-7xl), Framer Motion rotating words ('sales teams', 'marketing teams', 'admission teams'). Rich deep purple/indigo background blobs or gradients. Trust logos positioned right below.",
+        "bg_image": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/12c8d7afe338dc0e9393d63367d98f953c43fc9b4e5ff254c956f14201662e88.png"
+      },
+      "features": {
+        "style": "Apple-style Bento Grid. Cards with subtle 1px borders, off-white or white backgrounds, and a high-contrast deep purple icon. Hover lift and shadow effect."
+      },
+      "testimonials": {
+        "style": "Horizontal carousel or bento-style layout. High-quality avatar photos. Real names and institutions."
+      },
+      "industry_tabs": {
+        "style": "Horizontal pills or underlined tabs to switch between 'Schools', 'Universities', 'Coaching'. The active tab shows a specific image and features."
+      }
+    },
+    "dashboard": {
+      "layout": {
+        "style": "Dark sidebar (#0F172A) with white text/icons. Main content area is Light (#F8FAFC) with White cards (#FFFFFF). Top header has a white background and subtle bottom border."
+      },
+      "cards": {
+        "style": "Crisp, flat white cards with subtle border (#E2E8F0) and very soft shadow (shadow-sm). Use tight padding (p-4 to p-6) for density."
+      },
+      "tables": {
+        "style": "Dense, highly scannable. Small text (text-sm). Right-aligned numbers. Badge components for statuses (e.g., Lead Status). Clickable rows that open a right-side Shadcn Sheet for details."
+      },
+      "charts": {
+        "style": "Recharts with primary color (#5B3CC4) and distinct secondary colors. Avoid default colors. Maintain clean tooltips."
+      }
+    }
+  },
+  "media_urls": {
+    "hero_background": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/12c8d7afe338dc0e9393d63367d98f953c43fc9b4e5ff254c956f14201662e88.png",
+    "dashboard_mockup": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/ba6d23cca0a64e8ddf69ac304c53309e0961ad72ca5e0d124f053016840b3900.png",
+    "security_badges": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/d00bf82017ebc50a041ccae4d11803c806f0ebdd715e43fe2909aa3b75a2d91b.png",
+    "industry_images": {
+      "university": "https://images.pexels.com/photos/13440917/pexels-photo-13440917.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "school": "https://images.unsplash.com/photo-1632988663082-4bac2c1847a0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwyfHx1bml2ZXJzaXR5JTIwY2FtcHVzJTIwYnVpbGRpbmd8ZW58MHx8fHwxNzgwMjE0MDcyfDA&ixlib=rb-4.1.0&q=85"
+    },
+    "testimonial_avatars": [
+      "https://images.unsplash.com/photo-1590650213165-c1fef80648c4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2ODl8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjB0ZWFjaGVyJTIwZWR1Y2F0b3IlMjBzbWlsaW5nfGVufDB8fHx8MTc4MDIxNDA3Mnww&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1526080652727-5b77f74eacd2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2ODl8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjB0ZWFjaGVyJTIwZWR1Y2F0b3IlMjBzbWlsaW5nfGVufDB8fHx8MTc4MDIxNDA3Mnww&ixlib=rb-4.1.0&q=85",
+      "https://images.unsplash.com/photo-1573496799652-408c2ac9fe98?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2ODl8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjB0ZWFjaGVyJTIwZWR1Y2F0b3IlMjBzbWlsaW5nfGVufDB8fHx8MTc4MDIxNDA3Mnww&ixlib=rb-4.1.0&q=85"
+    ]
+  },
+  "instructions_to_main_agent": {
+    "testing": "All interactive and key informational elements MUST include a data-testid attribute in kebab-case (e.g., data-testid=\"login-submit-button\").",
+    "font_setup": "Update index.css and tailwind.config.js to import and use 'Sora' for headings and 'Plus Jakarta Sans' for sans/body.",
+    "icons": "Use 'lucide-react' for all dashboard icons.",
+    "animations": "Use 'framer-motion' for the marketing page hero text rotation, card hovers, and tab transitions.",
+    "sidebar": "Ensure the DashboardLayout.jsx component uses a dark slate background for the Sidebar with white/gray text for links, and white background for the main topbar."
+  }
 }
