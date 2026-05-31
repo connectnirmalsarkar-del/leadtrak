@@ -1,11 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth, formatApiErrorDetail } from '@/context/AuthContext';
-import { GraduationCap, ArrowRight } from 'lucide-react';
+import { GraduationCap, ArrowRight, Shield, Lock, Award, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+
+const TESTIMONIALS = [
+  {
+    quote: 'Achieved 3x faster admission cycles. Our counselors now spend time on conversations, not spreadsheets.',
+    name: 'Priya Sharma',
+    role: 'Director, Apex Coaching',
+    logo: 'APEX',
+  },
+  {
+    quote: 'Doubled our batch fill rate within 3 months. The AI lead scoring is a game-changer for coaching.',
+    name: 'Rahul Mehta',
+    role: 'COO, Bright Future Institute',
+    logo: 'BRIGHT',
+  },
+  {
+    quote: 'Finally a CRM built for education, not retrofitted from sales. Our team adopted it in a week.',
+    name: 'Dr. Anjali Verma',
+    role: 'Dean, EduPath University',
+    logo: 'EDUPATH',
+  },
+];
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -14,6 +36,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [testimonialIdx, setTestimonialIdx] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTestimonialIdx((i) => (i + 1) % TESTIMONIALS.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,33 +62,155 @@ export default function LoginPage() {
     }
   };
 
+  const t = TESTIMONIALS[testimonialIdx];
+
   return (
-    <div className="min-h-screen flex">
-      {/* Left side - Form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-white">
-        <div className="w-full max-w-md space-y-8">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center shadow-lg shadow-violet-200">
+    <div className="min-h-screen flex bg-white">
+      {/* Left brand panel */}
+      <div className="hidden lg:flex flex-col lg:w-[55%] bg-gradient-to-br from-slate-950 via-violet-950 to-slate-900 relative overflow-hidden">
+        {/* Background effects */}
+        <div className="absolute inset-0 opacity-40">
+          <div className="absolute top-32 left-20 w-96 h-96 bg-violet-600 rounded-full mix-blend-multiply filter blur-3xl animate-blob"></div>
+          <div className="absolute bottom-32 right-20 w-96 h-96 bg-fuchsia-600 rounded-full mix-blend-multiply filter blur-3xl animate-blob" style={{ animationDelay: '3s' }}></div>
+          <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-indigo-600 rounded-full mix-blend-multiply filter blur-3xl animate-blob" style={{ animationDelay: '6s' }}></div>
+        </div>
+
+        {/* Grid pattern overlay */}
+        <div className="absolute inset-0 opacity-[0.04]" style={{
+          backgroundImage: 'linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px)',
+          backgroundSize: '64px 64px',
+        }}></div>
+
+        <div className="relative z-10 flex flex-col h-screen p-12 xl:p-16">
+          {/* Top brand */}
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-violet-700 rounded-lg flex items-center justify-center shadow-xl shadow-violet-900/50">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-slate-900" style={{fontFamily: 'Sora'}}>EduCRM</span>
+            <span className="text-xl font-bold text-white tracking-tight" style={{ fontFamily: 'Sora' }}>
+              EduCRM
+            </span>
           </Link>
 
+          {/* Middle content */}
+          <div className="flex-1 flex flex-col justify-center max-w-lg">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-500/10 border border-violet-400/20 rounded-full mb-6 backdrop-blur-sm w-fit">
+              <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse"></span>
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-200">
+                Education CRM Platform
+              </span>
+            </div>
+
+            <h2 className="text-4xl xl:text-5xl font-bold text-white tracking-tight leading-[1.1] mb-6" style={{ fontFamily: 'Sora' }}>
+              Convert more inquiries into <span className="bg-gradient-to-r from-violet-300 to-fuchsia-300 bg-clip-text text-transparent">admissions</span>.
+            </h2>
+
+            <p className="text-base text-slate-300 leading-relaxed mb-12">
+              The all-in-one platform that captures every lead, automates follow-ups, and tells you exactly what to do next.
+            </p>
+
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-4 mb-12">
+              {[
+                { v: '3x', l: 'Faster admissions' },
+                { v: '60%', l: 'Higher productivity' },
+                { v: '500+', l: 'Institutions' },
+              ].map((s, i) => (
+                <div key={i}>
+                  <p className="text-3xl xl:text-4xl font-bold bg-gradient-to-br from-violet-300 to-violet-100 bg-clip-text text-transparent" style={{ fontFamily: 'Sora' }}>
+                    {s.v}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">{s.l}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Testimonial carousel */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={testimonialIdx}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.5 }}
+                className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-5"
+              >
+                <div className="flex gap-0.5 mb-3">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star key={s} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  ))}
+                </div>
+                <p className="text-sm text-slate-200 leading-relaxed mb-4">"{t.quote}"</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-violet-700 flex items-center justify-center text-white font-bold text-xs">
+                    {t.name.split(' ').map((n) => n[0]).join('')}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{t.name}</p>
+                    <p className="text-xs text-slate-400">{t.role}</p>
+                  </div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Dots */}
+            <div className="flex gap-1.5 mt-4">
+              {TESTIMONIALS.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setTestimonialIdx(i)}
+                  className={`h-1 rounded-full transition-all ${i === testimonialIdx ? 'w-8 bg-violet-400' : 'w-1.5 bg-slate-600'}`}
+                  data-testid={`testimonial-dot-${i}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom trust badges */}
+          <div className="flex items-center gap-6 pt-6 border-t border-white/10">
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Shield className="w-4 h-4 text-violet-400" />
+              ISO 27001
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Lock className="w-4 h-4 text-violet-400" />
+              SOC 2 Type II
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Award className="w-4 h-4 text-violet-400" />
+              DPDP Ready
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right form panel */}
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative">
+        {/* Mobile-only brand */}
+        <Link to="/" className="lg:hidden absolute top-6 left-6 flex items-center gap-2">
+          <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center">
+            <GraduationCap className="w-5 h-5 text-white" />
+          </div>
+          <span className="text-lg font-bold text-slate-900" style={{ fontFamily: 'Sora' }}>EduCRM</span>
+        </Link>
+
+        <div className="w-full max-w-sm space-y-8">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Sign in</p>
+            <h1 className="text-3xl xl:text-4xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>
               Welcome back
             </h1>
             <p className="text-sm text-slate-600 mt-2">
-              Don't have an account?{' '}
-              <Link to="/register" className="text-violet-700 hover:text-violet-800 font-medium" data-testid="link-to-register">
-                Sign up
+              New here?{' '}
+              <Link to="/register" className="text-violet-700 hover:text-violet-800 font-semibold" data-testid="link-to-register">
+                Book a demo
               </Link>
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-slate-700">Email</Label>
+              <Label htmlFor="email" className="text-sm font-semibold text-slate-700">Work email</Label>
               <Input
                 id="email"
                 type="email"
@@ -66,13 +218,18 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-11"
+                className="h-11 border-slate-300 focus-visible:ring-violet-300"
                 data-testid="login-email-input"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium text-slate-700">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-sm font-semibold text-slate-700">Password</Label>
+                <button type="button" className="text-xs text-violet-700 hover:text-violet-800 font-medium" data-testid="forgot-password-link">
+                  Forgot?
+                </button>
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -80,63 +237,40 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="h-11"
+                className="h-11 border-slate-300 focus-visible:ring-violet-300"
                 data-testid="login-password-input"
               />
             </div>
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700" data-testid="login-error">
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" data-testid="login-error">
                 {error}
               </div>
             )}
 
             <Button
               type="submit"
-              className="w-full h-11 bg-violet-700 hover:bg-violet-800 text-white shadow-lg shadow-violet-200"
+              className="w-full h-11 bg-violet-700 hover:bg-violet-800 text-white shadow-lg shadow-violet-200 font-semibold"
               disabled={loading}
               data-testid="login-submit-btn"
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? 'Signing in...' : 'Sign in to EduCRM'}
               {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
             </Button>
           </form>
 
-          <div className="border-t border-slate-200 pt-6">
-            <p className="text-xs text-slate-500 text-center">
-              Default Super Admin: admin@educationcrm.com / Admin@123
-            </p>
+          <div className="pt-6 border-t border-slate-200">
+            <p className="text-xs text-slate-500 text-center mb-2">Default Super Admin</p>
+            <div className="bg-slate-50 rounded-lg p-3 font-mono text-xs text-slate-700 text-center">
+              admin@educationcrm.com / Admin@123
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Right side - Image/Brand */}
-      <div className="hidden lg:flex flex-1 bg-gradient-to-br from-slate-900 via-violet-900 to-slate-900 items-center justify-center p-12 relative overflow-hidden">
-        <div className="relative z-10 max-w-md text-white">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-violet-500/20 border border-violet-400/30 rounded-full mb-6 backdrop-blur">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-200">Trusted by 500+ institutions</span>
-          </div>
-          <h2 className="text-4xl font-bold tracking-tight mb-4" style={{fontFamily: 'Sora'}}>
-            Convert more leads into admissions.
-          </h2>
-          <p className="text-base text-slate-300 leading-relaxed">
-            EduCRM is the all-in-one lead management platform built specifically for schools, colleges, and coaching institutes.
+          <p className="text-xs text-slate-500 text-center">
+            By signing in, you agree to our{' '}
+            <a href="#" className="text-slate-700 underline">Terms</a> and{' '}
+            <a href="#" className="text-slate-700 underline">Privacy Policy</a>.
           </p>
-
-          <div className="mt-12 grid grid-cols-2 gap-6">
-            <div>
-              <p className="text-4xl font-bold" style={{fontFamily: 'Sora'}}>2.5x</p>
-              <p className="text-sm text-slate-400 mt-1">Conversion increase</p>
-            </div>
-            <div>
-              <p className="text-4xl font-bold" style={{fontFamily: 'Sora'}}>70%</p>
-              <p className="text-sm text-slate-400 mt-1">Time saved on follow-ups</p>
-            </div>
-          </div>
-        </div>
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute top-20 left-20 w-72 h-72 bg-blue-500 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-20 right-20 w-72 h-72 bg-indigo-500 rounded-full blur-3xl"></div>
         </div>
       </div>
     </div>
