@@ -70,26 +70,39 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Frontend `SupportTicketsPage.jsx` — full UI with file uploader, attachment previews, status dropdown, role-based controls
 - ✅ Backend testing: 19/19 pytest tests passed (iteration_2.json)
 
+### Phase 4 — Multi-Industry Foundation (2026-05-31) ✅ COMPLETE
+- ✅ 9 industry templates: Education, IT/Software, Real Estate, Healthcare, Insurance, Travel, Retail, Fitness, Generic
+- ✅ `industry_config.py` central registry (terms, default sources/statuses/pipeline stages, icons, taglines)
+- ✅ Organization schema extended with `industry` field; backfill migration runs on startup
+- ✅ Registration flow accepts industry, validates, seeds default lead sources for the chosen industry
+- ✅ `GET /api/industries` + `GET /api/industries/{key}` public catalog endpoints
+- ✅ `PUT /api/organization/industry` (org_admin/super_admin) to switch templates later
+- ✅ `/auth/login`, `/auth/register`, `/auth/me` now return `industry`, `terminology`, `organization_name`
+- ✅ `GET /api/dashboard/funnel` last-stage label is industry-aware (Enrolled/Won/Booked/Issued/etc.)
+- ✅ Frontend `useTerminology` hook (in `/app/frontend/src/lib/terminology.js`)
+- ✅ Industry dropdown on Register page with tagline per option
+- ✅ Sidebar nav (DashboardLayout) renders dynamic labels (Admissions → Deals/Bookings/Appointments)
+- ✅ Dashboard, Leads, Admissions pages use dynamic terminology (page titles, table columns, form labels, button text, empty states)
+- ✅ Topbar shows real organization name
+- ✅ Backend testing: 36/36 pytest tests passed (17 new + 19 regression, iteration_3.json)
+- ⏳ NOT YET DONE in Phase 4: Settings, FollowupsPage, TasksPage, Reports, LandingPage, WhatsAppTemplatesPage label updates; brand text "EduCRM" still in sidebar/marketing pages
+
 ---
 
 ## Prioritized Backlog
 
-### P0 — Multi-Industry Transformation (NEW — User priority 2026-05-31)
-- ⏳ **Phase A: Industry Foundation**
-  - Add `industry` field to organizations (Education, IT/Software, Real Estate, Healthcare, Insurance, Travel, Retail, Fitness, Generic Sales)
-  - Signup flow asks for industry selection
-  - Industry-specific terminology mapping (Lead/Student/Patient/Buyer/Client; Admission/Deal/Booking/Appointment; Course/Service/Property/Treatment)
-  - Industry-wise default lead sources, statuses, pipeline stages seeded per org
-  - Rename Admissions module to generic "Conversions/Deals" with industry-driven label
-  - Migrate existing "Bright Future Coaching" demo to a Generic/Education hybrid template
-- ⏳ **Phase B: Custom Fields & Pipeline Builder**
+### P0 — Multi-Industry Phase B & beyond
+- ⏳ **Phase B — Custom Fields & Pipeline Builder**
   - Org Admin can add custom fields on leads (text, number, dropdown, date)
   - Drag-and-drop custom pipeline stages
   - Custom lead statuses & sources per org
-- ⏳ **Phase C: Module Toggle**
-  - Org Admin can turn modules on/off (Admissions, WhatsApp, Reports, etc.)
-- ⏳ **Phase D: Industry Dashboards**
+  - On industry switch, optionally re-seed sources/statuses/pipeline
+- ⏳ **Phase C — Module Toggle**
+  - Org Admin can turn modules on/off (Admissions/Deals, WhatsApp, Reports, etc.)
+- ⏳ **Phase D — Industry Dashboards**
   - Industry-specific KPIs and dashboard widgets
+  - Migrate "Admission Done" lead status to a generic "Converted" + industry display label
+- ⏳ Apply terminology to remaining pages (Followups, Tasks, Reports, Settings, Landing) + neutral brand
 
 ### P0 — External Integrations (need user keys)
 - ⏳ Real Razorpay API keys + webhook signature verification
