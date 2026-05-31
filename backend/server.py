@@ -249,7 +249,7 @@ async def seed_admin():
         f.write("## Super Admin\n")
         f.write(f"- Email: {admin_email}\n")
         f.write(f"- Password: {admin_password}\n")
-        f.write(f"- Role: super_admin\n\n")
+        f.write("- Role: super_admin\n\n")
         f.write("## Auth Endpoints\n")
         f.write("- POST /api/auth/register\n")
         f.write("- POST /api/auth/login\n")
@@ -336,8 +336,8 @@ async def register(data: RegisterRequest, response: Response):
     refresh_token = create_refresh_token(user_id)
     
     # Set cookies
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=900, path="/")
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="none", max_age=900, path="/")
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="none", max_age=604800, path="/")
     
     return {
         "id": user_id,
@@ -350,7 +350,8 @@ async def register(data: RegisterRequest, response: Response):
 @api_router.post("/auth/login")
 async def login(data: LoginRequest, request: Request, response: Response):
     email = data.email.lower()
-    identifier = f"{request.client.host}:{email}"
+    # Use email-based identifier - k8s ingress shows different upstream IPs per request
+    identifier = email
     
     await check_brute_force(identifier)
     
@@ -365,8 +366,8 @@ async def login(data: LoginRequest, request: Request, response: Response):
     access_token = create_access_token(user_id, email)
     refresh_token = create_refresh_token(user_id)
     
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=900, path="/")
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="none", max_age=900, path="/")
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="none", max_age=604800, path="/")
     
     return {
         "id": user_id,
@@ -403,7 +404,7 @@ async def refresh_token(request: Request, response: Response):
         
         user_id = str(user["_id"])
         access_token = create_access_token(user_id, user["email"])
-        response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=900, path="/")
+        response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="none", max_age=900, path="/")
         
         return {"message": "Token refreshed"}
     except jwt.ExpiredSignatureError:
@@ -428,7 +429,8 @@ async def forgot_password(data: ForgotPasswordRequest):
         "created_at": datetime.now(timezone.utc)
     })
     
-    reset_link = f"http://localhost:3000/reset-password?token={token}"
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+    reset_link = f"{frontend_url}/reset-password?token={token}"
     logger.info(f"Password reset link: {reset_link}")
     
     return {"message": "If email exists, reset link has been sent"}
