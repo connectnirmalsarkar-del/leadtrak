@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API } from '@/context/AuthContext';
+import { useTerminology } from '@/lib/terminology';
 import { Plus, GraduationCap, IndianRupee } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 
 export default function AdmissionsPage() {
+  const t = useTerminology();
   const [admissions, setAdmissions] = useState([]);
   const [revenue, setRevenue] = useState(0);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -50,25 +52,25 @@ export default function AdmissionsPage() {
     <div className="space-y-6" data-testid="admissions-page">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Enrollment</p>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Admissions</h1>
-          <p className="text-sm text-slate-600 mt-1">{admissions.length} total enrollments</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">{t.conversion_verb}</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>{t.conversions}</h1>
+          <p className="text-sm text-slate-600 mt-1">{admissions.length} total {t.conversions.toLowerCase()}</p>
         </div>
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
           <DialogTrigger asChild>
             <Button className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="add-admission-btn">
               <Plus className="w-4 h-4 mr-2" />
-              Record Admission
+              Record {t.conversion}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Record New Admission</DialogTitle>
-              <DialogDescription>Add a new student enrollment</DialogDescription>
+              <DialogTitle>Record New {t.conversion}</DialogTitle>
+              <DialogDescription>Add a new {t.contact.toLowerCase()} {t.conversion.toLowerCase()}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label>Student Name *</Label>
+                <Label>{t.contact} Name *</Label>
                 <Input value={form.student_name} onChange={(e) => setForm({...form, student_name: e.target.value})} data-testid="adm-student-input" />
               </div>
               <div className="space-y-2">
@@ -76,12 +78,12 @@ export default function AdmissionsPage() {
                 <Input value={form.mobile} onChange={(e) => setForm({...form, mobile: e.target.value})} data-testid="adm-mobile-input" />
               </div>
               <div className="space-y-2">
-                <Label>Course *</Label>
+                <Label>{t.offering} *</Label>
                 <Input value={form.course} onChange={(e) => setForm({...form, course: e.target.value})} data-testid="adm-course-input" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>Fees (₹) *</Label>
+                  <Label>{t.revenue_label} (₹) *</Label>
                   <Input type="number" value={form.fees} onChange={(e) => setForm({...form, fees: e.target.value})} data-testid="adm-fees-input" />
                 </div>
                 <div className="space-y-2">
@@ -106,7 +108,7 @@ export default function AdmissionsPage() {
               <IndianRupee className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Total Revenue</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Total {t.revenue_label}</p>
               <p className="text-3xl font-semibold text-slate-900 font-mono">₹{revenue.toLocaleString('en-IN')}</p>
             </div>
           </div>
@@ -117,7 +119,7 @@ export default function AdmissionsPage() {
               <GraduationCap className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Total Admissions</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Total {t.conversions}</p>
               <p className="text-3xl font-semibold text-slate-900 font-mono">{admissions.length}</p>
             </div>
           </div>
@@ -128,18 +130,18 @@ export default function AdmissionsPage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50">
-              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Student</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">{t.contact}</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Mobile</TableHead>
-              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Course</TableHead>
-              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Fees</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">{t.offering}</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">{t.revenue_label}</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Date</TableHead>
-              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Counselor</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Owner</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {admissions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-slate-500">No admissions yet</TableCell>
+                <TableCell colSpan={6} className="text-center py-12 text-slate-500">No {t.conversions.toLowerCase()} yet</TableCell>
               </TableRow>
             ) : (
               admissions.map((adm) => (

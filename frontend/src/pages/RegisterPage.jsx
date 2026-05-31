@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useAuth, formatApiErrorDetail } from '@/context/AuthContext';
+import axios from 'axios';
+import { useAuth, formatApiErrorDetail, API } from '@/context/AuthContext';
 import {
   GraduationCap,
   ArrowRight,
@@ -15,12 +16,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
 const BENEFITS = [
-  { icon: Zap, title: 'Live in 5 minutes', desc: 'Pre-built workflows for schools, coaching, universities, and consultancies.' },
+  { icon: Zap, title: 'Live in 5 minutes', desc: 'Pre-built templates for Education, Real Estate, IT, Healthcare, Insurance, Travel & more.' },
   { icon: Sparkles, title: 'AI-powered lead scoring', desc: 'Identify high-intent prospects automatically based on behavioral signals.' },
-  { icon: TrendingUp, title: '3× admission velocity', desc: 'Automated follow-ups and counselor next-best-action recommendations.' },
+  { icon: TrendingUp, title: '3× faster conversions', desc: 'Automated follow-ups and rep next-best-action recommendations.' },
   { icon: Shield, title: 'Enterprise-grade security', desc: 'ISO 27001, SOC 2 Type II, DPDP Ready. Your data, fully protected.' },
 ];
 
@@ -34,17 +36,26 @@ export default function RegisterPage() {
     organization_name: '',
     email: '',
     password: '',
+    industry: 'education',
   });
+  const [industries, setIndustries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    axios
+      .get(`${API}/industries`)
+      .then(({ data }) => setIndustries(data))
+      .catch(() => setIndustries([]));
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await register(form.email, form.password, form.name, form.organization_name);
-      toast.success('Welcome to EduCRM!');
+      await register(form.email, form.password, form.name, form.organization_name, form.industry);
+      toast.success('Welcome! Your workspace is ready.');
       navigate('/dashboard');
     } catch (err) {
       const msg = formatApiErrorDetail(err.response?.data?.detail) || err.message;
@@ -263,17 +274,40 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="organization" className="text-sm font-semibold text-slate-700">Institution name *</Label>
+                  <Label htmlFor="organization" className="text-sm font-semibold text-slate-700">Organization name *</Label>
                   <Input
                     id="organization"
                     type="text"
-                    placeholder="Bright Future Coaching"
+                    placeholder="Your business or institution name"
                     value={form.organization_name}
                     onChange={(e) => setForm({ ...form, organization_name: e.target.value })}
                     required
                     className="h-11 border-slate-300 focus-visible:ring-violet-300"
                     data-testid="register-org-input"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="industry" className="text-sm font-semibold text-slate-700">What industry are you in? *</Label>
+                  <Select
+                    value={form.industry}
+                    onValueChange={(v) => setForm({ ...form, industry: v })}
+                  >
+                    <SelectTrigger id="industry" className="h-11 border-slate-300 focus:ring-violet-300" data-testid="register-industry-select">
+                      <SelectValue placeholder="Select your industry" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {industries.map((ind) => (
+                        <SelectItem key={ind.key} value={ind.key} data-testid={`industry-option-${ind.key}`}>
+                          <div className="flex flex-col py-0.5">
+                            <span className="font-medium text-sm">{ind.label}</span>
+                            <span className="text-[11px] text-slate-500">{ind.tagline}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-slate-500">We'll preload defaults (lead sources, pipeline, labels) tuned for your industry.</p>
                 </div>
 
                 <div className="space-y-2">

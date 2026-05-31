@@ -22,9 +22,11 @@ import {
   Globe,
   LifeBuoy,
   Layers,
+  Trophy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { useTerminology } from '@/lib/terminology';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,9 +38,9 @@ import {
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testId: 'nav-dashboard' },
-  { path: '/leads', label: 'Leads', icon: UserPlus, testId: 'nav-leads' },
+  { path: '/leads', labelKey: 'leads', fallback: 'Leads', icon: UserPlus, testId: 'nav-leads' },
   { path: '/followups', label: 'Follow-ups', icon: Calendar, testId: 'nav-followups' },
-  { path: '/admissions', label: 'Admissions', icon: GraduationCap, testId: 'nav-admissions' },
+  { path: '/admissions', labelKey: 'conversions', fallback: 'Conversions', icon: Trophy, testId: 'nav-admissions' },
   { path: '/tasks', label: 'Tasks', icon: CheckSquare, testId: 'nav-tasks' },
   { path: '/whatsapp-templates', label: 'WhatsApp', icon: MessageSquare, testId: 'nav-whatsapp' },
   { path: '/reports', label: 'Reports', icon: BarChart3, testId: 'nav-reports' },
@@ -60,6 +62,7 @@ const supportNavItem = { path: '/support', label: 'Support', icon: LifeBuoy, tes
 
 export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
+  const t = useTerminology();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -149,6 +152,7 @@ export default function DashboardLayout({ children }) {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
+            const labelText = item.labelKey ? (t[item.labelKey] || item.fallback) : item.label;
             return (
               <NavLink
                 key={item.path}
@@ -158,7 +162,7 @@ export default function DashboardLayout({ children }) {
                 data-testid={item.testId}
               >
                 <Icon className="w-4 h-4" />
-                <span className="text-sm">{item.label}</span>
+                <span className="text-sm">{labelText}</span>
               </NavLink>
             );
           })}
@@ -236,7 +240,7 @@ export default function DashboardLayout({ children }) {
             </button>
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <Building2 className="w-4 h-4" />
-              <span data-testid="org-name">Organization</span>
+              <span data-testid="org-name">{user?.organization_name || 'Organization'}</span>
             </div>
           </div>
 

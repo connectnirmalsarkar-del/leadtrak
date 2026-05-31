@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API } from '@/context/AuthContext';
+import { useTerminology } from '@/lib/terminology';
 import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare, Upload, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +45,7 @@ const statusBadgeClass = (status) => {
 };
 
 export default function LeadsPage() {
+  const t = useTerminology();
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -178,8 +180,8 @@ export default function LeadsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Pipeline</p>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Leads</h1>
-          <p className="text-sm text-slate-600 mt-1">{leads.length} {leads.length === 1 ? 'lead' : 'leads'} total</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>{t.leads}</h1>
+          <p className="text-sm text-slate-600 mt-1">{leads.length} {leads.length === 1 ? t.lead.toLowerCase() : t.leads.toLowerCase()} total</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -199,12 +201,12 @@ export default function LeadsPage() {
             <DialogTrigger asChild>
               <Button className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="add-lead-btn">
                 <Plus className="w-4 h-4 mr-2" />
-                Add Lead
+                Add {t.lead}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-              <DialogTitle>Add New Lead</DialogTitle>
+              <DialogTitle>Add New {t.lead}</DialogTitle>
               <DialogDescription>Capture a new prospect into your pipeline</DialogDescription>
             </DialogHeader>
             <div className="grid grid-cols-2 gap-4 py-4">
@@ -221,7 +223,7 @@ export default function LeadsPage() {
                 <Input type="email" value={newLead.email} onChange={(e) => setNewLead({...newLead, email: e.target.value})} data-testid="lead-email-input" />
               </div>
               <div className="space-y-2 col-span-2">
-                <Label>Course Interested *</Label>
+                <Label>{t.offering} Interested In *</Label>
                 <Input value={newLead.course_interested} onChange={(e) => setNewLead({...newLead, course_interested: e.target.value})} data-testid="lead-course-input" />
               </div>
               <div className="space-y-2">
@@ -233,7 +235,7 @@ export default function LeadsPage() {
                 <Input value={newLead.city} onChange={(e) => setNewLead({...newLead, city: e.target.value})} data-testid="lead-city-input" />
               </div>
               <div className="space-y-2">
-                <Label>Lead Source</Label>
+                <Label>{t.lead} Source</Label>
                 <Select value={newLead.lead_source} onValueChange={(v) => setNewLead({...newLead, lead_source: v})}>
                   <SelectTrigger data-testid="lead-source-select"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -253,7 +255,7 @@ export default function LeadsPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAddDialog(false)} data-testid="cancel-add-lead-btn">Cancel</Button>
-              <Button onClick={handleAddLead} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="submit-add-lead-btn">Create Lead</Button>
+              <Button onClick={handleAddLead} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="submit-add-lead-btn">Create {t.lead}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -289,9 +291,9 @@ export default function LeadsPage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50">
-              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Lead ID</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">{t.lead} ID</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Name</TableHead>
-              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Course</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">{t.offering}</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Source</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Status</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Created</TableHead>
@@ -301,7 +303,7 @@ export default function LeadsPage() {
             {leads.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-12 text-slate-500">
-                  No leads found. Click "Add Lead" to get started.
+                  No {t.leads.toLowerCase()} found. Click "Add {t.lead}" to get started.
                 </TableCell>
               </TableRow>
             ) : (

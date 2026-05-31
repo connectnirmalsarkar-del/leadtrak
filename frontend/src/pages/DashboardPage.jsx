@@ -3,6 +3,7 @@ import axios from 'axios';
 import { motion } from 'framer-motion';
 import { API } from '@/context/AuthContext';
 import { useAuth } from '@/context/AuthContext';
+import { useTerminology } from '@/lib/terminology';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -161,6 +162,7 @@ const timeAgo = (iso) => {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const t = useTerminology();
   const navigate = useNavigate();
   const [dateRange, setDateRange] = useState('30');
   const [stats, setStats] = useState({ total_leads: 0, todays_leads: 0, pending_followups: 0, admissions_done: 0, conversion_rate: 0 });
@@ -228,17 +230,17 @@ export default function DashboardPage() {
             data-testid="dashboard-new-lead-btn"
           >
             <Plus className="w-4 h-4 mr-1.5" />
-            New Lead
+            New {t.lead}
           </Button>
         </div>
       </div>
 
       {/* Top Stats Strip */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatCard icon={Users} label="Total Leads" value={stats.total_leads} trend={18} sparkData={sparkData} color="violet" testId="stat-total-leads" />
-        <StatCard icon={UserPlus} label="Today's Leads" value={stats.todays_leads} trend={24} sparkData={sparkData} color="blue" testId="stat-todays-leads" />
+        <StatCard icon={Users} label={`Total ${t.leads}`} value={stats.total_leads} trend={18} sparkData={sparkData} color="violet" testId="stat-total-leads" />
+        <StatCard icon={UserPlus} label={`Today's ${t.leads}`} value={stats.todays_leads} trend={24} sparkData={sparkData} color="blue" testId="stat-todays-leads" />
         <StatCard icon={Calendar} label="Pending Follow-ups" value={stats.pending_followups} trend={-5} sparkData={sparkData} color="amber" testId="stat-pending-followups" />
-        <StatCard icon={GraduationCap} label="Admissions" value={stats.admissions_done} trend={22} sparkData={sparkData} color="emerald" testId="stat-admissions" />
+        <StatCard icon={Trophy} label={t.conversions} value={stats.admissions_done} trend={22} sparkData={sparkData} color="emerald" testId="stat-admissions" />
         <StatCard icon={TrendingUp} label="Conversion" value={stats.conversion_rate} suffix="%" trend={3} sparkData={sparkData} color="fuchsia" testId="stat-conversion" />
       </div>
 
@@ -248,7 +250,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 mb-1">Conversion</p>
-              <h3 className="text-lg font-bold text-slate-900" style={{ fontFamily: 'Sora' }}>Lead Funnel</h3>
+              <h3 className="text-lg font-bold text-slate-900" style={{ fontFamily: 'Sora' }}>{t.lead} Funnel</h3>
             </div>
             <button className="text-xs text-violet-700 font-semibold flex items-center gap-1 hover:text-violet-800" onClick={() => navigate('/leads')} data-testid="view-all-leads-btn">
               View all <ChevronRight className="w-3 h-3" />
@@ -264,7 +266,7 @@ export default function DashboardPage() {
         <div className="col-span-12 lg:col-span-4 bg-white border border-slate-200 rounded-xl p-6">
           <div className="mb-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 mb-1">Distribution</p>
-            <h3 className="text-lg font-bold text-slate-900" style={{ fontFamily: 'Sora' }}>Lead Sources</h3>
+            <h3 className="text-lg font-bold text-slate-900" style={{ fontFamily: 'Sora' }}>{t.lead} Sources</h3>
           </div>
           {leadSources.length === 0 ? (
             <div className="h-48 flex items-center justify-center text-sm text-slate-400">No data</div>

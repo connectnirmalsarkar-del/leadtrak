@@ -22,6 +22,7 @@ import secrets
 import cloudinary
 import cloudinary.uploader
 from openpyxl import Workbook
+from industry_config import INDUSTRY_CONFIG, SUPPORTED_INDUSTRIES, get_industry, get_terms, list_industries
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -87,8 +88,20 @@ async def get_current_user(request: Request) -> dict:
             raise HTTPException(status_code=401, detail="User not found")
         user["_id"] = str(user["_id"])
         user["id"] = user["_id"]
-        user["organization_id"] = str(user.get("organization_id", ""))
+        org_id = user.get("organization_id")
+        user["organization_id"] = str(org_id) if org_id else ""
         user.pop("password_hash", None)
+        # Attach industry + terminology from the organization
+        industry_key = "generic"
+        org_name = ""
+        if org_id:
+            org = await db.organizations.find_one({"_id": org_id}, {"industry": 1, "name": 1})
+            if org:
+                industry_key = org.get("industry") or "education"
+                org_name = org.get("name", "")
+        user["industry"] = industry_key
+        user["organization_name"] = org_name
+        user["terminology"] = get_terms(industry_key)
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -130,6 +143,7 @@ class RegisterRequest(BaseModel):
     password: str
     name: str
     organization_name: str
+    industry: Optional[str] = "education"
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -232,6 +246,7 @@ async def seed_admin():
         # Create default organization for super admin
         org_result = await db.organizations.insert_one({
             "name": "Super Admin Organization",
+            "industry": "generic",
             "subscription_plan": "enterprise",
             "settings": {},
             "created_at": datetime.now(timezone.utc)
@@ -275,9 +290,15 @@ async def seed_demo_org_and_users():
     existing_org = await db.organizations.find_one({"name": demo_org_name})
     if existing_org:
         demo_org_id = existing_org["_id"]
+        # Ensure industry is set for legacy demo orgs
+        if not existing_org.get("industry"):
+            await db.organizations.update_one(
+                {"_id": demo_org_id}, {"$set": {"industry": "education"}}
+            )
     else:
         result = await db.organizations.insert_one({
             "name": demo_org_name,
+            "industry": "education",
             "subscription_plan": "growth",
             "settings": {},
             "created_at": datetime.now(timezone.utc),
@@ -358,6 +379,16 @@ async def seed_subscription_plans():
         logger.info("Subscription plans seeded")
 
 # ==================== Startup Event ====================
+async def migrate_industry_field():
+    """Backfill the `industry` field on legacy organizations created before multi-industry support."""
+    result = await db.organizations.update_many(
+        {"industry": {"$exists": False}},
+        {"$set": {"industry": "education"}},
+    )
+    if result.modified_count:
+        logger.info(f"Migrated {result.modified_count} organizations to industry='education'")
+
+
 @app.on_event("startup")
 async def startup_db():
     await db.users.create_index("email", unique=True)
@@ -368,6 +399,7 @@ async def startup_db():
     await seed_admin()
     await seed_demo_org_and_users()
     await seed_subscription_plans()
+    await migrate_industry_field()
     logger.info("Database initialized and indexes created")
 
 # ==================== Auth Routes ====================
@@ -380,14 +412,33 @@ async def register(data: RegisterRequest, response: Response):
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    # Validate industry
+    industry = (data.industry or "education").lower()
+    if industry not in SUPPORTED_INDUSTRIES:
+        industry = "generic"
+    industry_cfg = get_industry(industry)
+
     # Create organization
     org_result = await db.organizations.insert_one({
         "name": data.organization_name,
+        "industry": industry,
         "subscription_plan": "starter",
         "settings": {},
         "created_at": datetime.now(timezone.utc)
     })
     org_id = org_result.inserted_id
+
+    # Seed industry-specific default lead sources
+    default_sources = [
+        {
+            "name": src,
+            "organization_id": org_id,
+            "created_at": datetime.now(timezone.utc),
+        }
+        for src in industry_cfg["default_sources"]
+    ]
+    if default_sources:
+        await db.lead_sources.insert_many(default_sources)
     
     # Create user
     hashed = hash_password(data.password)
@@ -414,7 +465,10 @@ async def register(data: RegisterRequest, response: Response):
         "email": email,
         "name": data.name,
         "role": "org_admin",
-        "organization_id": str(org_id)
+        "organization_id": str(org_id),
+        "organization_name": data.organization_name,
+        "industry": industry,
+        "terminology": industry_cfg["terms"],
     }
 
 @api_router.post("/auth/login")
@@ -439,12 +493,24 @@ async def login(data: LoginRequest, request: Request, response: Response):
     response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="none", max_age=900, path="/")
     response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="none", max_age=604800, path="/")
     
+    # Fetch industry + org name from org for the response
+    org_id = user.get("organization_id")
+    industry = "generic"
+    org_name = ""
+    if org_id:
+        org = await db.organizations.find_one({"_id": org_id}, {"industry": 1, "name": 1})
+        if org:
+            industry = org.get("industry") or "education"
+            org_name = org.get("name", "")
     return {
         "id": user_id,
         "email": user["email"],
         "name": user["name"],
         "role": user["role"],
-        "organization_id": str(user.get("organization_id", ""))
+        "organization_id": str(user.get("organization_id", "")),
+        "organization_name": org_name,
+        "industry": industry,
+        "terminology": get_terms(industry),
     }
 
 @api_router.post("/auth/logout")
@@ -456,6 +522,42 @@ async def logout(response: Response):
 @api_router.get("/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     return current_user
+
+# ==================== Industries (multi-industry support) ====================
+@api_router.get("/industries")
+async def get_industries():
+    """Public list of supported industries (used on signup dropdown)."""
+    return list_industries()
+
+
+@api_router.get("/industries/{key}")
+async def get_industry_detail(key: str):
+    """Full config for one industry (terms + defaults)."""
+    if key not in SUPPORTED_INDUSTRIES:
+        raise HTTPException(status_code=404, detail="Industry not found")
+    cfg = INDUSTRY_CONFIG[key]
+    return {"key": key, **cfg}
+
+
+class IndustryUpdate(BaseModel):
+    industry: str
+
+
+@api_router.put("/organization/industry")
+async def update_organization_industry(
+    data: IndustryUpdate, current_user: dict = Depends(get_current_user)
+):
+    """Allow org_admin or super_admin to change their organization's industry template."""
+    if current_user["role"] not in ("super_admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if data.industry not in SUPPORTED_INDUSTRIES:
+        raise HTTPException(status_code=400, detail="Unsupported industry")
+    await db.organizations.update_one(
+        {"_id": ObjectId(current_user["organization_id"])},
+        {"$set": {"industry": data.industry}},
+    )
+    return {"industry": data.industry, "terminology": get_terms(data.industry)}
+
 
 @api_router.post("/auth/refresh")
 async def refresh_token(request: Request, response: Response):
@@ -1205,13 +1307,25 @@ async def send_whatsapp_message(data: WhatsAppMessage, current_user: dict = Depe
 @api_router.get("/dashboard/funnel")
 async def get_lead_funnel(current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
+    org = await db.organizations.find_one({"_id": org_id}, {"industry": 1})
+    industry = (org or {}).get("industry") or "education"
+    terms = get_terms(industry)
     stages = ["New", "Contacted", "Interested", "Admission Done"]
+    # Display labels — last stage adapts to industry
+    display_labels = {
+        "Admission Done": terms.get("conversion_verb", "Converted"),
+    }
     counts = {}
     for stage in stages:
         counts[stage] = await db.leads.count_documents({"organization_id": org_id, "status": stage})
     total = sum(counts.values()) or 1
     return [
-        {"stage": stage, "count": counts[stage], "percentage": round(counts[stage] / total * 100, 1)}
+        {
+            "stage": display_labels.get(stage, stage),
+            "raw_stage": stage,
+            "count": counts[stage],
+            "percentage": round(counts[stage] / total * 100, 1),
+        }
         for stage in stages
     ]
 
