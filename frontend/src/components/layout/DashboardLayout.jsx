@@ -19,6 +19,8 @@ import {
   MessageSquare,
   History,
   Globe,
+  LifeBuoy,
+  Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -49,6 +51,12 @@ const adminNavItems = [
   { path: '/settings', label: 'Settings', icon: Settings, testId: 'nav-settings' },
 ];
 
+const platformNavItems = [
+  { path: '/platform/organizations', label: 'Organizations', icon: Layers, testId: 'nav-platform-orgs' },
+];
+
+const supportNavItem = { path: '/support', label: 'Support', icon: LifeBuoy, testId: 'nav-support' };
+
 export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -56,6 +64,7 @@ export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const isAdmin = user && ['super_admin', 'org_admin', 'manager'].includes(user.role);
+  const isSuperAdmin = user && user.role === 'super_admin';
 
   const handleLogout = async () => {
     await logout();
@@ -140,6 +149,41 @@ export default function DashboardLayout({ children }) {
               })}
             </>
           )}
+
+          {/* Platform (super admin only) */}
+          {isSuperAdmin && (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-400 px-4 mb-2 mt-6">Platform</p>
+              {platformNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
+                    onClick={() => setSidebarOpen(false)}
+                    data-testid={item.testId}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm">{item.label}</span>
+                  </NavLink>
+                );
+              })}
+            </>
+          )}
+
+          {/* Support — visible to everyone */}
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 px-4 mb-2 mt-6">Help</p>
+          <NavLink
+            to={supportNavItem.path}
+            className={`sidebar-nav-item ${location.pathname === supportNavItem.path ? 'active' : ''}`}
+            onClick={() => setSidebarOpen(false)}
+            data-testid={supportNavItem.testId}
+          >
+            <supportNavItem.icon className="w-4 h-4" />
+            <span className="text-sm">{supportNavItem.label}</span>
+          </NavLink>
         </nav>
       </aside>
 

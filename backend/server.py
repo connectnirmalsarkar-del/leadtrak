@@ -1522,6 +1522,225 @@ async def get_cohort_analysis(current_user: dict = Depends(get_current_user)):
         for r in rows
     ]
 
+# ==================== Super Admin: Platform / Tenant Management ====================
+class PlatformOrgCreate(BaseModel):
+    organization_name: str
+    admin_name: str
+    admin_email: EmailStr
+    admin_password: str
+    subscription_plan: Optional[str] = "starter"
+
+@api_router.get("/platform/stats")
+async def platform_stats(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    total_orgs = await db.organizations.count_documents({})
+    active_orgs = await db.organizations.count_documents({"status": {"$ne": "suspended"}})
+    total_users = await db.users.count_documents({})
+    total_leads = await db.leads.count_documents({})
+    total_admissions = await db.admissions.count_documents({})
+    revenue_pipeline = await db.admissions.aggregate([{"$group": {"_id": None, "total": {"$sum": "$fees"}}}]).to_list(1)
+    revenue = revenue_pipeline[0]["total"] if revenue_pipeline else 0
+    plan_dist = await db.organizations.aggregate([{"$group": {"_id": "$subscription_plan", "count": {"$sum": 1}}}]).to_list(10)
+    return {
+        "total_organizations": total_orgs,
+        "active_organizations": active_orgs,
+        "suspended_organizations": total_orgs - active_orgs,
+        "total_users": total_users,
+        "total_leads_platform": total_leads,
+        "total_admissions_platform": total_admissions,
+        "platform_revenue": revenue,
+        "plan_distribution": [{"plan": p["_id"], "count": p["count"]} for p in plan_dist],
+    }
+
+@api_router.get("/platform/organizations")
+async def list_all_organizations(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    orgs = await db.organizations.find({}).sort("created_at", -1).to_list(1000)
+    result = []
+    for org in orgs:
+        oid = org["_id"]
+        users_count = await db.users.count_documents({"organization_id": oid})
+        leads_count = await db.leads.count_documents({"organization_id": oid})
+        admissions_count = await db.admissions.count_documents({"organization_id": oid})
+        result.append({
+            "id": str(oid),
+            "name": org.get("name", ""),
+            "subscription_plan": org.get("subscription_plan", "starter"),
+            "status": org.get("status", "active"),
+            "users_count": users_count,
+            "leads_count": leads_count,
+            "admissions_count": admissions_count,
+            "created_at": org["created_at"].isoformat() if isinstance(org.get("created_at"), datetime) else org.get("created_at"),
+        })
+    return result
+
+@api_router.post("/platform/organizations")
+async def create_organization(data: PlatformOrgCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    email = data.admin_email.lower()
+    existing = await db.users.find_one({"email": email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already exists")
+    org_result = await db.organizations.insert_one({
+        "name": data.organization_name,
+        "subscription_plan": data.subscription_plan,
+        "status": "active",
+        "settings": {},
+        "created_at": datetime.now(timezone.utc),
+    })
+    org_id = org_result.inserted_id
+    await db.users.insert_one({
+        "email": email,
+        "password_hash": hash_password(data.admin_password),
+        "name": data.admin_name,
+        "role": "org_admin",
+        "organization_id": org_id,
+        "created_at": datetime.now(timezone.utc),
+    })
+    return {"id": str(org_id), "name": data.organization_name, "admin_email": email}
+
+@api_router.put("/platform/organizations/{org_id}/toggle")
+async def toggle_organization_status(org_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    org = await db.organizations.find_one({"_id": ObjectId(org_id)})
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    new_status = "suspended" if org.get("status", "active") == "active" else "active"
+    await db.organizations.update_one({"_id": ObjectId(org_id)}, {"$set": {"status": new_status}})
+    return {"status": new_status}
+
+@api_router.delete("/platform/organizations/{org_id}")
+async def delete_organization(org_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    oid = ObjectId(org_id)
+    # Cascade delete tenant data
+    await db.users.delete_many({"organization_id": oid})
+    await db.leads.delete_many({"organization_id": oid})
+    await db.followups.delete_many({"organization_id": oid})
+    await db.admissions.delete_many({"organization_id": oid})
+    await db.tasks.delete_many({"organization_id": oid})
+    await db.notifications.delete_many({"organization_id": oid})
+    await db.activity_logs.delete_many({"organization_id": oid})
+    await db.whatsapp_templates.delete_many({"organization_id": oid})
+    await db.lead_sources.delete_many({"organization_id": oid})
+    await db.campaigns.delete_many({"organization_id": oid})
+    await db.support_tickets.delete_many({"organization_id": oid})
+    await db.organizations.delete_one({"_id": oid})
+    return {"message": "Organization and all related data deleted"}
+
+# ==================== Support Tickets ====================
+class TicketCreate(BaseModel):
+    subject: str
+    category: str
+    priority: str = "Medium"
+    message: str
+
+class TicketReply(BaseModel):
+    message: str
+
+class TicketStatusUpdate(BaseModel):
+    status: str
+
+@api_router.post("/support-tickets")
+async def create_ticket(data: TicketCreate, current_user: dict = Depends(get_current_user)):
+    org_id = ObjectId(current_user["organization_id"])
+    ticket_count = await db.support_tickets.count_documents({})
+    ticket_no = f"TKT{ticket_count + 1:05d}"
+    doc = {
+        "ticket_no": ticket_no,
+        "subject": data.subject,
+        "category": data.category,
+        "priority": data.priority,
+        "status": "open",
+        "messages": [{
+            "sender_id": current_user["id"],
+            "sender_name": current_user["name"],
+            "sender_role": current_user["role"],
+            "message": data.message,
+            "timestamp": datetime.now(timezone.utc),
+        }],
+        "organization_id": org_id,
+        "created_by": current_user["id"],
+        "creator_name": current_user["name"],
+        "creator_email": current_user["email"],
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    result = await db.support_tickets.insert_one(doc)
+    doc["_id"] = str(result.inserted_id)
+    doc["organization_id"] = str(org_id)
+    return doc
+
+@api_router.get("/support-tickets")
+async def list_tickets(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] == "super_admin":
+        query = {}
+    else:
+        query = {"organization_id": ObjectId(current_user["organization_id"])}
+    tickets = await db.support_tickets.find(query, {"messages": 0}).sort("updated_at", -1).to_list(500)
+    for t in tickets:
+        t["_id"] = str(t["_id"])
+        t["organization_id"] = str(t.get("organization_id", ""))
+        # Populate org name for super admin
+        if current_user["role"] == "super_admin":
+            org = await db.organizations.find_one({"_id": ObjectId(t["organization_id"])}, {"name": 1})
+            t["organization_name"] = org["name"] if org else ""
+    return tickets
+
+@api_router.get("/support-tickets/{tid}")
+async def get_ticket(tid: str, current_user: dict = Depends(get_current_user)):
+    ticket = await db.support_tickets.find_one({"_id": ObjectId(tid)})
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if current_user["role"] != "super_admin" and str(ticket["organization_id"]) != current_user["organization_id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    ticket["_id"] = str(ticket["_id"])
+    ticket["organization_id"] = str(ticket["organization_id"])
+    org = await db.organizations.find_one({"_id": ObjectId(ticket["organization_id"])}, {"name": 1})
+    ticket["organization_name"] = org["name"] if org else ""
+    for m in ticket.get("messages", []):
+        if isinstance(m.get("timestamp"), datetime):
+            m["timestamp"] = m["timestamp"].isoformat()
+    return ticket
+
+@api_router.post("/support-tickets/{tid}/reply")
+async def reply_ticket(tid: str, data: TicketReply, current_user: dict = Depends(get_current_user)):
+    ticket = await db.support_tickets.find_one({"_id": ObjectId(tid)})
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if current_user["role"] != "super_admin" and str(ticket["organization_id"]) != current_user["organization_id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    new_msg = {
+        "sender_id": current_user["id"],
+        "sender_name": current_user["name"],
+        "sender_role": current_user["role"],
+        "message": data.message,
+        "timestamp": datetime.now(timezone.utc),
+    }
+    await db.support_tickets.update_one(
+        {"_id": ObjectId(tid)},
+        {"$push": {"messages": new_msg}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+    )
+    return {"message": "Reply added"}
+
+@api_router.put("/support-tickets/{tid}/status")
+async def update_ticket_status(tid: str, data: TicketStatusUpdate, current_user: dict = Depends(get_current_user)):
+    ticket = await db.support_tickets.find_one({"_id": ObjectId(tid)})
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if current_user["role"] not in ["super_admin", "org_admin"] and str(ticket["organization_id"]) != current_user["organization_id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    await db.support_tickets.update_one(
+        {"_id": ObjectId(tid)},
+        {"$set": {"status": data.status, "updated_at": datetime.now(timezone.utc)}},
+    )
+    return {"status": data.status}
+
 # Include the router in the main app
 app.include_router(api_router)
 
