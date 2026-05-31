@@ -27,6 +27,7 @@ import {
   Tag,
   Video,
   MapPin,
+  Activity,
   Sparkles,
   AlertTriangle,
 } from 'lucide-react';
@@ -57,6 +58,7 @@ const adminNavItems = [
   { path: '/users', label: 'Team Members', icon: Users, testId: 'nav-users' },
   { path: '/services', label: 'Services & Pricing', icon: Tag, testId: 'nav-services' },
   { path: '/integrations', label: 'Integrations', icon: Layers, testId: 'nav-integrations' },
+  { path: '/integrations/webhooks', label: 'Webhook Health', icon: Activity, testId: 'nav-webhook-health' },
   { path: '/lead-widget', label: 'Lead Widget', icon: Globe, testId: 'nav-widget' },
   { path: '/activity-logs', label: 'Activity Logs', icon: History, testId: 'nav-activity' },
   { path: '/subscription', label: 'Subscription', icon: CreditCard, testId: 'nav-subscription' },

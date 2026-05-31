@@ -229,6 +229,19 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Lead Add form: **State** and **City** are now cascading Select dropdowns (city options re-populate when state changes)
 - ✅ New page **/platform/locations** for Super Admin — search, state filter, toggle active/inactive, edit, delete, custom vs default badges
 
+### Completed 2026-05-31 — Webhook Health Dashboard (Org Admin, tenant-isolated)
+- ✅ New `webhook_logs` collection — every FB / Google Ads inbound event logged with status, leads_imported, duplicates, error, payload, response, ip
+- ✅ Instrumented endpoints: FB verify, FB leadgen (signature pass/fail, Graph API error captured), Google Ads (auth pass/fail, validation errors, duplicates)
+- ✅ Endpoints (Org Admin + Super Admin only, scoped to `organization_id`):
+  - `GET /api/webhook-logs/stats` — total / success / failed / duplicates / today / last_24h / last_7d / by_source breakdown
+  - `GET /api/webhook-logs` — list with source / status / since filters
+  - `GET /api/webhook-logs/{id}` — full payload + response (tenant-scoped)
+  - `POST /api/webhook-logs/{id}/retry` — re-ingest a failed lead from stored payload (FB + Google Ads)
+- ✅ Counselor / Telecaller get **403** (verified)
+- ✅ New page **/integrations/webhooks** — 4 headline cards (Total / Success Rate / Failed / Last 24h), per-source breakdown cards, filterable log table with relative timestamps, click-to-view payload dialog with "Retry Ingestion" button
+- ✅ Sidebar link "Webhook Health" added under admin nav (visible only to admins/managers; counselors don't see it)
+- ✅ Indexes: `(organization_id, created_at desc)` + `(organization_id, source, status)`
+
 ### Completed 2026-05-31 — Unified Lead Capture (Manual + CSV + Widget + FB + Google)
 - ✅ **Schema parity** — `LeadCreate` / `LeadUpdate` now accept `company_name`, `budget_range`, `preferred_date`, `travellers`, `remarks` (all sources persist same fields)
 - ✅ **Manual Entry industry-aware** — `GET /api/leads/form-config` returns the same field list as the widget; LeadsPage Add dialog renders Industry-specific extras dynamically

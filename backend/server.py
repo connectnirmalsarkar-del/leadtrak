@@ -750,6 +750,9 @@ async def startup_db():
         unique=True,
         partialFilterExpression={"source_external_id": {"$type": "string"}},
     )
+    # Webhook logs
+    await db.webhook_logs.create_index([("organization_id", 1), ("created_at", -1)])
+    await db.webhook_logs.create_index([("organization_id", 1), ("source", 1), ("status", 1)])
     logger.info("Database initialized and indexes created")
 
 # ==================== Auth Routes ====================
@@ -2910,6 +2913,44 @@ async def report_by_demo_owner(current_user: dict = Depends(get_current_user)):
     return rows
 
 # ==================== Integration Routes ====================
+async def _log_webhook(
+    org_id: Optional[ObjectId],
+    *,
+    source: str,
+    event: str,
+    status: str,  # "success" | "failed" | "duplicate" | "ignored"
+    leads_imported: int = 0,
+    duplicates: int = 0,
+    error: Optional[str] = None,
+    payload: Optional[dict] = None,
+    response: Optional[dict] = None,
+    ip: Optional[str] = None,
+    page_id: Optional[str] = None,
+):
+    """Persist an inbound webhook event for the per-tenant Webhook Health Dashboard."""
+    if not org_id:
+        # Webhook arrived without resolvable tenant — log under a sentinel for super-admin debugging
+        return
+    try:
+        doc = {
+            "organization_id": org_id,
+            "source": source,
+            "event": event,
+            "status": status,
+            "leads_imported": leads_imported,
+            "duplicates": duplicates,
+            "error": error,
+            "payload": payload,
+            "response": response,
+            "ip": ip,
+            "page_id": page_id,
+            "created_at": datetime.now(timezone.utc),
+        }
+        await db.webhook_logs.insert_one(doc)
+    except Exception as e:
+        logger.warning(f"_log_webhook failed: {e}")
+
+
 async def _ingest_external_lead(
     org: dict,
     *,
@@ -3062,6 +3103,7 @@ def _map_fb_lead(fb_fields: dict, field_mapping: Optional[dict] = None) -> dict:
 async def facebook_lead_verify(request: Request):
     """Meta GET verification: returns hub.challenge if hub.verify_token matches any tenant's token."""
     qp = request.query_params
+    client_ip = request.client.host if request.client else None
     if qp.get("hub.mode") != "subscribe":
         raise HTTPException(status_code=400, detail="Invalid hub.mode")
     token = qp.get("hub.verify_token") or ""
@@ -3076,6 +3118,11 @@ async def facebook_lead_verify(request: Request):
         global_token = os.environ.get("FB_WEBHOOK_VERIFY_TOKEN")
         if not global_token or token != global_token:
             raise HTTPException(status_code=403, detail="Invalid verify token")
+    if match:
+        await _log_webhook(
+            match["_id"], source="facebook", event="subscribe_verify",
+            status="success", payload={"mode": "subscribe"}, ip=client_ip,
+        )
     return Response(content=challenge, media_type="text/plain")
 
 
@@ -3084,6 +3131,7 @@ async def facebook_lead_webhook(request: Request):
     """Meta POST: verifies signature → resolves tenant by page_id → fetches lead → creates lead."""
     raw_body = await request.body()
     header_sig = request.headers.get("X-Hub-Signature-256", "")
+    client_ip = request.client.host if request.client else None
     try:
         payload = json.loads(raw_body.decode("utf-8") or "{}")
     except Exception:
@@ -3094,6 +3142,7 @@ async def facebook_lead_webhook(request: Request):
         return {"status": "ignored", "reason": "no entries"}
 
     imported_ids = []
+    duplicates_count = 0
     for entry in entries:
         page_id = str(entry.get("id") or "")
         if not page_id:
@@ -3108,6 +3157,11 @@ async def facebook_lead_webhook(request: Request):
         app_secret = fb_cfg.get("app_secret") or ""
         page_access_token = fb_cfg.get("page_access_token") or ""
         if not _verify_fb_signature(app_secret, raw_body, header_sig):
+            await _log_webhook(
+                org["_id"], source="facebook", event="leadgen",
+                status="failed", error="Invalid HMAC signature",
+                payload={"page_id": page_id}, ip=client_ip, page_id=page_id,
+            )
             logger.warning(f"FB webhook: signature verification failed for page_id={page_id}")
             raise HTTPException(status_code=401, detail="Invalid signature")
         for change in entry.get("changes") or []:
@@ -3119,6 +3173,7 @@ async def facebook_lead_webhook(request: Request):
                 continue
             # Fetch full lead from Graph API
             lead_data = {"field_data": []}
+            graph_error = None
             if page_access_token:
                 try:
                     api_ver = fb_cfg.get("graph_api_version") or "v19.0"
@@ -3130,9 +3185,11 @@ async def facebook_lead_webhook(request: Request):
                     if r.status_code == 200:
                         lead_data = r.json()
                     else:
-                        logger.warning(f"FB Graph API {r.status_code}: {r.text[:200]}")
+                        graph_error = f"Graph API {r.status_code}: {r.text[:200]}"
+                        logger.warning(graph_error)
                 except Exception as e:
-                    logger.error(f"FB Graph API error: {e}")
+                    graph_error = f"Graph API request error: {e}"
+                    logger.error(graph_error)
             fb_fields = _fb_fields_to_dict(lead_data.get("field_data") or [])
             crm = _map_fb_lead(fb_fields, fb_cfg.get("field_mapping") or {})
             new_id = await _ingest_external_lead(
@@ -3155,7 +3212,23 @@ async def facebook_lead_webhook(request: Request):
             )
             if new_id:
                 imported_ids.append(new_id)
-    return {"status": "ok", "imported": len(imported_ids), "lead_ids": imported_ids}
+                await _log_webhook(
+                    org["_id"], source="facebook", event="leadgen",
+                    status="success", leads_imported=1,
+                    payload={"page_id": page_id, "leadgen_id": leadgen_id, "fb_fields": fb_fields},
+                    response={"lead_id": new_id}, ip=client_ip, page_id=page_id,
+                )
+            else:
+                duplicates_count += 1
+                await _log_webhook(
+                    org["_id"], source="facebook", event="leadgen",
+                    status="duplicate" if not graph_error else "failed",
+                    duplicates=1 if not graph_error else 0,
+                    error=graph_error,
+                    payload={"page_id": page_id, "leadgen_id": leadgen_id, "fb_fields": fb_fields},
+                    ip=client_ip, page_id=page_id,
+                )
+    return {"status": "ok", "imported": len(imported_ids), "lead_ids": imported_ids, "duplicates": duplicates_count}
 
 
 class GoogleAdsLeadIn(BaseModel):
@@ -3175,12 +3248,13 @@ class GoogleAdsLeadIn(BaseModel):
 
 
 @api_router.post("/integrations/google-ads/{tenant_id}")
-async def google_ads_lead_webhook(tenant_id: str, data: GoogleAdsLeadIn):
+async def google_ads_lead_webhook(tenant_id: str, data: GoogleAdsLeadIn, request: Request):
     """Google Ads Lead Form webhook receiver.
     URL pattern: /api/integrations/google-ads/{tenant_id}
     Auth: caller must include `google_key` matching the tenant's stored webhook key.
     Supports both native Google `user_column_data` array and flat JSON for Zapier-style posts.
     """
+    client_ip = request.client.host if request.client else None
     try:
         org_oid = ObjectId(tenant_id)
     except Exception:
@@ -3191,6 +3265,11 @@ async def google_ads_lead_webhook(tenant_id: str, data: GoogleAdsLeadIn):
     g_cfg = (org.get("integrations") or {}).get("google_ads") or {}
     stored_key = g_cfg.get("webhook_secret") or g_cfg.get("webhook_key") or ""
     if not stored_key or not hmac.compare_digest(stored_key, data.google_key or ""):
+        await _log_webhook(
+            org_oid, source="google_ads", event="lead_form",
+            status="failed", error="Invalid webhook key",
+            payload={"campaign_id": data.campaign_id, "form_id": data.form_id}, ip=client_ip,
+        )
         raise HTTPException(status_code=401, detail="Invalid webhook key")
 
     # Normalize fields — Google sends `user_column_data: [{column_id, column_name, string_value}, …]`
@@ -3220,6 +3299,11 @@ async def google_ads_lead_webhook(tenant_id: str, data: GoogleAdsLeadIn):
                 course = course or val
 
     if not name or not mobile:
+        await _log_webhook(
+            org_oid, source="google_ads", event="lead_form",
+            status="failed", error="name and mobile are required",
+            payload=data.model_dump(), ip=client_ip,
+        )
         raise HTTPException(status_code=400, detail="name and mobile are required")
     ext_id = data.lead_id or f"google-{datetime.now(timezone.utc).timestamp():.0f}-{mobile}"
     new_lead = await _ingest_external_lead(
@@ -3234,7 +3318,209 @@ async def google_ads_lead_webhook(tenant_id: str, data: GoogleAdsLeadIn):
         city=city,
         raw=data.model_dump(),
     )
+    if new_lead:
+        await _log_webhook(
+            org_oid, source="google_ads", event="lead_form",
+            status="success", leads_imported=1,
+            payload=data.model_dump(), response={"lead_id": new_lead}, ip=client_ip,
+        )
+    else:
+        await _log_webhook(
+            org_oid, source="google_ads", event="lead_form",
+            status="duplicate", duplicates=1,
+            payload=data.model_dump(), ip=client_ip,
+        )
     return {"status": "ok", "lead_id": new_lead, "duplicate": new_lead is None}
+
+
+# ==================== Webhook Health (Org Admin) ====================
+@api_router.get("/webhook-logs/stats")
+async def webhook_logs_stats(current_user: dict = Depends(get_current_user)):
+    """Per-tenant webhook stats for the health dashboard. Org Admin only."""
+    if current_user["role"] not in ("org_admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only Org Admins can view webhook health")
+    org_id = ObjectId(current_user["organization_id"])
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    last_24h = now - timedelta(hours=24)
+    last_7d = now - timedelta(days=7)
+
+    base = {"organization_id": org_id}
+    total = await db.webhook_logs.count_documents(base)
+    success = await db.webhook_logs.count_documents({**base, "status": "success"})
+    failed = await db.webhook_logs.count_documents({**base, "status": "failed"})
+    duplicates = await db.webhook_logs.count_documents({**base, "status": "duplicate"})
+    today = await db.webhook_logs.count_documents({**base, "created_at": {"$gte": today_start}})
+    last24 = await db.webhook_logs.count_documents({**base, "created_at": {"$gte": last_24h}})
+    last7 = await db.webhook_logs.count_documents({**base, "created_at": {"$gte": last_7d}})
+
+    # Per-source breakdown
+    pipeline = [
+        {"$match": base},
+        {"$group": {
+            "_id": "$source",
+            "total": {"$sum": 1},
+            "success": {"$sum": {"$cond": [{"$eq": ["$status", "success"]}, 1, 0]}},
+            "failed": {"$sum": {"$cond": [{"$eq": ["$status", "failed"]}, 1, 0]}},
+            "duplicates": {"$sum": {"$cond": [{"$eq": ["$status", "duplicate"]}, 1, 0]}},
+            "leads_imported": {"$sum": "$leads_imported"},
+            "last_event_at": {"$max": "$created_at"},
+        }},
+    ]
+    by_source = []
+    async for r in db.webhook_logs.aggregate(pipeline):
+        by_source.append({
+            "source": r["_id"],
+            "total": r["total"],
+            "success": r["success"],
+            "failed": r["failed"],
+            "duplicates": r["duplicates"],
+            "leads_imported": r.get("leads_imported", 0),
+            "last_event_at": r["last_event_at"].isoformat() if r.get("last_event_at") else None,
+        })
+
+    success_rate = round((success / total * 100) if total else 0, 1)
+    return {
+        "total": total,
+        "success": success,
+        "failed": failed,
+        "duplicates": duplicates,
+        "success_rate": success_rate,
+        "today": today,
+        "last_24h": last24,
+        "last_7d": last7,
+        "by_source": by_source,
+    }
+
+
+@api_router.get("/webhook-logs")
+async def list_webhook_logs(
+    source: Optional[str] = None,
+    status: Optional[str] = None,
+    since: Optional[str] = None,  # ISO date
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user),
+):
+    """List webhook events for the current tenant (Org Admin only). Most recent first."""
+    if current_user["role"] not in ("org_admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only Org Admins can view webhook health")
+    org_id = ObjectId(current_user["organization_id"])
+    q = {"organization_id": org_id}
+    if source:
+        q["source"] = source
+    if status:
+        q["status"] = status
+    if since:
+        try:
+            q["created_at"] = {"$gte": datetime.fromisoformat(since.replace("Z", "+00:00"))}
+        except Exception:
+            pass
+    limit = max(1, min(limit, 500))
+    cursor = db.webhook_logs.find(q).sort("created_at", -1).limit(limit)
+    rows = []
+    async for d in cursor:
+        rows.append({
+            "id": str(d["_id"]),
+            "source": d.get("source"),
+            "event": d.get("event"),
+            "status": d.get("status"),
+            "leads_imported": d.get("leads_imported", 0),
+            "duplicates": d.get("duplicates", 0),
+            "error": d.get("error"),
+            "page_id": d.get("page_id"),
+            "ip": d.get("ip"),
+            "created_at": d["created_at"].isoformat() if isinstance(d.get("created_at"), datetime) else None,
+        })
+    return rows
+
+
+@api_router.get("/webhook-logs/{log_id}")
+async def get_webhook_log(log_id: str, current_user: dict = Depends(get_current_user)):
+    """Full payload + response for a single webhook event. Org Admin only, tenant-scoped."""
+    if current_user["role"] not in ("org_admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only Org Admins can view webhook health")
+    org_id = ObjectId(current_user["organization_id"])
+    oid = safe_object_id(log_id, "log_id")
+    d = await db.webhook_logs.find_one({"_id": oid, "organization_id": org_id})
+    if not d:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {
+        "id": str(d["_id"]),
+        "source": d.get("source"),
+        "event": d.get("event"),
+        "status": d.get("status"),
+        "leads_imported": d.get("leads_imported", 0),
+        "duplicates": d.get("duplicates", 0),
+        "error": d.get("error"),
+        "payload": d.get("payload"),
+        "response": d.get("response"),
+        "page_id": d.get("page_id"),
+        "ip": d.get("ip"),
+        "created_at": d["created_at"].isoformat() if isinstance(d.get("created_at"), datetime) else None,
+    }
+
+
+@api_router.post("/webhook-logs/{log_id}/retry")
+async def retry_webhook_log(log_id: str, current_user: dict = Depends(get_current_user)):
+    """Re-ingest a failed webhook payload using the stored data. Org Admin only."""
+    if current_user["role"] not in ("org_admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only Org Admins can retry webhooks")
+    org_id = ObjectId(current_user["organization_id"])
+    oid = safe_object_id(log_id, "log_id")
+    log = await db.webhook_logs.find_one({"_id": oid, "organization_id": org_id})
+    if not log:
+        raise HTTPException(status_code=404, detail="Not found")
+    if log.get("status") == "success":
+        return {"status": "noop", "reason": "Already successful"}
+    org = await db.organizations.find_one({"_id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    source = log.get("source")
+    payload = log.get("payload") or {}
+    new_lead_id = None
+    if source == "google_ads":
+        name = (payload.get("name") or "").strip()
+        mobile = (payload.get("mobile") or "").strip()
+        if not name or not mobile:
+            await _log_webhook(org_id, source="google_ads", event="retry", status="failed", error="name and mobile required for retry", payload=payload)
+            raise HTTPException(status_code=400, detail="Original payload missing name/mobile")
+        ext_id = payload.get("lead_id") or f"retry-{oid}"
+        new_lead_id = await _ingest_external_lead(
+            org, source="Google Ads", external_id=ext_id,
+            name=name, mobile=mobile, email=payload.get("email"),
+            course_interested=payload.get("course_interested"),
+            state=payload.get("state"), city=payload.get("city"),
+            raw=payload,
+        )
+    elif source == "facebook":
+        fb_fields = payload.get("fb_fields") or {}
+        if not fb_fields:
+            raise HTTPException(status_code=400, detail="Original webhook had no FB field data to retry")
+        crm = _map_fb_lead(fb_fields, ((org.get("integrations") or {}).get("facebook_lead_ads") or {}).get("field_mapping") or {})
+        leadgen_id = payload.get("leadgen_id") or f"retry-{oid}"
+        new_lead_id = await _ingest_external_lead(
+            org, source="Facebook Lead Ads", external_id=leadgen_id,
+            name=crm.get("name") or "Unknown",
+            mobile=str(crm.get("mobile") or "").strip(),
+            email=crm.get("email"),
+            course_interested=crm.get("course_interested"),
+            state=crm.get("state"), city=crm.get("city"),
+            extras={"company_name": crm.get("company_name"), "budget_range": crm.get("budget_range"), "preferred_date": crm.get("preferred_date"), "travellers": crm.get("travellers")},
+            raw=payload,
+        )
+    else:
+        raise HTTPException(status_code=400, detail=f"Retry not supported for source '{source}'")
+
+    status_val = "success" if new_lead_id else "duplicate"
+    await _log_webhook(
+        org_id, source=source or "unknown", event="retry",
+        status=status_val,
+        leads_imported=1 if new_lead_id else 0,
+        duplicates=0 if new_lead_id else 1,
+        payload=payload, response={"lead_id": new_lead_id},
+    )
+    return {"status": status_val, "lead_id": new_lead_id}
 
 @api_router.post("/integrations/whatsapp/send")
 async def send_whatsapp_message(data: WhatsAppMessage, current_user: dict = Depends(get_current_user)):

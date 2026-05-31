@@ -20,6 +20,7 @@ import ActivityLogsPage from '@/pages/ActivityLogsPage';
 import LeadWidgetPage from '@/pages/LeadWidgetPage';
 import PlatformOrgsPage from '@/pages/PlatformOrgsPage';
 import PlatformLocationsPage from '@/pages/PlatformLocationsPage';
+import WebhookHealthPage from '@/pages/WebhookHealthPage';
 import SupportTicketsPage from '@/pages/SupportTicketsPage';
 import ServicesPage from '@/pages/ServicesPage';
 import IntegrationsPage from '@/pages/IntegrationsPage';
@@ -85,6 +86,7 @@ function App() {
           <Route path="/lead-widget" element={<ProtectedRoute><LeadWidgetPage /></ProtectedRoute>} />
           <Route path="/platform/organizations" element={<ProtectedRoute><PlatformOrgsPage /></ProtectedRoute>} />
           <Route path="/platform/locations" element={<ProtectedRoute><PlatformLocationsPage /></ProtectedRoute>} />
+          <Route path="/integrations/webhooks" element={<ProtectedRoute><WebhookHealthPage /></ProtectedRoute>} />
           <Route path="/support" element={<ProtectedRoute><SupportTicketsPage /></ProtectedRoute>} />
           <Route path="/services" element={<ProtectedRoute><ServicesPage /></ProtectedRoute>} />
           <Route path="/integrations" element={<ProtectedRoute><IntegrationsPage /></ProtectedRoute>} />
