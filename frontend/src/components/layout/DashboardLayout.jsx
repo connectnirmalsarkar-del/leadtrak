@@ -26,6 +26,8 @@ import {
   Zap,
   Tag,
   Video,
+  Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -74,8 +76,24 @@ export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [subscription, setSubscription] = useState(null);
   const knownNotifIdsRef = useRef(new Set());
   const isFirstLoadRef = useRef(true);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchSub = async () => {
+      try {
+        const { data } = await axios.get(`${API}/subscription/status`);
+        setSubscription(data);
+      } catch (e) {
+        // silent
+      }
+    };
+    fetchSub();
+    const id = setInterval(fetchSub, 5 * 60 * 1000); // every 5 minutes
+    return () => clearInterval(id);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -271,6 +289,39 @@ export default function DashboardLayout({ children }) {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Subscription badge — visible to org users (not super admin own-org) */}
+            {subscription && user?.role !== 'super_admin' && (() => {
+              const status = subscription.status;
+              const days = subscription.days_remaining;
+              const isTrial = status === 'trial';
+              const isExpired = status === 'expired';
+              const isWarning = days !== null && days <= 7 && !isExpired;
+              const cls = isExpired
+                ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                : isWarning
+                  ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                  : isTrial
+                    ? 'bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100';
+              const Icon = isExpired ? AlertTriangle : isTrial ? Sparkles : CreditCard;
+              const label = isExpired
+                ? 'Expired — Renew'
+                : isTrial
+                  ? `Trial · ${days}d left`
+                  : `${(subscription.plan || '').toString().charAt(0).toUpperCase() + (subscription.plan || '').toString().slice(1)} · ${days}d`;
+              return (
+                <button
+                  onClick={() => navigate('/subscription')}
+                  className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${cls}`}
+                  data-testid="header-subscription-badge"
+                  title={subscription.end_date ? `Expires ${new Date(subscription.end_date).toLocaleDateString()}` : ''}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span data-testid="subscription-badge-label">{label}</span>
+                </button>
+              );
+            })()}
+
             <div className="relative">
               <Button variant="ghost" size="icon" onClick={() => setShowNotifPanel(!showNotifPanel)} data-testid="notifications-btn">
                 <Bell className="w-5 h-5 text-slate-600" />

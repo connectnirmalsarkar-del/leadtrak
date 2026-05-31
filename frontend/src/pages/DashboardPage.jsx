@@ -172,6 +172,7 @@ export default function DashboardPage() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [activity, setActivity] = useState([]);
   const [todayFollowups, setTodayFollowups] = useState([]);
+  const [subscription, setSubscription] = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -182,7 +183,8 @@ export default function DashboardPage() {
       axios.get(`${API}/dashboard/leaderboard`),
       axios.get(`${API}/dashboard/activity-feed`),
       axios.get(`${API}/dashboard/today-followups`),
-    ]).then(([s, src, mt, fn, lb, af, tf]) => {
+      axios.get(`${API}/subscription/status`).catch(() => ({ data: null })),
+    ]).then(([s, src, mt, fn, lb, af, tf, sub]) => {
       setStats(s.data);
       setLeadSources(src.data);
       setMonthlyTrend(mt.data);
@@ -190,6 +192,7 @@ export default function DashboardPage() {
       setLeaderboard(lb.data);
       setActivity(af.data);
       setTodayFollowups(tf.data);
+      setSubscription(sub.data);
     }).catch((e) => console.error(e));
   }, []);
 
@@ -200,6 +203,49 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-[1440px] mx-auto space-y-6" data-testid="dashboard-page">
+      {/* Subscription Banner — show only if trial or expiring soon or expired */}
+      {subscription && user?.role !== 'super_admin' && (() => {
+        const status = subscription.status;
+        const days = subscription.days_remaining ?? 0;
+        const isTrial = status === 'trial';
+        const isExpired = status === 'expired';
+        const isWarning = days <= 7 && !isExpired;
+        if (!isTrial && !isWarning && !isExpired) return null;
+        const bg = isExpired
+          ? 'bg-red-50 border-red-200'
+          : isWarning
+            ? 'bg-amber-50 border-amber-200'
+            : 'bg-violet-50 border-violet-200';
+        const accent = isExpired ? 'text-red-700' : isWarning ? 'text-amber-700' : 'text-violet-700';
+        const headline = isExpired
+          ? 'Your subscription has expired'
+          : isTrial
+            ? `You're on a 14-day trial — ${days} days remaining`
+            : `Subscription expires in ${days} day${days === 1 ? '' : 's'}`;
+        const sub = isExpired
+          ? 'Renew now to regain full access to your leads, follow-ups and reports.'
+          : isTrial
+            ? `Upgrade to ${subscription.plan === 'starter' ? 'Growth' : 'a paid plan'} to keep your workspace active after the trial.`
+            : 'Renew now to avoid any service interruption.';
+        return (
+          <div className={`border rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${bg}`} data-testid="subscription-banner">
+            <div>
+              <p className={`text-sm font-bold ${accent}`} data-testid="subscription-banner-headline">{headline}</p>
+              <p className="text-xs sm:text-sm text-slate-700 mt-0.5">{sub}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => navigate('/subscription')}
+                className={isExpired ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-violet-700 hover:bg-violet-800 text-white'}
+                data-testid="subscription-banner-cta"
+              >
+                {isExpired ? 'Renew Now' : 'Upgrade Plan'}
+              </Button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

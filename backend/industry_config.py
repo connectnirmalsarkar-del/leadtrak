@@ -24,7 +24,11 @@ INDUSTRY_CONFIG = {
             "revenue_label": "Fees Collected",
         },
         "default_sources": ["Website", "Facebook Ad", "Google Ad", "Walk-in", "Referral", "Cold Call", "WhatsApp"],
-        "default_lead_statuses": ["New", "Contacted", "Interested", "Follow-up", "Converted", "Lost"],
+        "default_lead_statuses": [
+            "New", "Contacted", "Interested", "Counseling Scheduled", "Counseling Done",
+            "Application Sent", "Documents Pending", "Fee Discussion", "Admitted",
+            "Not Interested", "Dropped", "Lost"
+        ],
         "default_pipeline_stages": ["New Inquiry", "Counseling", "Documentation", "Fee Payment", "Enrolled"],
     },
     "it_software": {
@@ -42,7 +46,10 @@ INDUSTRY_CONFIG = {
             "revenue_label": "Revenue",
         },
         "default_sources": ["Website", "LinkedIn", "Referral", "Cold Email", "Demo Request", "Partner", "Event"],
-        "default_lead_statuses": ["New", "Qualifying", "Demo Scheduled", "Proposal Sent", "Negotiation", "Won", "Lost"],
+        "default_lead_statuses": [
+            "New", "Contacted", "Qualifying", "Demo Scheduled", "Demo Done",
+            "Proposal Sent", "Negotiation", "Contract Sent", "Won", "Lost", "On Hold"
+        ],
         "default_pipeline_stages": ["Discovery", "Qualification", "Demo", "Proposal", "Negotiation", "Closed Won"],
     },
     "real_estate": {
@@ -60,7 +67,10 @@ INDUSTRY_CONFIG = {
             "revenue_label": "Booking Value",
         },
         "default_sources": ["99acres", "MagicBricks", "Housing.com", "Website", "Facebook Ad", "Walk-in", "Referral"],
-        "default_lead_statuses": ["New", "Contacted", "Site Visit Scheduled", "Site Visited", "Negotiation", "Booked", "Lost"],
+        "default_lead_statuses": [
+            "New", "Contacted", "Site Visit Scheduled", "Site Visited",
+            "Negotiation", "Token Paid", "Booked", "Cancelled", "Lost"
+        ],
         "default_pipeline_stages": ["Inquiry", "Site Visit", "Negotiation", "Token Money", "Agreement", "Booked"],
     },
     "healthcare": {
@@ -96,7 +106,10 @@ INDUSTRY_CONFIG = {
             "revenue_label": "Premium",
         },
         "default_sources": ["Website", "Cold Call", "Referral", "Walk-in", "Agent Network", "WhatsApp"],
-        "default_lead_statuses": ["New", "Contacted", "Quote Sent", "Proposal", "Issued", "Lost"],
+        "default_lead_statuses": [
+            "New", "Contacted", "Quote Sent", "Proposal Sent",
+            "KYC Pending", "Underwriting", "Issued", "Rejected", "Lost"
+        ],
         "default_pipeline_stages": ["Quote", "Proposal", "Medical/KYC", "Underwriting", "Issued"],
     },
     "travel": {
@@ -114,7 +127,10 @@ INDUSTRY_CONFIG = {
             "revenue_label": "Trip Value",
         },
         "default_sources": ["Website", "Google Ad", "Instagram", "Facebook Ad", "Referral", "Walk-in", "WhatsApp"],
-        "default_lead_statuses": ["New", "Quote Sent", "Negotiation", "Confirmed", "Travelled", "Lost"],
+        "default_lead_statuses": [
+            "New", "Itinerary Sent", "Quote Sent", "Negotiation",
+            "Token Paid", "Confirmed", "Travelled", "Cancelled", "Lost"
+        ],
         "default_pipeline_stages": ["Inquiry", "Itinerary", "Quote", "Negotiation", "Token", "Booked", "Travelled"],
     },
     "retail": {
@@ -132,7 +148,10 @@ INDUSTRY_CONFIG = {
             "revenue_label": "Order Value",
         },
         "default_sources": ["Website", "Instagram", "Facebook Ad", "Walk-in", "Referral", "Marketplace", "WhatsApp"],
-        "default_lead_statuses": ["New", "Contacted", "Cart Added", "Checkout", "Ordered", "Lost"],
+        "default_lead_statuses": [
+            "New", "Contacted", "Cart Added", "Checkout Started",
+            "Ordered", "Shipped", "Delivered", "Returned", "Lost"
+        ],
         "default_pipeline_stages": ["Inquiry", "Quote", "Order Placed", "Paid", "Shipped", "Delivered"],
     },
     "fitness": {
@@ -150,7 +169,10 @@ INDUSTRY_CONFIG = {
             "revenue_label": "Membership Revenue",
         },
         "default_sources": ["Website", "Instagram", "Walk-in", "Referral", "Google Ad", "WhatsApp"],
-        "default_lead_statuses": ["New", "Trial Booked", "Trial Done", "Member", "Renewed", "Lost"],
+        "default_lead_statuses": [
+            "New", "Trial Booked", "Trial Done", "Member",
+            "Renewal Due", "Renewed", "Churned", "Lost"
+        ],
         "default_pipeline_stages": ["Inquiry", "Trial Booked", "Trial Done", "Joined", "Active", "Renewed"],
     },
     "generic": {
@@ -168,7 +190,10 @@ INDUSTRY_CONFIG = {
             "revenue_label": "Revenue",
         },
         "default_sources": ["Website", "Referral", "Cold Call", "Walk-in", "Email", "Event", "WhatsApp"],
-        "default_lead_statuses": ["New", "Contacted", "Qualified", "Proposal", "Won", "Lost"],
+        "default_lead_statuses": [
+            "New", "Contacted", "Qualified", "Proposal Sent",
+            "Negotiation", "Won", "Lost", "On Hold"
+        ],
         "default_pipeline_stages": ["Lead", "Qualified", "Proposal", "Negotiation", "Won"],
     },
 }
@@ -252,6 +277,11 @@ def get_industry(industry: str) -> dict:
 
 def get_terms(industry: str) -> dict:
     return get_industry(industry)["terms"]
+
+
+def get_lead_statuses(industry: str) -> list:
+    """Return industry-specific lead status list (used in dropdowns)."""
+    return get_industry(industry).get("default_lead_statuses", [])
 
 
 def list_industries() -> list:

@@ -23,7 +23,7 @@ import secrets
 import cloudinary
 import cloudinary.uploader
 from openpyxl import Workbook
-from industry_config import INDUSTRY_CONFIG, SUPPORTED_INDUSTRIES, get_industry, get_terms, list_industries, get_default_services
+from industry_config import INDUSTRY_CONFIG, SUPPORTED_INDUSTRIES, get_industry, get_terms, get_lead_statuses, list_industries, get_default_services
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -104,6 +104,7 @@ async def get_current_user(request: Request) -> dict:
         user["industry"] = industry_key
         user["organization_name"] = org_name
         user["terminology"] = get_terms(industry_key)
+        user["lead_statuses"] = get_lead_statuses(industry_key)
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -522,6 +523,37 @@ async def migrate_industry_field():
         logger.info(f"Migrated {result.modified_count} organizations to industry='education'")
 
 
+async def migrate_subscription_fields():
+    """Backfill trial_start_date / trial_end_date / subscription_status for legacy orgs."""
+    now = datetime.now(timezone.utc)
+    legacy = db.organizations.find({"subscription_status": {"$exists": False}}, {"_id": 1, "created_at": 1, "name": 1})
+    count = 0
+    async for org in legacy:
+        # Super admin org and demo org get long-running grace; others get 14 days from creation
+        is_super = org.get("name") == "Super Admin Organization"
+        start = org.get("created_at") or now
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        if is_super:
+            end = now + timedelta(days=3650)  # effectively forever
+            status_val = "active"
+        else:
+            end = start + timedelta(days=14)
+            status_val = "trial" if end > now else "expired"
+        await db.organizations.update_one(
+            {"_id": org["_id"]},
+            {"$set": {
+                "trial_start_date": start,
+                "trial_end_date": end,
+                "subscription_end_date": end,
+                "subscription_status": status_val,
+            }}
+        )
+        count += 1
+    if count:
+        logger.info(f"Backfilled subscription fields for {count} organizations")
+
+
 async def seed_services_for_existing_orgs():
     """Seed default services for orgs that don't have any (Phase 6)."""
     orgs = db.organizations.find({}, {"industry": 1})
@@ -657,8 +689,12 @@ async def startup_db():
     await seed_demo_org_and_users()
     await seed_subscription_plans()
     await migrate_industry_field()
+    await migrate_subscription_fields()
     await seed_services_for_existing_orgs()
     await seed_demo_timeline_lead()
+    # Subscription orders index
+    await db.subscription_orders.create_index([("organization_id", 1), ("created_at", -1)])
+    await db.subscription_orders.create_index("status")
     logger.info("Database initialized and indexes created")
 
 # ==================== Auth Routes ====================
@@ -677,11 +713,19 @@ async def register(data: RegisterRequest, response: Response):
         industry = "generic"
     industry_cfg = get_industry(industry)
 
+    # Start 14-day trial automatically on signup
+    trial_start = datetime.now(timezone.utc)
+    trial_end = trial_start + timedelta(days=14)
+
     # Create organization
     org_result = await db.organizations.insert_one({
         "name": data.organization_name,
         "industry": industry,
         "subscription_plan": "starter",
+        "subscription_status": "trial",
+        "trial_start_date": trial_start,
+        "trial_end_date": trial_end,
+        "subscription_end_date": trial_end,
         "settings": {},
         "created_at": datetime.now(timezone.utc)
     })
@@ -2174,7 +2218,12 @@ async def upload_org_logo(
 # ==================== Subscription Routes ====================
 @api_router.get("/subscription-plans")
 async def get_subscription_plans():
-    plans = await db.subscription_plans.find({}, {"_id": 0}).to_list(10)
+    plans_cursor = db.subscription_plans.find({})
+    plans = []
+    async for p in plans_cursor:
+        p["_id"] = str(p["_id"])
+        p["id"] = p["_id"]
+        plans.append(p)
     return plans
 
 @api_router.post("/subscriptions/create-order")
@@ -2193,6 +2242,24 @@ async def create_subscription_order(data: SubscriptionCreate, current_user: dict
             "amount": amount,
             "currency": "INR",
             "payment_capture": 1
+        })
+        # Record the order as pending (used for Abandoned Cart Report)
+        await db.subscription_orders.insert_one({
+            "organization_id": ObjectId(current_user["organization_id"]),
+            "plan_id": ObjectId(data.plan_id),
+            "plan_name": plan.get("name"),
+            "billing_cycle": data.billing_cycle,
+            "amount": plan[f"price_{data.billing_cycle}"],
+            "currency": "INR",
+            "status": "pending",
+            "payment_method": "online_razorpay",
+            "razorpay_order_id": order["id"],
+            "razorpay_payment_id": None,
+            "created_by": ObjectId(current_user["id"]),
+            "created_by_name": current_user.get("name"),
+            "created_at": datetime.now(timezone.utc),
+            "paid_at": None,
+            "notes": "",
         })
         
         return {
@@ -2213,16 +2280,279 @@ async def verify_subscription(payment_id: str, order_id: str, signature: str, cu
             "razorpay_signature": signature
         })
         
+        # Lookup the order
+        order_doc = await db.subscription_orders.find_one({"razorpay_order_id": order_id})
+        days = 365 if (order_doc or {}).get("billing_cycle") == "annual" else 30
+        now = datetime.now(timezone.utc)
+        new_end = now + timedelta(days=days)
         # Update organization subscription
         await db.organizations.update_one(
             {"_id": ObjectId(current_user["organization_id"])},
-            {"$set": {"subscription_status": "active", "last_payment_date": datetime.now(timezone.utc)}}
+            {"$set": {
+                "subscription_status": "active",
+                "subscription_end_date": new_end,
+                "last_payment_date": now,
+                "subscription_plan": (order_doc or {}).get("plan_name", "").lower() or "growth",
+            }}
         )
+        # Mark order paid
+        if order_doc:
+            await db.subscription_orders.update_one(
+                {"_id": order_doc["_id"]},
+                {"$set": {
+                    "status": "paid",
+                    "razorpay_payment_id": payment_id,
+                    "paid_at": now,
+                    "subscription_end_date": new_end,
+                }}
+            )
         
         return {"message": "Payment verified successfully"}
     except Exception as e:
         logger.error(f"Payment verification error: {str(e)}")
         raise HTTPException(status_code=400, detail="Payment verification failed")
+
+
+# ==================== Tenant Subscription Status ====================
+@api_router.get("/subscription/status")
+async def subscription_status(current_user: dict = Depends(get_current_user)):
+    """Return current tenant's subscription status with days remaining for the header badge."""
+    org = await db.organizations.find_one(
+        {"_id": ObjectId(current_user["organization_id"])},
+        {"subscription_plan": 1, "subscription_status": 1, "trial_end_date": 1, "subscription_end_date": 1}
+    )
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    now = datetime.now(timezone.utc)
+    end_date = org.get("subscription_end_date") or org.get("trial_end_date")
+    days_remaining = None
+    if end_date:
+        # Ensure tz-aware comparison
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
+        days_remaining = max(0, (end_date - now).days)
+    status_val = org.get("subscription_status") or "trial"
+    # Auto-flip to expired if past end
+    if end_date and now > end_date and status_val in ("trial", "active"):
+        status_val = "expired"
+        await db.organizations.update_one(
+            {"_id": org["_id"]},
+            {"$set": {"subscription_status": "expired"}}
+        )
+    return {
+        "plan": org.get("subscription_plan", "starter"),
+        "status": status_val,
+        "days_remaining": days_remaining,
+        "end_date": end_date.isoformat() if end_date else None,
+    }
+
+
+# ==================== Super Admin: SaaS Billing ====================
+class ManualPaymentRequest(BaseModel):
+    organization_id: str
+    plan_id: str
+    billing_cycle: str  # monthly | annual
+    amount: float
+    payment_method: str  # cash | bank_transfer | cheque | upi | other
+    reference: Optional[str] = None  # cheque no, txn id, etc.
+    notes: Optional[str] = None
+
+
+@api_router.get("/platform/trial-report")
+async def platform_trial_report(current_user: dict = Depends(get_current_user)):
+    """Super Admin: list of orgs currently in trial along with days remaining and expired trials."""
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    now = datetime.now(timezone.utc)
+    orgs = await db.organizations.find(
+        {"subscription_status": {"$in": ["trial", "expired"]}}
+    ).sort("trial_end_date", 1).to_list(1000)
+    rows = []
+    for org in orgs:
+        end_date = org.get("trial_end_date") or org.get("subscription_end_date")
+        if end_date and end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
+        days_remaining = max(0, (end_date - now).days) if end_date else 0
+        is_expired = end_date and end_date < now
+        # Fetch admin user for contact
+        admin = await db.users.find_one({"organization_id": org["_id"], "role": "org_admin"}, {"email": 1, "name": 1})
+        rows.append({
+            "id": str(org["_id"]),
+            "name": org.get("name", ""),
+            "industry": org.get("industry", ""),
+            "subscription_plan": org.get("subscription_plan", "starter"),
+            "trial_start_date": (org.get("trial_start_date") or "").isoformat() if isinstance(org.get("trial_start_date"), datetime) else "",
+            "trial_end_date": end_date.isoformat() if end_date else "",
+            "days_remaining": days_remaining,
+            "status": "expired" if is_expired else "trial",
+            "admin_name": (admin or {}).get("name", ""),
+            "admin_email": (admin or {}).get("email", ""),
+            "created_at": org["created_at"].isoformat() if isinstance(org.get("created_at"), datetime) else "",
+        })
+    return rows
+
+
+@api_router.get("/platform/abandoned-carts")
+async def platform_abandoned_carts(current_user: dict = Depends(get_current_user)):
+    """Super Admin: list of subscription orders that were created but never paid (>1 hour stale)."""
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    now = datetime.now(timezone.utc)
+    # Auto-mark pending orders >24h old as abandoned
+    cutoff = now - timedelta(hours=24)
+    await db.subscription_orders.update_many(
+        {"status": "pending", "created_at": {"$lt": cutoff}},
+        {"$set": {"status": "abandoned"}}
+    )
+    orders = await db.subscription_orders.find(
+        {"status": {"$in": ["pending", "abandoned"]}}
+    ).sort("created_at", -1).to_list(1000)
+    rows = []
+    for o in orders:
+        org = await db.organizations.find_one({"_id": o["organization_id"]}, {"name": 1})
+        admin = await db.users.find_one({"organization_id": o["organization_id"], "role": "org_admin"}, {"email": 1, "name": 1, "mobile": 1})
+        created_at = o.get("created_at")
+        age_hours = round((now - created_at).total_seconds() / 3600, 1) if created_at else None
+        rows.append({
+            "id": str(o["_id"]),
+            "organization_id": str(o["organization_id"]),
+            "organization_name": (org or {}).get("name", ""),
+            "plan_name": o.get("plan_name", ""),
+            "billing_cycle": o.get("billing_cycle", ""),
+            "amount": o.get("amount", 0),
+            "status": o.get("status"),
+            "razorpay_order_id": o.get("razorpay_order_id", ""),
+            "age_hours": age_hours,
+            "admin_name": (admin or {}).get("name", ""),
+            "admin_email": (admin or {}).get("email", ""),
+            "admin_mobile": (admin or {}).get("mobile", ""),
+            "created_at": created_at.isoformat() if isinstance(created_at, datetime) else "",
+        })
+    return rows
+
+
+@api_router.get("/platform/subscription-orders")
+async def platform_subscription_orders(current_user: dict = Depends(get_current_user)):
+    """Super Admin: all subscription orders (paid + pending + abandoned)."""
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    orders = await db.subscription_orders.find({}).sort("created_at", -1).to_list(2000)
+    rows = []
+    for o in orders:
+        org = await db.organizations.find_one({"_id": o["organization_id"]}, {"name": 1})
+        rows.append({
+            "id": str(o["_id"]),
+            "organization_id": str(o["organization_id"]),
+            "organization_name": (org or {}).get("name", ""),
+            "plan_name": o.get("plan_name", ""),
+            "billing_cycle": o.get("billing_cycle", ""),
+            "amount": o.get("amount", 0),
+            "status": o.get("status"),
+            "payment_method": o.get("payment_method", ""),
+            "reference": o.get("reference", ""),
+            "notes": o.get("notes", ""),
+            "created_at": o["created_at"].isoformat() if isinstance(o.get("created_at"), datetime) else "",
+            "paid_at": o["paid_at"].isoformat() if isinstance(o.get("paid_at"), datetime) else None,
+            "recorded_by": o.get("recorded_by_name", o.get("created_by_name", "")),
+        })
+    return rows
+
+
+@api_router.post("/platform/manual-payment")
+async def platform_manual_payment(data: ManualPaymentRequest, current_user: dict = Depends(get_current_user)):
+    """Super Admin: manually mark an offline payment (Cash / Cheque / Bank Transfer)."""
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    org_oid = safe_object_id(data.organization_id, "organization_id")
+    plan_oid = safe_object_id(data.plan_id, "plan_id")
+
+    org = await db.organizations.find_one({"_id": org_oid})
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    plan = await db.subscription_plans.find_one({"_id": plan_oid})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    if data.billing_cycle not in ("monthly", "annual"):
+        raise HTTPException(status_code=400, detail="billing_cycle must be 'monthly' or 'annual'")
+    if data.payment_method not in ("cash", "bank_transfer", "cheque", "upi", "other"):
+        raise HTTPException(status_code=400, detail="Invalid payment_method")
+
+    now = datetime.now(timezone.utc)
+    days = 365 if data.billing_cycle == "annual" else 30
+    # If org already has an active subscription, extend from the current end_date; else from now.
+    current_end = org.get("subscription_end_date")
+    if current_end and current_end.tzinfo is None:
+        current_end = current_end.replace(tzinfo=timezone.utc)
+    base = current_end if (current_end and current_end > now and org.get("subscription_status") == "active") else now
+    new_end = base + timedelta(days=days)
+
+    # Generate receipt number
+    receipt_no = f"RCP-{now.strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}"
+
+    order_doc = {
+        "organization_id": org_oid,
+        "plan_id": plan_oid,
+        "plan_name": plan.get("name"),
+        "billing_cycle": data.billing_cycle,
+        "amount": data.amount,
+        "currency": "INR",
+        "status": "paid",
+        "payment_method": data.payment_method,
+        "reference": data.reference or "",
+        "notes": data.notes or "",
+        "receipt_no": receipt_no,
+        "recorded_by": ObjectId(current_user["id"]),
+        "recorded_by_name": current_user.get("name"),
+        "created_at": now,
+        "paid_at": now,
+        "subscription_end_date": new_end,
+    }
+    result = await db.subscription_orders.insert_one(order_doc)
+
+    # Update organization
+    await db.organizations.update_one(
+        {"_id": org_oid},
+        {"$set": {
+            "subscription_status": "active",
+            "subscription_plan": plan.get("name", "").lower(),
+            "subscription_end_date": new_end,
+            "last_payment_date": now,
+        }}
+    )
+
+    return {
+        "id": str(result.inserted_id),
+        "receipt_no": receipt_no,
+        "subscription_end_date": new_end.isoformat(),
+        "message": f"Payment recorded. Subscription extended to {new_end.strftime('%d %b %Y')}.",
+    }
+
+
+@api_router.post("/platform/organizations/{org_id}/extend-trial")
+async def extend_trial(org_id: str, days: int = 7, current_user: dict = Depends(get_current_user)):
+    """Super Admin: grant additional trial days."""
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    if days <= 0 or days > 365:
+        raise HTTPException(status_code=400, detail="days must be 1-365")
+    org = await db.organizations.find_one({"_id": ObjectId(org_id)})
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    now = datetime.now(timezone.utc)
+    current_end = org.get("trial_end_date") or org.get("subscription_end_date") or now
+    if current_end.tzinfo is None:
+        current_end = current_end.replace(tzinfo=timezone.utc)
+    base = current_end if current_end > now else now
+    new_end = base + timedelta(days=days)
+    await db.organizations.update_one(
+        {"_id": ObjectId(org_id)},
+        {"$set": {
+            "trial_end_date": new_end,
+            "subscription_end_date": new_end,
+            "subscription_status": "trial",
+        }}
+    )
+    return {"trial_end_date": new_end.isoformat(), "days_added": days}
 
 # ==================== Reports Routes ====================
 @api_router.get("/reports/lead-summary")
@@ -2946,15 +3276,23 @@ async def list_all_organizations(current_user: dict = Depends(get_current_user))
         raise HTTPException(status_code=403, detail="Super admin only")
     orgs = await db.organizations.find({}).sort("created_at", -1).to_list(1000)
     result = []
+    now = datetime.now(timezone.utc)
     for org in orgs:
         oid = org["_id"]
         users_count = await db.users.count_documents({"organization_id": oid})
         leads_count = await db.leads.count_documents({"organization_id": oid})
         admissions_count = await db.admissions.count_documents({"organization_id": oid})
+        end_date = org.get("subscription_end_date") or org.get("trial_end_date")
+        if end_date and end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
+        days_remaining = max(0, (end_date - now).days) if end_date else None
         result.append({
             "id": str(oid),
             "name": org.get("name", ""),
             "subscription_plan": org.get("subscription_plan", "starter"),
+            "subscription_status": org.get("subscription_status", "active"),
+            "subscription_end_date": end_date.isoformat() if end_date else None,
+            "days_remaining": days_remaining,
             "status": org.get("status", "active"),
             "users_count": users_count,
             "leads_count": leads_count,
@@ -2973,7 +3311,12 @@ async def create_organization(data: PlatformOrgCreate, current_user: dict = Depe
         raise HTTPException(status_code=400, detail="Email already exists")
     org_result = await db.organizations.insert_one({
         "name": data.organization_name,
+        "industry": "generic",
         "subscription_plan": data.subscription_plan,
+        "subscription_status": "trial",
+        "trial_start_date": datetime.now(timezone.utc),
+        "trial_end_date": datetime.now(timezone.utc) + timedelta(days=14),
+        "subscription_end_date": datetime.now(timezone.utc) + timedelta(days=14),
         "status": "active",
         "settings": {},
         "created_at": datetime.now(timezone.utc),

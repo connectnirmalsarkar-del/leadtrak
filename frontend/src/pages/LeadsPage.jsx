@@ -32,7 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 
-const STATUS_OPTIONS = ['New', 'Contacted', 'Interested', 'Follow-up', 'Admission Done', 'Not Interested', 'Lost'];
+const STATUS_OPTIONS_FALLBACK = ['New', 'Contacted', 'Interested', 'Follow-up', 'Admission Done', 'Not Interested', 'Lost'];
 const SOURCES = ['Facebook Ads', 'Website', 'Google Ads', 'Referral', 'Walk-in', 'Telecalling'];
 
 const TEMP_OPTIONS = ['hot', 'warm', 'cold'];
@@ -50,8 +50,39 @@ const statusBadgeClass = (status) => {
     'Contacted': 'status-contacted',
     'Interested': 'status-interested',
     'Follow-up': 'status-followup',
+    'Counseling Scheduled': 'status-followup',
+    'Counseling Done': 'status-interested',
+    'Application Sent': 'status-interested',
+    'Documents Pending': 'status-followup',
+    'Fee Discussion': 'status-interested',
+    'Demo Scheduled': 'status-followup',
+    'Demo Done': 'status-interested',
+    'Proposal Sent': 'status-interested',
+    'Negotiation': 'status-followup',
+    'Contract Sent': 'status-interested',
+    'Quote Sent': 'status-interested',
+    'Site Visit Scheduled': 'status-followup',
+    'Site Visited': 'status-interested',
+    'Token Paid': 'status-admission',
+    'Booked': 'status-admission',
+    'Won': 'status-admission',
+    'Admitted': 'status-admission',
+    'Issued': 'status-admission',
+    'Confirmed': 'status-admission',
+    'Travelled': 'status-admission',
+    'Ordered': 'status-admission',
+    'Delivered': 'status-admission',
+    'Member': 'status-admission',
+    'Renewed': 'status-admission',
+    'Completed': 'status-admission',
     'Admission Done': 'status-admission',
+    'On Hold': 'status-followup',
     'Not Interested': 'status-notinterested',
+    'Dropped': 'status-lost',
+    'Cancelled': 'status-lost',
+    'Returned': 'status-lost',
+    'Churned': 'status-lost',
+    'Rejected': 'status-lost',
     'Lost': 'status-lost',
   };
   return map[status] || 'status-new';
@@ -60,6 +91,9 @@ const statusBadgeClass = (status) => {
 export default function LeadsPage() {
   const t = useTerminology();
   const { user } = useAuth();
+  const STATUS_OPTIONS = (user && Array.isArray(user.lead_statuses) && user.lead_statuses.length > 0)
+    ? user.lead_statuses
+    : STATUS_OPTIONS_FALLBACK;
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [services, setServices] = useState([]);

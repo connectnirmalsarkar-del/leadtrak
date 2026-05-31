@@ -1,0 +1,63 @@
+{
+  "summary": "SaaS Billing & Subscription Management — backend + frontend smoke tested. 24/24 new backend tests PASS covering subscription/status, trial-report, abandoned-carts, subscription-orders, manual-payment, extend-trial, auto-trial on register/platform-create, lead_statuses on /auth/me, 403 role guards on all 5 super_admin endpoints, and tenant isolation (payment on org A does NOT affect org B). Frontend smoke: super_admin /platform/organizations renders 4 tabs (Organizations/Trials/Abandoned/Orders) and all load their respective APIs (trials=56 rows, orders=4 paid rows incl. UPI/Cash methods, abandoned=0). Manual Payment dialog opens with Plan + Billing Cycle + Amount + Method + Reference + Notes fields. Extend Trial dialog opens. Org admin login (orgadmin@demo.com) shows header-subscription-badge='Trial · 13d left' AND subscription-banner='You're on a 14-day trial — 13 days remaining'. LeadsPage loads with industry-specific lead_statuses (demo lead shows 'Admission Done' status — an education-industry status from industry_config). NO blocking issues found in scope.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/subscription-plans",
+        "issue": "Response still includes raw '_id' field (stringified) alongside 'id'. Per project guideline 'MongoDB ObjectId - Always exclude mongodb objectId _id', the _id should be removed. Currently both 'id' and '_id' are returned (line 2224-2225 of server.py)."
+      },
+      {
+        "endpoint": "POST /api/platform/organizations/{org_id}/extend-trial",
+        "issue": "Uses raw ObjectId(org_id) at lines 2538 and 2548 without safe_object_id wrapper — a malformed org_id will surface as 500 instead of 400. Same latent class of bug already noted in iteration_6 for the leads routes. helper safe_object_id already exists at line 141."
+      },
+      {
+        "endpoint": "GET /api/platform/abandoned-carts",
+        "issue": "Has a side-effect inside a GET handler — auto-marks pending>24h orders as abandoned via update_many on every call (line 2403). Violates HTTP semantics (GET should be safe/idempotent). Better as a background scheduled job (e.g. APScheduler) or moved to a dedicated POST /platform/billing/sweep-abandoned endpoint."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Org Admin Dashboard", "issues": ["Multiple recharts console warnings: 'The width(-1) and height(-1) of chart should be greater than 0' — chart containers render with zero width on initial mount before layout. Cosmetic but spams console. Add minWidth/minHeight or use aspect-ratio per recharts docs."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_saas_billing.py",
+    "/app/test_reports/pytest/iteration_7_saas_billing.xml"
+  ],
+  "action_items": [
+    "Remove '_id' from /api/subscription-plans response (keep only 'id'). Project convention violation.",
+    "Wrap ObjectId(org_id) in safe_object_id() inside extend_trial (server.py lines 2538, 2548) — currently throws 500 on malformed id.",
+    "Move auto-abandon logic out of GET /platform/abandoned-carts into a scheduled job or POST endpoint — GET should not mutate state.",
+    "Consider a daily seed-cleanup that prunes orgs prefixed 'TEST_' older than N days — testing produced ~30 new TEST_* orgs (org count went from ~50 to 61) and they are now visible in production-style /platform/organizations listings.",
+    "Address pre-existing recharts console warnings on dashboard."
+  ],
+  "critical_code_review_comments": [
+    "Subscription expiry semantics: /api/subscription/status auto-flips org to 'expired' (writes the DB) on every GET. Two issues: (a) silent state mutation on read — same pattern as abandoned-carts; (b) once flipped to 'expired', it cannot return to 'active' until manual-payment fixes it, but the flip is based on the local `now` of the request — clock skew between API replicas could race-flip. Move expiry decision into a daily job + read-time decoration.",
+    "register_user (line ~725) and create_organization (line ~3316) both compute trial dates using datetime.now(timezone.utc) — duplication. Extract a `start_trial(days=14)` helper that returns the three fields atomically.",
+    "/api/platform/manual-payment: amount is taken from client payload, NOT computed from plan.price_monthly/price_annual server-side. A malicious super_admin (or buggy UI) could record ₹1 for a Growth-annual purchase. Recommend either (a) validate `data.amount == plan[f'price_{billing_cycle}']` (with optional discount support), or (b) ignore client amount and read from plan.",
+    "ManualPaymentRequest model has no Pydantic validators on payment_method / billing_cycle — relies on if/else inside the handler (lines 2475, 2477). Use Literal['cash','bank_transfer','cheque','upi','other'] and Literal['monthly','annual'] for early 422 validation.",
+    "POST /platform/organizations/{org_id}/extend-trial accepts `days` as query param with default=7 — should default at least be documented. Endpoint currently allows extending an already-PAID org back to trial (line 2552 sets subscription_status='trial' unconditionally). Add a guard: if org.subscription_status == 'active', reject or downgrade explicitly.",
+    "subscription_orders collection has no index on (organization_id, status) — list queries scan all docs (`find({status: {$in: ['pending','abandoned']}})` and the auto-abandon update_many). Add indexes: db.subscription_orders.create_index([('organization_id', 1), ('status', 1)]) and ('created_at', -1).",
+    "/api/auth/register has no rate-limit + no email verification — anyone can spam-register tenants and consume 14-day trials. During testing alone, ~30 TEST_ orgs were created. Production should at least require email OTP or recaptcha.",
+    "PlatformOrgsPage.jsx — opens Manual Payment dialog via clicking the first 'pay-*' button. There are 61 such buttons rendered in one DOM; for large customers consider virtualization (react-window) once orgs > 200.",
+    "trial-report includes 'expired' orgs by design (line 2368). Frontend tab label is 'Trials' — confusing UX, label should be 'Trials & Expired' or split into two tabs.",
+    "subscription/status returns days_remaining=null when org has no end_date — frontend badge will say 'undefined' or 'null d left' unless guarded. Quick read of DashboardLayout line ~316 should be verified for null handling."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_saas_billing.py (new — 24 tests, all pass)"
+  ],
+  "success_rate": {
+    "backend": "100% (24/24 new SaaS billing tests pass)",
+    "frontend": "100% smoke (super_admin 4 tabs + manual payment dialog + extend trial dialog + org_admin badge + banner + leads page all render and integrate with backend)"
+  },
+  "test_credentials": "Used /app/memory/test_credentials.md — admin@educationcrm.com / orgadmin@demo.com / counselor@demo.com (all valid).",
+  "seed_data_creation": "Created ~10 TEST_* organizations via /api/auth/register and /api/platform/organizations during test fixtures (TEST_BillingOrg_*, TEST_Iso_*, TEST_Extend_*, TEST_PlatCreate_*). Each starts a fresh 14-day trial. 4 paid subscription_orders also created (TEST_Iso_6e85fac4/UPI, TEST_BillingOrg_b37058cf/Cash, TEST_Iso_d7fad68d/UPI, TEST_BillingOrg_81b15ca2/Cash). NO cleanup — collections will accumulate TEST_* records across iterations. Recommend a teardown fixture or a /api/platform/test-cleanup endpoint guarded by env flag.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_saas_billing.py is the canonical regression suite for billing module — 24 tests, all green. Run with: pytest /app/backend/tests/test_saas_billing.py -v. Key gotchas: (1) Pydantic EmailStr rejects @*.test TLD (reserved) → use @billingtest.com or @example.com. (2) days_remaining uses datetime.days (floor) so a fresh 14-day trial reads 13 or 14, and a 30-day extension reads 29 or 30. Tests assert >=29 / in (13,14) accordingly. (3) Demo org (orgadmin@demo.com) was on trial during this run (badge='13d left') — if main agent records a payment for it, the org_admin smoke test in the frontend playbook needs to be adjusted (banner only renders for trial/expiring/expired). (4) /api/auth/register lowercases email server-side — assertion must use email.lower(). (5) The platform admin's own org (super_admin) returns active/trial/expired in /subscription/status — depends on seed.",
+  "rca of the issue": "No blocking RCA — all 24 backend tests + 5 frontend smoke flows passed. Three minor issues filed (raw _id on /subscription-plans, missing safe_object_id on extend-trial, GET endpoint with side-effects on abandoned-carts) are listed under backend_issues.minor with reproduction steps and recommended fixes."
+}
