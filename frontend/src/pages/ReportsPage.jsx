@@ -162,14 +162,16 @@ export default function ReportsPage() {
                     <Layers className="w-4 h-4 text-slate-400" />
                   </div>
                   {summary.by_source && summary.by_source.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={280} minWidth={1} minHeight={1}>
-                      <PieChart>
-                        <Pie data={summary.by_source} dataKey="count" nameKey="source" cx="50%" cy="50%" outerRadius={90} label={(d) => d.source}>
-                          {summary.by_source.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <div style={{ width: '100%', height: 280, minWidth: 1, minHeight: 1 }}>
+                      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                        <PieChart>
+                          <Pie data={summary.by_source} dataKey="count" nameKey="source" cx="50%" cy="50%" outerRadius={90} label={(d) => d.source}>
+                            {summary.by_source.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
                   ) : (
                     <p className="text-sm text-slate-500 py-12 text-center">No data yet</p>
                   )}
@@ -182,15 +184,17 @@ export default function ReportsPage() {
                     <Target className="w-4 h-4 text-slate-400" />
                   </div>
                   {summary.by_status && summary.by_status.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={280} minWidth={1} minHeight={1}>
-                      <BarChart data={summary.by_status} layout="vertical" margin={{ left: 50 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                        <XAxis type="number" tick={{ fontSize: 11 }} />
-                        <YAxis type="category" dataKey="status" tick={{ fontSize: 11 }} width={120} />
-                        <Tooltip />
-                        <Bar dataKey="count" fill="#7C3AED" radius={[0, 8, 8, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div style={{ width: '100%', height: 280, minWidth: 1, minHeight: 1 }}>
+                      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                        <BarChart data={summary.by_status} layout="vertical" margin={{ left: 50 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                          <XAxis type="number" tick={{ fontSize: 11 }} />
+                          <YAxis type="category" dataKey="status" tick={{ fontSize: 11 }} width={120} />
+                          <Tooltip />
+                          <Bar dataKey="count" fill="#7C3AED" radius={[0, 8, 8, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   ) : (
                     <p className="text-sm text-slate-500 py-12 text-center">No data yet</p>
                   )}

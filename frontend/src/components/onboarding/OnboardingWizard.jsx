@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Sparkles, CheckCircle2, ArrowRight, X, Loader2, Plus, Tag, Users, Webhook, UserPlus, Globe, Facebook, Activity,
 } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -169,10 +169,19 @@ export default function OnboardingWizard() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-2xl p-0 overflow-hidden" data-testid="onboarding-wizard">
+        <DialogTitle className="sr-only">Setup Guide</DialogTitle>
+        <DialogDescription className="sr-only">
+          Five-step onboarding wizard to set up your workspace: welcome, add services, invite team, connect lead source, and add your first lead.
+        </DialogDescription>
         {/* Header */}
         <div className="relative px-7 pt-7 pb-5 bg-gradient-to-br from-violet-600 via-fuchsia-600 to-pink-600 text-white">
-          <button onClick={skipAll} className="absolute top-4 right-4 text-white/80 hover:text-white" data-testid="onboarding-skip-btn">
-            <X className="w-5 h-5" />
+          <button
+            onClick={skipAll}
+            aria-label="Close setup guide"
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/25 text-white/90 hover:text-white transition-colors ring-1 ring-white/20"
+            data-testid="onboarding-skip-btn"
+          >
+            <X className="w-4 h-4" strokeWidth={2.5} />
           </button>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 text-[10px] font-bold tracking-[0.15em] uppercase mb-3">
             <Sparkles className="w-3 h-3" /> Setup Guide · Step {Math.min(stepIndex + 1, totalSteps)} of {totalSteps}
