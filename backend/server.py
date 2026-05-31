@@ -234,11 +234,15 @@ class UserCreate(BaseModel):
     name: str
     role: str
     mobile: Optional[str] = None
+    reports_to: Optional[str] = None  # ObjectId of manager
+    password: Optional[str] = None
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = None
     mobile: Optional[str] = None
+    reports_to: Optional[str] = None
+    active: Optional[bool] = None
 
 class LeadCreate(BaseModel):
     name: str
@@ -2143,8 +2147,11 @@ async def create_user(data: UserCreate, current_user: dict = Depends(get_current
     if existing:
         raise HTTPException(status_code=400, detail="Email already exists")
     
-    # Generate temporary password
-    temp_password = secrets.token_urlsafe(8)
+    # Use provided password or generate temporary password
+    if data.password:
+        temp_password = data.password
+    else:
+        temp_password = secrets.token_urlsafe(8)
     hashed = hash_password(temp_password)
     
     user_doc = {
@@ -2153,7 +2160,9 @@ async def create_user(data: UserCreate, current_user: dict = Depends(get_current
         "name": data.name,
         "role": data.role,
         "mobile": data.mobile,
+        "reports_to": ObjectId(data.reports_to) if data.reports_to else None,
         "organization_id": org_id,
+        "active": True,
         "created_at": datetime.now(timezone.utc)
     }
     
@@ -2177,6 +2186,8 @@ async def get_users(current_user: dict = Depends(get_current_user)):
     
     for user in users:
         user["_id"] = str(user["_id"])
+        if user.get("reports_to"):
+            user["reports_to"] = str(user["reports_to"])
     
     return users
 
@@ -2187,6 +2198,15 @@ async def update_user(user_id: str, data: UserUpdate, current_user: dict = Depen
     
     org_id = ObjectId(current_user["organization_id"])
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    # Convert reports_to to ObjectId if provided as string
+    if "reports_to" in update_data:
+        if update_data["reports_to"] == "":
+            update_data["reports_to"] = None
+        elif isinstance(update_data["reports_to"], str):
+            try:
+                update_data["reports_to"] = ObjectId(update_data["reports_to"])
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid reports_to value")
     
     if not update_data:
         raise HTTPException(status_code=400, detail="No data to update")
@@ -2969,6 +2989,159 @@ async def report_by_caller(current_user: dict = Depends(get_current_user)):
         })
     rows.sort(key=lambda r: (-r["converted"], -r["revenue"], -r["total_leads"]))
     return rows
+
+
+@api_router.get("/reports/by-manager")
+async def report_by_manager(current_user: dict = Depends(get_current_user)):
+    """Per-manager performance: their team's combined leads, conversions, revenue, team size."""
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only managers and admins can view team reports")
+    org_id = ObjectId(current_user["organization_id"])
+
+    # Find managers (role=manager OR role=org_admin)
+    managers = await db.users.find(
+        {"organization_id": org_id, "role": {"$in": ["manager", "org_admin"]}}
+    ).to_list(100)
+
+    rows = []
+    # Track team members assigned to a manager
+    all_team_assigned = set()
+    for m in managers:
+        mid = m["_id"]
+        team_members = await db.users.find(
+            {"organization_id": org_id, "reports_to": mid}
+        ).to_list(200)
+        team_ids = [str(t["_id"]) for t in team_members]
+        all_team_assigned.update(team_ids)
+        # Include manager's own leads too
+        owner_ids = team_ids + [str(mid)]
+
+        leads_match = {"organization_id": org_id, "assigned_to": {"$in": owner_ids}}
+        total_leads = await db.leads.count_documents(leads_match)
+        converted = await db.leads.count_documents({**leads_match, "status": {"$in": ["Admission Done", "Won", "Admitted", "Booked", "Confirmed", "Issued", "Member", "Renewed"]}})
+        lost = await db.leads.count_documents({**leads_match, "status": {"$in": ["Lost", "Not Interested", "Dropped", "Cancelled", "Churned", "Rejected"]}})
+        hot = await db.leads.count_documents({**leads_match, "temperature": "hot"})
+
+        # Revenue from team's admissions
+        revenue = 0
+        if owner_ids:
+            rev_pipe = [
+                {"$match": {"organization_id": org_id, "created_by": {"$in": owner_ids}}},
+                {"$group": {"_id": None, "total": {"$sum": "$fees"}}},
+            ]
+            rev = await db.admissions.aggregate(rev_pipe).to_list(1)
+            revenue = rev[0]["total"] if rev else 0
+
+        rows.append({
+            "manager_id": str(mid),
+            "manager_name": m.get("name"),
+            "role": m.get("role"),
+            "team_size": len(team_members),
+            "team_members": [{"id": str(t["_id"]), "name": t.get("name"), "role": t.get("role")} for t in team_members],
+            "total_leads": total_leads,
+            "hot": hot,
+            "converted": converted,
+            "lost": lost,
+            "revenue": revenue,
+            "conversion_rate": round((converted / total_leads * 100) if total_leads else 0, 1),
+        })
+
+    # Add an "Unassigned" bucket for users not reporting to any manager
+    unassigned = await db.users.find({
+        "organization_id": org_id,
+        "role": {"$in": ["counselor", "telecaller", "manager"]},
+        "$or": [{"reports_to": {"$exists": False}}, {"reports_to": None}],
+    }).to_list(200)
+    # Filter out the managers themselves (they're shown as their own row)
+    manager_ids_set = {m["_id"] for m in managers}
+    unassigned = [u for u in unassigned if u["_id"] not in manager_ids_set]
+    if unassigned:
+        unassigned_ids = [str(u["_id"]) for u in unassigned]
+        ua_match = {"organization_id": org_id, "assigned_to": {"$in": unassigned_ids}}
+        rows.append({
+            "manager_id": None,
+            "manager_name": "Unassigned",
+            "role": "—",
+            "team_size": len(unassigned),
+            "team_members": [{"id": str(u["_id"]), "name": u.get("name"), "role": u.get("role")} for u in unassigned],
+            "total_leads": await db.leads.count_documents(ua_match),
+            "hot": await db.leads.count_documents({**ua_match, "temperature": "hot"}),
+            "converted": await db.leads.count_documents({**ua_match, "status": {"$in": ["Admission Done", "Won", "Admitted", "Booked", "Confirmed", "Issued", "Member", "Renewed"]}}),
+            "lost": await db.leads.count_documents({**ua_match, "status": {"$in": ["Lost", "Not Interested", "Dropped", "Cancelled", "Churned", "Rejected"]}}),
+            "revenue": 0,
+            "conversion_rate": 0,
+        })
+
+    rows.sort(key=lambda r: (-r["converted"], -r["revenue"], -r["total_leads"]))
+    return rows
+
+
+@api_router.get("/reports/total-summary")
+async def report_total_summary(current_user: dict = Depends(get_current_user)):
+    """Org-wide totals + per-source + per-status breakdown for the Overview tab."""
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only managers and admins can view team reports")
+    org_id = ObjectId(current_user["organization_id"])
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    last_7d = now - timedelta(days=7)
+    last_30d = now - timedelta(days=30)
+
+    base = {"organization_id": org_id}
+    total_leads = await db.leads.count_documents(base)
+    today_leads = await db.leads.count_documents({**base, "created_at": {"$gte": today_start}})
+    week_leads = await db.leads.count_documents({**base, "created_at": {"$gte": last_7d}})
+    month_leads = await db.leads.count_documents({**base, "created_at": {"$gte": last_30d}})
+    converted = await db.leads.count_documents({**base, "status": {"$in": ["Admission Done", "Won", "Admitted", "Booked", "Confirmed", "Issued", "Member", "Renewed"]}})
+    lost = await db.leads.count_documents({**base, "status": {"$in": ["Lost", "Not Interested", "Dropped", "Cancelled", "Churned", "Rejected"]}})
+    active = total_leads - converted - lost
+
+    # Revenue
+    rev_pipe = [
+        {"$match": base},
+        {"$group": {"_id": None, "total": {"$sum": "$fees"}, "count": {"$sum": 1}}},
+    ]
+    rev = await db.admissions.aggregate(rev_pipe).to_list(1)
+    revenue = rev[0]["total"] if rev else 0
+    admissions_count = rev[0]["count"] if rev else 0
+
+    # By source
+    source_pipe = [
+        {"$match": base},
+        {"$group": {"_id": "$lead_source", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]
+    by_source = [{"source": r["_id"] or "Unknown", "count": r["count"]} async for r in db.leads.aggregate(source_pipe)]
+
+    # By status
+    status_pipe = [
+        {"$match": base},
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]
+    by_status = [{"status": r["_id"] or "Unknown", "count": r["count"]} async for r in db.leads.aggregate(status_pipe)]
+
+    # Active team count
+    team_count = await db.users.count_documents({"organization_id": org_id, "role": {"$in": ["counselor", "telecaller", "manager"]}})
+    manager_count = await db.users.count_documents({"organization_id": org_id, "role": {"$in": ["manager", "org_admin"]}})
+
+    return {
+        "total_leads": total_leads,
+        "today_leads": today_leads,
+        "week_leads": week_leads,
+        "month_leads": month_leads,
+        "converted": converted,
+        "lost": lost,
+        "active": active,
+        "conversion_rate": round((converted / total_leads * 100) if total_leads else 0, 1),
+        "revenue": revenue,
+        "admissions_count": admissions_count,
+        "avg_ticket_size": round(revenue / admissions_count, 2) if admissions_count else 0,
+        "team_count": team_count,
+        "manager_count": manager_count,
+        "by_source": by_source,
+        "by_status": by_status,
+    }
 
 
 @api_router.get("/reports/by-demo-owner")

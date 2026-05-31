@@ -26,7 +26,19 @@ export default function UsersPage() {
   const [users, setUsers] = useState([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [tempPassword, setTempPassword] = useState('');
-  const [form, setForm] = useState({ name: '', email: '', role: 'counselor', mobile: '' });
+  const [form, setForm] = useState({ name: '', email: '', role: 'counselor', mobile: '', reports_to: '' });
+
+  const managers = users.filter((u) => ['manager', 'org_admin'].includes(u.role));
+
+  const handleReportsToChange = async (userId, newManagerId) => {
+    try {
+      await axios.put(`${API}/users/${userId}`, { reports_to: newManagerId || '' });
+      toast.success('Manager updated');
+      fetchUsers();
+    } catch (e) {
+      toast.error('Failed to update');
+    }
+  };
 
   useEffect(() => {
     fetchUsers();
@@ -46,7 +58,7 @@ export default function UsersPage() {
       const { data } = await axios.post(`${API}/users`, form);
       setTempPassword(data.temp_password);
       toast.success('User created');
-      setForm({ name: '', email: '', role: 'counselor', mobile: '' });
+      setForm({ name: '', email: '', role: 'counselor', mobile: '', reports_to: '' });
       fetchUsers();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to create user');
@@ -118,13 +130,28 @@ export default function UsersPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Role *</Label>
-                    <Select value={form.role} onValueChange={(v) => setForm({...form, role: v})}>
+                    <Select value={form.role} onValueChange={(v) => setForm({...form, role: v, reports_to: v === 'org_admin' ? '' : form.reports_to})}>
                       <SelectTrigger data-testid="user-role-select"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {ROLES.map(r => <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
+                  {['counselor', 'telecaller', 'manager'].includes(form.role) && managers.length > 0 && (
+                    <div className="space-y-2 col-span-2">
+                      <Label>Reports To</Label>
+                      <Select value={form.reports_to || 'none'} onValueChange={(v) => setForm({...form, reports_to: v === 'none' ? '' : v})}>
+                        <SelectTrigger data-testid="user-reports-to-select"><SelectValue placeholder="(Unassigned)" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">— Unassigned —</SelectItem>
+                          {managers.map((m) => (
+                            <SelectItem key={m._id} value={m._id}>{m.name} ({m.role.replace('_', ' ')})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-slate-500">Used in "Manager-wise" reports to roll up performance.</p>
+                    </div>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={closeDialog}>Cancel</Button>
@@ -143,6 +170,7 @@ export default function UsersPage() {
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Name</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Email</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Role</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Reports To</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Joined</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em] w-20"></TableHead>
             </TableRow>
@@ -150,11 +178,12 @@ export default function UsersPage() {
           <TableBody>
             {users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-12 text-slate-500">No team members yet</TableCell>
+                <TableCell colSpan={6} className="text-center py-12 text-slate-500">No team members yet</TableCell>
               </TableRow>
             ) : (
               users.map((u) => {
                 const initials = u.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                const canHaveManager = ['counselor', 'telecaller', 'manager'].includes(u.role);
                 return (
                   <TableRow key={u._id} data-testid={`user-row-${u._id}`}>
                     <TableCell>
@@ -170,6 +199,23 @@ export default function UsersPage() {
                       <Badge variant="outline" className={roleColors[u.role] || roleColors.telecaller}>
                         {u.role.replace('_', ' ')}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {canHaveManager && managers.filter((m) => m._id !== u._id).length > 0 ? (
+                        <Select value={u.reports_to || 'none'} onValueChange={(v) => handleReportsToChange(u._id, v === 'none' ? '' : v)}>
+                          <SelectTrigger className="h-8 text-xs" data-testid={`reports-to-${u._id}`}>
+                            <SelectValue placeholder="—" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">— Unassigned —</SelectItem>
+                            {managers.filter((m) => m._id !== u._id).map((m) => (
+                              <SelectItem key={m._id} value={m._id}>{m.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-slate-500">
                       {new Date(u.created_at).toLocaleDateString()}

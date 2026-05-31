@@ -229,6 +229,16 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Lead Add form: **State** and **City** are now cascading Select dropdowns (city options re-populate when state changes)
 - ✅ New page **/platform/locations** for Super Admin — search, state filter, toggle active/inactive, edit, delete, custom vs default badges
 
+### Completed 2026-05-31 — Reports: Caller / Manager / Total
+- ✅ Reports page redesigned with **3 tabs** — Overview · By Caller · By Manager
+- ✅ **Overview tab**: 8 KPI cards (Total leads, Conv rate, Revenue, Avg deal size, Today, This month, Team count, Lost) + Source pie chart + Status bar chart
+- ✅ **By Caller tab**: Sortable table (10 columns: Total, Hot, Warm, Cold, Converted, Conv%, Revenue, Demos), search box, role filter (counselor/telecaller/manager), 5 sort options. Top 3 get medal badges. CSV export.
+- ✅ **By Manager tab**: Manager cards showing team_size + team members + total leads + conversions + revenue (rolls up the manager's own + all direct reports). "Unassigned" bucket auto-created for users without `reports_to`. CSV export.
+- ✅ Added `reports_to` field on users → schema + backend update + frontend "Reports To" Select dropdown in Users page (both Add dialog AND inline edit in row). Self-referencing prevention. Counselors/telecallers/managers can have a manager; org_admin cannot.
+- ✅ Backend endpoints (manager + admin only, counselor 403): `GET /api/reports/total-summary`, `GET /api/reports/by-caller`, `GET /api/reports/by-manager`
+- ✅ Conversion detection uses union of all industry-specific "won" statuses (Won, Admitted, Booked, Confirmed, Issued, Member, Renewed, Admission Done)
+- ✅ All lint clean, all 3 tabs render
+
 ### Completed 2026-05-31 — Onboarding Wizard
 - ✅ 5-step guided setup wizard for new org admins (Welcome → Services → Team → Lead Source → First Lead)
 - ✅ Smart auto-detection — pre-marks steps as complete if data already exists (services in catalog, additional users, leads imported)
