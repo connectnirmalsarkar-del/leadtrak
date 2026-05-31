@@ -1,0 +1,62 @@
+{
+  "summary": "Iteration 10 — Final pre-launch QA on 3 new deltas (Onboarding Wizard, Reports 3-tab page, Users Reports-To column). Backend: 17/17 new pytest cases PASS (onboarding state/advance/skip/reset + role 403, reports total-summary/by-caller/by-manager + counselor 403, users reports_to create/list/update). Frontend: org_admin login → wizard auto-resumes at Step 4 (smart auto-detection works — demo org already has services/team/leads), violet→fuchsia gradient header + progress dots + 'STEP 4 OF 5' + X close + 'Skip setup guide' all render correctly; Skip dismisses wizard. Reports page renders 3 tabs (Overview / By Caller / By Manager); Overview shows all 8 KPI cards (Total Leads 33, Conv 3%, Revenue ₹0, Avg Deal ₹0, Today 32, This Month 33, Active Team 3, Lost 0) + Lead Source pie + Lead Status bar chart; By Manager card shows Arjun Mehta (#1, team_size=2, Priya+Rohan chips, 33 leads, 1 converted, 3%) + Riya Kapoor (#2). Users table now shows Reports To column with Select dropdown for counselor/telecaller/manager rows and '—' for org_admin. Counselor login does NOT trigger wizard. Counselor /reports correctly redirects (RBAC enforced).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "OnboardingWizard <Dialog>",
+        "issue": "Radix Dialog accessibility warnings spam the console: `DialogContent` requires a `DialogTitle` for screen readers, and `Missing Description or aria-describedby`. Visual rendering is fine but a11y is degraded.",
+        "selector": "components/onboarding/OnboardingWizard.jsx",
+        "priority": "LOW"
+      },
+      {
+        "component": "Recharts ResponsiveContainer (carry-over from iter 9)",
+        "issue": "Many `width(-1) and height(-1) of chart should be greater than 0` warnings on Dashboard + Reports Overview. Charts still render. Cosmetic console noise.",
+        "selector": "Dashboard charts, ReportsPage Overview pie/bar",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "OnboardingWizard X close button",
+        "issues": ["X icon top-right renders as a dark filled square at 1920×1080 zoom — looks like the lucide-x svg color/contrast against the violet→fuchsia gradient is not crisp. Functional (click closes wizard) but visually it appears as a black box rather than a clean X stroke. Consider adding text-white/80 + a subtle ring."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration10_qa.py",
+    "/app/test_reports/pytest/iteration_10.xml"
+  ],
+  "action_items": [
+    "(Already fixed by tester) POST /api/users with reports_to returned 500 — ObjectId left in response payload. Fixed in server.py: now stringifies reports_to before returning. Please verify and keep.",
+    "LOW: Add <DialogTitle> (or VisuallyHidden wrapper) + aria-describedby to OnboardingWizard's DialogContent to silence Radix a11y warnings.",
+    "LOW: Improve X close button contrast on wizard header gradient (use text-white/90 + hover ring).",
+    "LOW (carry-over from iter 9): Set explicit min-height on Recharts ResponsiveContainer wrappers (Dashboard + Reports Overview) to silence width(-1)/height(-1) warnings."
+  ],
+  "critical_code_review_comments": [
+    "BUG fixed in server.py POST /api/users: when caller supplied reports_to, server stored ObjectId in user_doc but returned the same dict without stringifying — FastAPI jsonable_encoder choked on ObjectId → 500. Patched lines 2169-2173 to str() reports_to before returning.",
+    "Onboarding endpoints correctly gate advance/skip/reset to org_admin (counselor → 403). State endpoint accessible to non-admins (returns 200).",
+    "Reports endpoints (total-summary, by-caller, by-manager) correctly require org_admin/manager — counselor gets 403 on all three. Verified by pytest.",
+    "Smart auto-detection in /api/onboarding/state works as documented: demo org already has services + extra team + leads, so wizard correctly resumes at 'lead_source' (step 4 of 5), not step 1.",
+    "server.py is now ~4800 lines (was 4500 in iter 9) — even more urgent to split into routers (leads/billing/integrations/webhooks/onboarding/reports/platform).",
+    "OnboardingWizard.jsx should mount inside a portal AND under a DialogTitle for a11y — current implementation triggers Radix warnings on every open."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (POST /api/users: stringify reports_to in response — fixes 500)",
+    "/app/backend/tests/test_iteration10_qa.py (new — 17 tests covering onboarding + reports + users reports_to)"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 new tests + previous regression suites still green)",
+    "frontend": "95% — all critical flows verified visually; only a11y/console-warning cosmetic issues remain. By-Caller tab content not explicitly verified in screenshot (tab switch confirmed, but my body-text check ran while a transient overlay was present; backend payload for by-caller verified correct with Priya/Rohan/Arjun rows)."
+  },
+  "test_credentials": "orgadmin@demo.com/Demo@123, manager@demo.com/Demo@123, counselor@demo.com/Demo@123, telecaller@demo.com/Demo@123 — all valid, httpOnly cookie auth.",
+  "seed_data_creation": "Test created+deleted 1 transient user (test_qa_user_iter10@demo.com) to validate POST /api/users with reports_to. Onboarding was reset twice (POST /api/onboarding/reset) for demo org during testing — final state is RESET (wizard will reopen on next org_admin login). Recommend main agent calls /api/onboarding/skip if a clean dashboard is desired for user demo.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 3 new deltas (Onboarding wizard, Reports 3-tab, Users Reports-To column) verified end-to-end. One real backend bug found and fixed during this session: POST /api/users dropped to 500 when reports_to was provided due to ObjectId in response — now patched. Remaining items are LOW-priority cosmetic (Radix DialogTitle a11y, Recharts width warnings, wizard X-button contrast). Demo org onboarding state is currently in RESET state — wizard will pop on next org_admin login (this is intentional for follow-up manual demo). Counselor RBAC verified at both API (403) and route level (redirect).",
+  "rca of the issue": "POST /api/users 500 RCA: In server.py create_user (~line 2157), reports_to was stored as ObjectId in user_doc, but the same dict was returned to the client. FastAPI's jsonable_encoder tried dict(ObjectId) → TypeError, then vars(ObjectId) → TypeError, then bubbled as 500. Fix: stringify user_doc['reports_to'] after insert, alongside the existing _id and organization_id stringification. Reproduction: POST /api/users with body {name, email, mobile, role:'counselor', reports_to:<manager_id>, password:'Welcome@123'} as org_admin → was 500, now 200."
+}

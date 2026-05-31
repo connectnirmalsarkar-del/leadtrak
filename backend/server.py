@@ -2169,6 +2169,8 @@ async def create_user(data: UserCreate, current_user: dict = Depends(get_current
     result = await db.users.insert_one(user_doc)
     user_doc["_id"] = str(result.inserted_id)
     user_doc["organization_id"] = str(org_id)
+    if user_doc.get("reports_to"):
+        user_doc["reports_to"] = str(user_doc["reports_to"])
     user_doc.pop("password_hash", None)
     user_doc["temp_password"] = temp_password
     
