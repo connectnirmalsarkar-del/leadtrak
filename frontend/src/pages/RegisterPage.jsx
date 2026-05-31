@@ -84,14 +84,35 @@ export default function RegisterPage() {
       </header>
 
       {/* Body */}
-      <div className="relative z-10 max-w-7xl mx-auto px-6 py-12 lg:py-16">
-        <div className="grid lg:grid-cols-[1.1fr,0.9fr] gap-12 lg:gap-16 items-start">
-          {/* Left — marketing */}
-          <div className="space-y-10">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-8 lg:py-16">
+        {/* Mobile-only compact hero (above the form) */}
+        <div className="lg:hidden text-center mb-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-violet-100 border border-violet-200 rounded-full mb-3">
+            <Sparkles className="w-3 h-3 text-violet-700" />
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-700">
+              Book a Free Demo
+            </span>
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 leading-[1.1]" style={{ fontFamily: 'Sora' }}>
+            Goodbye spreadsheets.<br />
+            <span className="bg-gradient-to-r from-violet-600 to-fuchsia-500 bg-clip-text text-transparent">
+              Hello admissions growth.
+            </span>
+          </h1>
+          <p className="text-sm text-slate-600 mt-3 max-w-md mx-auto">
+            Join 500+ institutions converting more inquiries into admissions.
+          </p>
+        </div>
+
+        <div className="grid lg:grid-cols-[1.1fr,0.9fr] gap-8 lg:gap-16 items-start">
+          {/* Left — marketing (order-2 on mobile, order-1 on desktop) */}
+          <div className="space-y-8 lg:space-y-10 order-2 lg:order-1">
+            {/* Desktop-only full hero */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
+              className="hidden lg:block"
             >
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-100 border border-violet-200 rounded-full mb-5">
                 <Sparkles className="w-3.5 h-3.5 text-violet-700" />
@@ -206,14 +227,14 @@ export default function RegisterPage() {
             </motion.div>
           </div>
 
-          {/* Right — form card */}
+          {/* Right — form card (order-1 on mobile, order-2 on desktop) */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.2 }}
-            className="lg:sticky lg:top-24"
+            className="order-1 lg:order-2 lg:sticky lg:top-24"
           >
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl shadow-violet-100/50 p-8 lg:p-10">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl shadow-violet-100/50 p-6 sm:p-8 lg:p-10">
               <div className="mb-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-2">
                   Get started
