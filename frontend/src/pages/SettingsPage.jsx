@@ -1,19 +1,41 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
-import { API } from '@/context/AuthContext';
-import { useAuth } from '@/context/AuthContext';
-import { Building2, Mail, MessageSquare, Plus, Trash2 } from 'lucide-react';
+import { API, useAuth } from '@/context/AuthContext';
+import {
+  Building2,
+  Plus,
+  Trash2,
+  Upload,
+  ImageIcon,
+  MapPin,
+  FileText,
+  Phone,
+  Mail,
+  Globe,
+  Layers,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
+const GST_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
 export default function SettingsPage() {
-  const { user } = useAuth();
-  const [organization, setOrganization] = useState({ name: '' });
+  const { user, setUser } = useAuth();
+  const [organization, setOrganization] = useState({
+    name: '', logo_url: '', address: '', gst_number: '', phone: '', email: '', website: '',
+  });
   const [sources, setSources] = useState([]);
   const [newSource, setNewSource] = useState('');
+  const [savingCompany, setSavingCompany] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef(null);
+
+  const canManage = user && ['super_admin', 'org_admin'].includes(user.role);
 
   useEffect(() => {
     fetchOrg();
@@ -23,9 +45,17 @@ export default function SettingsPage() {
   const fetchOrg = async () => {
     try {
       const { data } = await axios.get(`${API}/organization`);
-      setOrganization(data);
+      setOrganization({
+        name: data.name || '',
+        logo_url: data.logo_url || '',
+        address: data.address || '',
+        gst_number: data.gst_number || '',
+        phone: data.phone || '',
+        email: data.email || '',
+        website: data.website || '',
+      });
     } catch (e) {
-      // ignore
+      // silent
     }
   };
 
@@ -34,16 +64,67 @@ export default function SettingsPage() {
       const { data } = await axios.get(`${API}/lead-sources`);
       setSources(data);
     } catch (e) {
-      // ignore
+      // silent
     }
   };
 
-  const handleSaveOrg = async () => {
+  const handleSaveCompany = async () => {
+    // Validate GST client-side first
+    const gst = (organization.gst_number || '').trim().toUpperCase();
+    if (gst && !GST_PATTERN.test(gst)) {
+      toast.error('Invalid GST format. Expected: 27ABCDE1234F1Z5');
+      return;
+    }
+    setSavingCompany(true);
     try {
-      await axios.put(`${API}/organization`, { name: organization.name });
-      toast.success('Organization updated');
+      const payload = { ...organization };
+      if (gst) payload.gst_number = gst;
+      else delete payload.gst_number;
+      // Don't send empty strings on optional fields → keep DB clean
+      Object.keys(payload).forEach((k) => { if (payload[k] === '') delete payload[k]; });
+      await axios.put(`${API}/organization`, payload);
+      toast.success('Company profile updated');
+      // Refresh auth user so topbar updates immediately
+      try {
+        const { data } = await axios.get(`${API}/auth/me`);
+        setUser && setUser(data);
+      } catch (e) { /* ignore */ }
     } catch (e) {
-      toast.error('Failed to update organization');
+      toast.error(e.response?.data?.detail || 'Save failed');
+    } finally {
+      setSavingCompany(false);
+    }
+  };
+
+  const handleLogoChoose = () => logoInputRef.current?.click();
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 500 * 1024) {
+      toast.error('Logo too large. Max 500 KB allowed.');
+      e.target.value = '';
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const { data } = await axios.post(`${API}/uploads/org-logo`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setOrganization((o) => ({ ...o, logo_url: data.logo_url }));
+      toast.success('Logo uploaded');
+      // Refresh auth user
+      try {
+        const { data: me } = await axios.get(`${API}/auth/me`);
+        setUser && setUser(me);
+      } catch (err) { /* ignore */ }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Upload failed');
+    } finally {
+      setUploadingLogo(false);
+      e.target.value = '';
     }
   };
 
@@ -60,97 +141,185 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6" data-testid="settings-page">
+    <div className="space-y-6 max-w-4xl" data-testid="settings-page">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Configuration</p>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Settings</h1>
-        <p className="text-sm text-slate-600 mt-1">Configure your workspace</p>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>Settings</h1>
+        <p className="text-sm text-slate-600 mt-1">Manage your company profile, lead sources, and integrations.</p>
       </div>
 
-      <Tabs defaultValue="organization">
+      <Tabs defaultValue="company">
         <TabsList className="bg-slate-100">
-          <TabsTrigger value="organization" data-testid="tab-organization"><Building2 className="w-4 h-4 mr-2" />Organization</TabsTrigger>
+          <TabsTrigger value="company" data-testid="tab-company"><Building2 className="w-4 h-4 mr-1.5" />Company Profile</TabsTrigger>
           <TabsTrigger value="sources" data-testid="tab-sources">Lead Sources</TabsTrigger>
-          <TabsTrigger value="integrations" data-testid="tab-integrations">Integrations</TabsTrigger>
+          <TabsTrigger value="integrations" data-testid="tab-integrations" asChild>
+            <Link to="/integrations" className="flex items-center"><Layers className="w-4 h-4 mr-1.5" />Integrations →</Link>
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="organization" className="space-y-4 mt-4">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 max-w-2xl">
-            <h3 className="text-lg font-medium text-slate-900 mb-4" style={{fontFamily: 'Sora'}}>Organization Details</h3>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Organization Name</Label>
-                <Input value={organization.name || ''} onChange={(e) => setOrganization({...organization, name: e.target.value})} data-testid="org-name-input" />
-              </div>
-              <div className="space-y-2">
-                <Label>Subscription Plan</Label>
-                <Input value={organization.subscription_plan || 'starter'} disabled />
-              </div>
-              <Button onClick={handleSaveOrg} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="save-org-btn">Save Changes</Button>
-            </div>
-          </div>
-        </TabsContent>
+        {/* Company Profile */}
+        <TabsContent value="company" className="space-y-4 mt-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-6">
+            <h3 className="text-base font-semibold text-slate-900 mb-1" style={{ fontFamily: 'Sora' }}>Brand & Identity</h3>
+            <p className="text-xs text-slate-500 mb-5">Your logo appears in the topbar and on future invoices and lead-capture forms.</p>
 
-        <TabsContent value="sources" className="space-y-4 mt-4">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 max-w-2xl">
-            <h3 className="text-lg font-medium text-slate-900 mb-4" style={{fontFamily: 'Sora'}}>Custom Lead Sources</h3>
-            <div className="flex gap-2 mb-4">
-              <Input
-                placeholder="Add new source (e.g., LinkedIn Ads)"
-                value={newSource}
-                onChange={(e) => setNewSource(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddSource()}
-                data-testid="new-source-input"
-              />
-              <Button onClick={handleAddSource} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="add-source-btn">
-                <Plus className="w-4 h-4" />
-              </Button>
+            <div className="flex flex-col sm:flex-row items-start gap-6 pb-6 border-b border-slate-100">
+              <div className="w-32 h-32 rounded-lg border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden" data-testid="logo-preview">
+                {organization.logo_url ? (
+                  <img src={organization.logo_url} alt="Logo" className="max-w-full max-h-full object-contain" />
+                ) : (
+                  <ImageIcon className="w-8 h-8 text-slate-300" />
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label>Company logo</Label>
+                <p className="text-xs text-slate-500">PNG / JPG / WEBP / SVG · max 500 KB · any aspect ratio</p>
+                <div className="flex gap-2">
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                    data-testid="org-logo-file-input"
+                  />
+                  <Button
+                    onClick={handleLogoChoose}
+                    disabled={uploadingLogo || !canManage}
+                    variant="outline"
+                    data-testid="upload-logo-btn"
+                  >
+                    <Upload className="w-4 h-4 mr-1.5" />
+                    {uploadingLogo ? 'Uploading…' : (organization.logo_url ? 'Replace logo' : 'Upload logo')}
+                  </Button>
+                  {organization.logo_url && canManage && (
+                    <Button
+                      variant="outline"
+                      className="text-red-600 border-red-200 hover:bg-red-50"
+                      onClick={() => setOrganization((o) => ({ ...o, logo_url: '' }))}
+                      data-testid="remove-logo-btn"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1.5" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              {sources.length === 0 ? (
-                <p className="text-sm text-slate-500">No custom sources yet. Default sources include: Facebook Ads, Website, Google Ads, Referral, Walk-in, Telecalling.</p>
-              ) : (
-                sources.map(s => (
-                  <div key={s._id} className="flex items-center justify-between p-3 bg-slate-50 rounded-md">
-                    <span className="text-sm text-slate-900">{s.name}</span>
-                  </div>
-                ))
+
+            <div className="pt-6 space-y-4">
+              <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Company details</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2 md:col-span-2">
+                  <Label><Building2 className="w-3.5 h-3.5 inline mr-1.5 text-slate-400" />Company name *</Label>
+                  <Input
+                    value={organization.name}
+                    onChange={(e) => setOrganization({ ...organization, name: e.target.value })}
+                    placeholder="Bright Future Coaching Pvt. Ltd."
+                    disabled={!canManage}
+                    data-testid="org-name-input"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label><MapPin className="w-3.5 h-3.5 inline mr-1.5 text-slate-400" />Registered address</Label>
+                  <Textarea
+                    value={organization.address}
+                    onChange={(e) => setOrganization({ ...organization, address: e.target.value })}
+                    rows={3}
+                    placeholder={"42 MG Road, Sector 18\nGurgaon, Haryana 122001\nIndia"}
+                    disabled={!canManage}
+                    data-testid="org-address-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label><FileText className="w-3.5 h-3.5 inline mr-1.5 text-slate-400" />GST number</Label>
+                  <Input
+                    value={organization.gst_number}
+                    onChange={(e) => setOrganization({ ...organization, gst_number: e.target.value.toUpperCase() })}
+                    placeholder="27ABCDE1234F1Z5"
+                    maxLength={15}
+                    disabled={!canManage}
+                    className="font-mono"
+                    data-testid="org-gst-input"
+                  />
+                  <p className="text-[11px] text-slate-500">Format: 2-digit state + 10-char PAN + 1 entity + Z + 1 check</p>
+                </div>
+                <div className="space-y-2">
+                  <Label><Phone className="w-3.5 h-3.5 inline mr-1.5 text-slate-400" />Phone</Label>
+                  <Input
+                    value={organization.phone}
+                    onChange={(e) => setOrganization({ ...organization, phone: e.target.value })}
+                    placeholder="+91 98765 43210"
+                    disabled={!canManage}
+                    data-testid="org-phone-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label><Mail className="w-3.5 h-3.5 inline mr-1.5 text-slate-400" />Email</Label>
+                  <Input
+                    type="email"
+                    value={organization.email}
+                    onChange={(e) => setOrganization({ ...organization, email: e.target.value })}
+                    placeholder="contact@brightfuture.com"
+                    disabled={!canManage}
+                    data-testid="org-email-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label><Globe className="w-3.5 h-3.5 inline mr-1.5 text-slate-400" />Website</Label>
+                  <Input
+                    value={organization.website}
+                    onChange={(e) => setOrganization({ ...organization, website: e.target.value })}
+                    placeholder="https://brightfuture.com"
+                    disabled={!canManage}
+                    data-testid="org-website-input"
+                  />
+                </div>
+              </div>
+              {canManage && (
+                <div className="pt-2 flex justify-end">
+                  <Button
+                    onClick={handleSaveCompany}
+                    disabled={savingCompany}
+                    className="bg-violet-700 hover:bg-violet-800 text-white"
+                    data-testid="save-company-btn"
+                  >
+                    {savingCompany ? 'Saving…' : 'Save changes'}
+                  </Button>
+                </div>
               )}
             </div>
           </div>
         </TabsContent>
 
-        <TabsContent value="integrations" className="space-y-4 mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-white border border-slate-200 rounded-xl p-6">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-emerald-50 rounded-md flex items-center justify-center">
-                  <MessageSquare className="w-5 h-5 text-emerald-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-slate-900" style={{fontFamily: 'Sora'}}>WhatsApp (Twilio)</h3>
-                  <p className="text-xs text-slate-500">Send messages via Twilio API</p>
-                </div>
-              </div>
-              <p className="text-sm text-slate-600 mb-3">Configure your Twilio credentials in the backend .env file to enable WhatsApp messaging.</p>
-              <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-xs text-amber-700">
-                Status: Not configured - add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER
-              </div>
+        {/* Lead Sources */}
+        <TabsContent value="sources" className="space-y-4 mt-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-6">
+            <h3 className="text-base font-semibold text-slate-900 mb-1" style={{ fontFamily: 'Sora' }}>Lead Sources</h3>
+            <p className="text-xs text-slate-500 mb-5">These appear in the "Lead Source" dropdown when adding new leads.</p>
+            <div className="flex gap-2 mb-4">
+              <Input
+                placeholder="Add a new source (e.g. LinkedIn Ads)"
+                value={newSource}
+                onChange={(e) => setNewSource(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddSource()}
+                disabled={!canManage}
+                data-testid="new-source-input"
+              />
+              <Button onClick={handleAddSource} disabled={!canManage} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="add-source-btn">
+                <Plus className="w-4 h-4" />
+              </Button>
             </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-6">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-blue-50 rounded-md flex items-center justify-center">
-                  <Building2 className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-slate-900" style={{fontFamily: 'Sora'}}>Facebook Lead Ads</h3>
-                  <p className="text-xs text-slate-500">Auto-import leads from Meta</p>
-                </div>
-              </div>
-              <p className="text-sm text-slate-600 mb-3">Configure Facebook App credentials and webhook URL: <code className="bg-slate-100 px-1 rounded text-xs">/api/integrations/facebook-leads</code></p>
-              <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-xs text-amber-700">
-                Status: Webhook endpoint ready - add Facebook App credentials
-              </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {sources.length === 0 ? (
+                <p className="text-sm text-slate-500 col-span-3">No sources yet.</p>
+              ) : (
+                sources.map((s) => (
+                  <div key={s._id} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-md border border-slate-200">
+                    <span className="text-sm text-slate-900 flex-1 truncate">{s.name}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </TabsContent>

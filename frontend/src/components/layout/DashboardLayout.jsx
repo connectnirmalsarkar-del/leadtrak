@@ -261,7 +261,11 @@ export default function DashboardLayout({ children }) {
               <Menu className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2 text-sm text-slate-600">
-              <Building2 className="w-4 h-4" />
+              {user?.logo_url ? (
+                <img src={user.logo_url} alt="" className="w-6 h-6 rounded object-contain bg-white border border-slate-200" data-testid="topbar-org-logo" />
+              ) : (
+                <Building2 className="w-4 h-4" />
+              )}
               <span data-testid="org-name">{user?.organization_name || 'Organization'}</span>
             </div>
           </div>

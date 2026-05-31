@@ -12,6 +12,7 @@ import os
 import logging
 import io
 import csv
+import re
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
@@ -95,10 +96,11 @@ async def get_current_user(request: Request) -> dict:
         industry_key = "generic"
         org_name = ""
         if org_id:
-            org = await db.organizations.find_one({"_id": org_id}, {"industry": 1, "name": 1})
+            org = await db.organizations.find_one({"_id": org_id}, {"industry": 1, "name": 1, "logo_url": 1})
             if org:
                 industry_key = org.get("industry") or "education"
                 org_name = org.get("name", "")
+                user["logo_url"] = org.get("logo_url", "")
         user["industry"] = industry_key
         user["organization_name"] = org_name
         user["terminology"] = get_terms(industry_key)
@@ -343,8 +345,16 @@ class TaskUpdate(BaseModel):
 class LeadSourceCreate(BaseModel):
     name: str
 
+GST_REGEX = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$")
+
 class OrganizationUpdate(BaseModel):
     name: Optional[str] = None
+    logo_url: Optional[str] = None
+    address: Optional[str] = None
+    gst_number: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    website: Optional[str] = None
     email_settings: Optional[Dict] = None
     whatsapp_settings: Optional[Dict] = None
 
@@ -2089,7 +2099,17 @@ async def update_organization(data: OrganizationUpdate, current_user: dict = Dep
     
     if not update_data:
         raise HTTPException(status_code=400, detail="No data to update")
-    
+
+    # Validate Indian GST format if present
+    if "gst_number" in update_data and update_data["gst_number"]:
+        gst = update_data["gst_number"].strip().upper()
+        if not GST_REGEX.match(gst):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid GST number. Must be 15 chars: 2 digit state code + 10 char PAN + 1 entity + 'Z' + 1 check digit (e.g. 27ABCDE1234F1Z5).",
+            )
+        update_data["gst_number"] = gst
+
     result = await db.organizations.update_one(
         {"_id": ObjectId(current_user["organization_id"])},
         {"$set": update_data}
@@ -2099,6 +2119,46 @@ async def update_organization(data: OrganizationUpdate, current_user: dict = Dep
         raise HTTPException(status_code=404, detail="Organization not found")
     
     return {"message": "Organization updated successfully"}
+
+
+# ==================== Organization Logo Upload (Cloudinary) ====================
+ALLOWED_LOGO_MIME = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/svg+xml"}
+MAX_LOGO_SIZE = 500 * 1024  # 500 KB
+
+
+@api_router.post("/uploads/org-logo")
+async def upload_org_logo(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    if current_user["role"] not in ("super_admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can upload org logo")
+    if not os.environ.get("CLOUDINARY_CLOUD_NAME"):
+        raise HTTPException(status_code=500, detail="Logo upload not configured")
+    if file.content_type not in ALLOWED_LOGO_MIME:
+        raise HTTPException(status_code=400, detail=f"File type {file.content_type} not allowed. Use JPG/PNG/WEBP/SVG.")
+    content = await file.read()
+    if len(content) > MAX_LOGO_SIZE:
+        raise HTTPException(status_code=400, detail="Logo too large. Max 500 KB allowed.")
+    folder = f"leadtrak/org-logo/{current_user['organization_id']}"
+    try:
+        result = cloudinary.uploader.upload(
+            content,
+            folder=folder,
+            resource_type="image",
+            overwrite=True,
+            public_id="logo",
+        )
+    except Exception as e:
+        logger.error(f"Cloudinary logo upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Logo upload failed")
+    logo_url = result.get("secure_url")
+    # Persist on org doc immediately
+    await db.organizations.update_one(
+        {"_id": ObjectId(current_user["organization_id"])},
+        {"$set": {"logo_url": logo_url}},
+    )
+    return {"logo_url": logo_url, "public_id": result.get("public_id")}
 
 # ==================== Subscription Routes ====================
 @api_router.get("/subscription-plans")
