@@ -348,24 +348,26 @@ class TestVoiceUpload:
         )
         assert r.status_code == 200, r.text
 
-    def test_oversize_4mb_rejected(self, counselor_session):
-        big = b"\x00" * (4 * 1024 * 1024)
+    def test_oversize_rejected(self, counselor_session):
+        # Phase 6: cap raised to 5 MB. Send 5.5 MB → rejected with 400.
+        big = b"\x00" * int(5.5 * 1024 * 1024)
         files = {"file": ("big.webm", big, "audio/webm")}
         r = counselor_session.post(
             f"{BASE_URL}/api/uploads/voice-recording",
             files=files, data={"duration": "60"}, timeout=60,
         )
         assert r.status_code == 400
-        assert "large" in r.text.lower() or "max" in r.text.lower()
+        assert "large" in r.text.lower() or "max" in r.text.lower() or "5 mb" in r.text.lower()
 
-    def test_duration_over_180_rejected(self, counselor_session):
+    def test_duration_over_cap_rejected(self, counselor_session):
+        # Phase 6: cap raised to 300s. duration=320 → rejected.
         files = {"file": ("dur.webm", self._small_audio_bytes(50), "audio/webm")}
         r = counselor_session.post(
             f"{BASE_URL}/api/uploads/voice-recording",
-            files=files, data={"duration": "200"}, timeout=60,
+            files=files, data={"duration": "320"}, timeout=60,
         )
         assert r.status_code == 400
-        assert "3 minutes" in r.text or "180" in r.text or "duration" in r.text.lower()
+        assert "5 minutes" in r.text or "300" in r.text or "duration" in r.text.lower()
 
     def test_disallowed_mime_rejected(self, counselor_session):
         files = {"file": ("bad.txt", b"hello world", "text/plain")}

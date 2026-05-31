@@ -20,6 +20,7 @@ import ActivityLogsPage from '@/pages/ActivityLogsPage';
 import LeadWidgetPage from '@/pages/LeadWidgetPage';
 import PlatformOrgsPage from '@/pages/PlatformOrgsPage';
 import SupportTicketsPage from '@/pages/SupportTicketsPage';
+import ServicesPage from '@/pages/ServicesPage';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const ProtectedRoute = ({ children }) => {
@@ -81,6 +82,7 @@ function App() {
           <Route path="/lead-widget" element={<ProtectedRoute><LeadWidgetPage /></ProtectedRoute>} />
           <Route path="/platform/organizations" element={<ProtectedRoute><PlatformOrgsPage /></ProtectedRoute>} />
           <Route path="/support" element={<ProtectedRoute><SupportTicketsPage /></ProtectedRoute>} />
+          <Route path="/services" element={<ProtectedRoute><ServicesPage /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

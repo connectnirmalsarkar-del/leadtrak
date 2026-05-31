@@ -23,6 +23,7 @@ import {
   Layers,
   Trophy,
   Zap,
+  Tag,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -48,6 +49,7 @@ const navItems = [
 
 const adminNavItems = [
   { path: '/users', label: 'Team Members', icon: Users, testId: 'nav-users' },
+  { path: '/services', label: 'Services & Pricing', icon: Tag, testId: 'nav-services' },
   { path: '/lead-widget', label: 'Lead Widget', icon: Globe, testId: 'nav-widget' },
   { path: '/activity-logs', label: 'Activity Logs', icon: History, testId: 'nav-activity' },
   { path: '/subscription', label: 'Subscription', icon: CreditCard, testId: 'nav-subscription' },

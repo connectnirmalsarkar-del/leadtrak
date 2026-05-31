@@ -22,7 +22,7 @@ import secrets
 import cloudinary
 import cloudinary.uploader
 from openpyxl import Workbook
-from industry_config import INDUSTRY_CONFIG, SUPPORTED_INDUSTRIES, get_industry, get_terms, list_industries
+from industry_config import INDUSTRY_CONFIG, SUPPORTED_INDUSTRIES, get_industry, get_terms, list_industries, get_default_services
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -233,6 +233,29 @@ class AdmissionCreate(BaseModel):
     fees: float
     admission_date: str
     lead_id: Optional[str] = None
+    # New service catalog + discount fields (Phase 6)
+    service_id: Optional[str] = None
+    base_price: Optional[float] = None
+    discount_amount: Optional[float] = 0
+    discount_reason: Optional[str] = ""
+
+class ServiceCreate(BaseModel):
+    name: str
+    category: Optional[str] = ""
+    base_price: float
+    min_price: float
+    description: Optional[str] = ""
+    duration: Optional[str] = ""
+    active: bool = True
+
+class ServiceUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    base_price: Optional[float] = None
+    min_price: Optional[float] = None
+    description: Optional[str] = None
+    duration: Optional[str] = None
+    active: Optional[bool] = None
 
 class TaskCreate(BaseModel):
     title: str
@@ -419,6 +442,29 @@ async def migrate_industry_field():
         logger.info(f"Migrated {result.modified_count} organizations to industry='education'")
 
 
+async def seed_services_for_existing_orgs():
+    """Seed default services for orgs that don't have any (Phase 6)."""
+    orgs = db.organizations.find({}, {"industry": 1})
+    async for org in orgs:
+        existing = await db.services.count_documents({"organization_id": org["_id"]})
+        if existing == 0:
+            industry = org.get("industry") or "education"
+            services_seed = [
+                {
+                    **svc,
+                    "active": True,
+                    "description": "",
+                    "duration": "",
+                    "organization_id": org["_id"],
+                    "created_at": datetime.now(timezone.utc),
+                }
+                for svc in get_default_services(industry)
+            ]
+            if services_seed:
+                await db.services.insert_many(services_seed)
+                logger.info(f"Seeded {len(services_seed)} default services for org {org['_id']}")
+
+
 @app.on_event("startup")
 async def startup_db():
     await db.users.create_index("email", unique=True)
@@ -434,6 +480,7 @@ async def startup_db():
     await seed_demo_org_and_users()
     await seed_subscription_plans()
     await migrate_industry_field()
+    await seed_services_for_existing_orgs()
     logger.info("Database initialized and indexes created")
 
 # ==================== Auth Routes ====================
@@ -473,6 +520,21 @@ async def register(data: RegisterRequest, response: Response):
     ]
     if default_sources:
         await db.lead_sources.insert_many(default_sources)
+
+    # Seed industry-specific default services (Phase 6)
+    default_services_seed = [
+        {
+            **svc,
+            "active": True,
+            "description": "",
+            "duration": "",
+            "organization_id": org_id,
+            "created_at": datetime.now(timezone.utc),
+        }
+        for svc in get_default_services(industry)
+    ]
+    if default_services_seed:
+        await db.services.insert_many(default_services_seed)
     
     # Create user
     hashed = hash_password(data.password)
@@ -591,6 +653,89 @@ async def update_organization_industry(
         {"$set": {"industry": data.industry}},
     )
     return {"industry": data.industry, "terminology": get_terms(data.industry)}
+
+
+# ==================== Services Catalog (Phase 6) ====================
+def _serialize_service(s: dict) -> dict:
+    s["_id"] = str(s["_id"])
+    s.pop("organization_id", None)
+    if isinstance(s.get("created_at"), datetime):
+        s["created_at"] = s["created_at"].isoformat()
+    return s
+
+
+@api_router.get("/services")
+async def list_services(
+    current_user: dict = Depends(get_current_user),
+    include_inactive: bool = False,
+):
+    org_id = ObjectId(current_user["organization_id"])
+    query = {"organization_id": org_id}
+    if not include_inactive:
+        query["active"] = {"$ne": False}
+    services = await db.services.find(query).sort("name", 1).to_list(500)
+    return [_serialize_service(s) for s in services]
+
+
+@api_router.post("/services")
+async def create_service(data: ServiceCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only managers and admins can manage services")
+    if data.min_price > data.base_price:
+        raise HTTPException(status_code=400, detail="Min price cannot exceed base price")
+    org_id = ObjectId(current_user["organization_id"])
+    doc = {
+        "name": data.name,
+        "category": data.category,
+        "base_price": data.base_price,
+        "min_price": data.min_price,
+        "description": data.description,
+        "duration": data.duration,
+        "active": data.active,
+        "organization_id": org_id,
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = await db.services.insert_one(doc)
+    doc["_id"] = result.inserted_id
+    return _serialize_service(doc)
+
+
+@api_router.put("/services/{service_id}")
+async def update_service(service_id: str, data: ServiceUpdate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only managers and admins can manage services")
+    org_id = ObjectId(current_user["organization_id"])
+    update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No data to update")
+    # Validate min_price ≤ base_price if both being modified, else against existing
+    if "min_price" in update_data or "base_price" in update_data:
+        existing = await db.services.find_one({"_id": ObjectId(service_id), "organization_id": org_id})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Service not found")
+        base = update_data.get("base_price", existing.get("base_price", 0))
+        mn = update_data.get("min_price", existing.get("min_price", 0))
+        if mn > base:
+            raise HTTPException(status_code=400, detail="Min price cannot exceed base price")
+    result = await db.services.update_one(
+        {"_id": ObjectId(service_id), "organization_id": org_id},
+        {"$set": update_data},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Service not found")
+    return {"message": "Service updated"}
+
+
+@api_router.delete("/services/{service_id}")
+async def delete_service(service_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only managers and admins can manage services")
+    org_id = ObjectId(current_user["organization_id"])
+    result = await db.services.delete_one({"_id": ObjectId(service_id), "organization_id": org_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Service not found")
+    return {"message": "Service deleted"}
+
 
 
 @api_router.post("/auth/refresh")
@@ -1112,7 +1257,20 @@ async def complete_followup(followup_id: str, current_user: dict = Depends(get_c
 @api_router.post("/admissions")
 async def create_admission(data: AdmissionCreate, current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
-    
+
+    # Validate against service min_price (Phase 6) if a service is referenced
+    service = None
+    if data.service_id:
+        service = await db.services.find_one({"_id": ObjectId(data.service_id), "organization_id": org_id})
+        if not service:
+            raise HTTPException(status_code=404, detail="Service not found")
+        min_price = service.get("min_price", 0)
+        if data.fees < min_price:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Final price ₹{data.fees:,.0f} is below the minimum allowed (₹{min_price:,.0f}) for this service. Increase the price or reduce the discount.",
+            )
+
     admission_doc = {
         "student_name": data.student_name,
         "mobile": data.mobile,
@@ -1120,6 +1278,11 @@ async def create_admission(data: AdmissionCreate, current_user: dict = Depends(g
         "fees": data.fees,
         "admission_date": data.admission_date,
         "lead_id": data.lead_id,
+        "service_id": data.service_id,
+        "service_name": service.get("name") if service else None,
+        "base_price": data.base_price,
+        "discount_amount": data.discount_amount or 0,
+        "discount_reason": data.discount_reason or "",
         "counselor_name": current_user["name"],
         "organization_id": org_id,
         "created_by": current_user["id"],
@@ -1141,8 +1304,11 @@ async def create_admission(data: AdmissionCreate, current_user: dict = Depends(g
             "admission_recorded",
             {
                 "admission_id": admission_doc["_id"],
-                "offering": data.course,
+                "offering": service.get("name") if service else data.course,
                 "amount": data.fees,
+                "base_price": data.base_price,
+                "discount_amount": data.discount_amount or 0,
+                "discount_reason": data.discount_reason or "",
                 "date": data.admission_date,
             },
             current_user,
@@ -1993,7 +2159,8 @@ ALLOWED_VOICE_MIME = {
     # Some browsers send video/* for webm audio recordings
     "video/webm",
 }
-MAX_VOICE_SIZE = 3 * 1024 * 1024  # 3 MB
+MAX_VOICE_SIZE = 5 * 1024 * 1024  # 5 MB (supports uploaded calls up to ~5 min)
+MAX_VOICE_DURATION = 300  # 5 minutes
 
 @api_router.post("/uploads/voice-recording")
 async def upload_voice_recording(
@@ -2013,9 +2180,9 @@ async def upload_voice_recording(
         raise HTTPException(status_code=400, detail=f"Audio type {file.content_type} not allowed")
     content = await file.read()
     if len(content) > MAX_VOICE_SIZE:
-        raise HTTPException(status_code=400, detail="Recording too large. Max 3 MB (≈3 minutes) allowed.")
-    if duration is not None and duration > 180:
-        raise HTTPException(status_code=400, detail="Recording duration exceeds 3 minutes")
+        raise HTTPException(status_code=400, detail="Recording too large. Max 5 MB allowed.")
+    if duration is not None and duration > MAX_VOICE_DURATION:
+        raise HTTPException(status_code=400, detail="Recording duration exceeds 5 minutes")
     folder = f"leadtrak/voice/{current_user['organization_id']}"
     try:
         result = cloudinary.uploader.upload(

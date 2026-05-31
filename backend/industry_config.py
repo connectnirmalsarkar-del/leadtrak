@@ -177,6 +177,74 @@ INDUSTRY_CONFIG = {
 SUPPORTED_INDUSTRIES = list(INDUSTRY_CONFIG.keys())
 
 
+# ==================== Default Services per Industry ====================
+# Seeded on org signup. Format: {name, category, base_price, min_price}
+DEFAULT_SERVICES = {
+    "education": [
+        {"name": "MBA Full-time", "category": "Master's", "base_price": 240000, "min_price": 200000},
+        {"name": "BBA", "category": "Bachelor's", "base_price": 120000, "min_price": 100000},
+        {"name": "PGDM", "category": "Master's", "base_price": 300000, "min_price": 275000},
+        {"name": "MCA", "category": "Master's", "base_price": 180000, "min_price": 160000},
+        {"name": "BTech CSE", "category": "Bachelor's", "base_price": 200000, "min_price": 180000},
+    ],
+    "it_software": [
+        {"name": "Website Development", "category": "Web", "base_price": 50000, "min_price": 35000},
+        {"name": "Mobile App (iOS+Android)", "category": "Mobile", "base_price": 150000, "min_price": 120000},
+        {"name": "Custom SaaS Build", "category": "Product", "base_price": 500000, "min_price": 400000},
+        {"name": "DevOps Setup", "category": "Infra", "base_price": 80000, "min_price": 60000},
+        {"name": "Maintenance (Annual)", "category": "Support", "base_price": 60000, "min_price": 48000},
+    ],
+    "real_estate": [
+        {"name": "1 BHK Apartment", "category": "Apartment", "base_price": 4500000, "min_price": 4200000},
+        {"name": "2 BHK Apartment", "category": "Apartment", "base_price": 7500000, "min_price": 7000000},
+        {"name": "3 BHK Apartment", "category": "Apartment", "base_price": 11000000, "min_price": 10500000},
+        {"name": "Villa", "category": "Independent", "base_price": 25000000, "min_price": 23000000},
+        {"name": "Commercial Office", "category": "Commercial", "base_price": 15000000, "min_price": 13500000},
+    ],
+    "healthcare": [
+        {"name": "General Consultation", "category": "Consult", "base_price": 600, "min_price": 500},
+        {"name": "Dental Cleaning", "category": "Dental", "base_price": 2500, "min_price": 2000},
+        {"name": "Physiotherapy Session", "category": "Physio", "base_price": 1200, "min_price": 1000},
+        {"name": "Full Body Health Check", "category": "Diagnostics", "base_price": 8000, "min_price": 6500},
+        {"name": "Specialist Consult", "category": "Consult", "base_price": 1500, "min_price": 1200},
+    ],
+    "insurance": [
+        {"name": "Term Life — 1 Cr", "category": "Life", "base_price": 12000, "min_price": 11000},
+        {"name": "Health Floater Family", "category": "Health", "base_price": 25000, "min_price": 22000},
+        {"name": "Motor — Private Car", "category": "Motor", "base_price": 8500, "min_price": 7500},
+        {"name": "Home Insurance", "category": "Property", "base_price": 5500, "min_price": 5000},
+    ],
+    "travel": [
+        {"name": "Goa 3N4D Package", "category": "Domestic", "base_price": 18000, "min_price": 15000},
+        {"name": "Kerala 5N6D Package", "category": "Domestic", "base_price": 32000, "min_price": 28000},
+        {"name": "Dubai 4N5D Package", "category": "International", "base_price": 65000, "min_price": 58000},
+        {"name": "Europe 10D Package", "category": "International", "base_price": 250000, "min_price": 230000},
+    ],
+    "retail": [
+        {"name": "Premium T-Shirt", "category": "Apparel", "base_price": 1500, "min_price": 1200},
+        {"name": "Sneakers", "category": "Footwear", "base_price": 4500, "min_price": 3800},
+        {"name": "Smartwatch", "category": "Electronics", "base_price": 12000, "min_price": 10500},
+        {"name": "Gift Hamper", "category": "Lifestyle", "base_price": 2500, "min_price": 2000},
+    ],
+    "fitness": [
+        {"name": "Monthly Membership", "category": "Gym", "base_price": 2500, "min_price": 2000},
+        {"name": "Quarterly Membership", "category": "Gym", "base_price": 6500, "min_price": 5500},
+        {"name": "Annual Membership", "category": "Gym", "base_price": 22000, "min_price": 18000},
+        {"name": "Personal Trainer (10 sessions)", "category": "Training", "base_price": 12000, "min_price": 10000},
+        {"name": "Yoga Pass (Monthly)", "category": "Yoga", "base_price": 3000, "min_price": 2500},
+    ],
+    "generic": [
+        {"name": "Standard Package", "category": "General", "base_price": 10000, "min_price": 8000},
+        {"name": "Premium Package", "category": "General", "base_price": 25000, "min_price": 22000},
+        {"name": "Enterprise Package", "category": "General", "base_price": 100000, "min_price": 90000},
+    ],
+}
+
+
+def get_default_services(industry: str) -> list:
+    return DEFAULT_SERVICES.get(industry, DEFAULT_SERVICES["generic"])
+
+
 def get_industry(industry: str) -> dict:
     """Return the config for an industry, falling back to generic."""
     return INDUSTRY_CONFIG.get(industry) or INDUSTRY_CONFIG["generic"]
