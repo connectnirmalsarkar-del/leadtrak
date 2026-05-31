@@ -3,13 +3,15 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Response
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Response, UploadFile, File, Form
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 import os
 import logging
+import io
+import csv
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
@@ -17,6 +19,7 @@ import bcrypt
 import jwt
 import razorpay
 import secrets
+from openpyxl import Workbook
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -1130,6 +1133,337 @@ async def send_whatsapp_message(data: WhatsAppMessage, current_user: dict = Depe
     except Exception as e:
         logger.error(f"WhatsApp send error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to send WhatsApp message")
+
+# ==================== Dashboard Widgets (Enhanced) ====================
+@api_router.get("/dashboard/funnel")
+async def get_lead_funnel(current_user: dict = Depends(get_current_user)):
+    org_id = ObjectId(current_user["organization_id"])
+    stages = ["New", "Contacted", "Interested", "Admission Done"]
+    counts = {}
+    for stage in stages:
+        counts[stage] = await db.leads.count_documents({"organization_id": org_id, "status": stage})
+    total = sum(counts.values()) or 1
+    return [
+        {"stage": stage, "count": counts[stage], "percentage": round(counts[stage] / total * 100, 1)}
+        for stage in stages
+    ]
+
+@api_router.get("/dashboard/leaderboard")
+async def get_counselor_leaderboard(current_user: dict = Depends(get_current_user)):
+    org_id = ObjectId(current_user["organization_id"])
+    users_cursor = db.users.find({"organization_id": org_id})
+    leaderboard = []
+    async for user in users_cursor:
+        user_id = str(user["_id"])
+        leads_assigned = await db.leads.count_documents({"organization_id": org_id, "assigned_to": user_id})
+        admissions_done = await db.leads.count_documents({"organization_id": org_id, "assigned_to": user_id, "status": "Admission Done"})
+        if leads_assigned > 0:
+            conversion = round(admissions_done / leads_assigned * 100, 1)
+        else:
+            conversion = 0
+        leaderboard.append({
+            "user_id": user_id,
+            "name": user["name"],
+            "role": user["role"],
+            "leads_assigned": leads_assigned,
+            "admissions": admissions_done,
+            "conversion_rate": conversion,
+        })
+    leaderboard.sort(key=lambda x: x["admissions"], reverse=True)
+    return leaderboard[:5]
+
+@api_router.get("/dashboard/activity-feed")
+async def get_activity_feed(current_user: dict = Depends(get_current_user)):
+    org_id = ObjectId(current_user["organization_id"])
+    activities = []
+    # Recent leads
+    leads = await db.leads.find({"organization_id": org_id}).sort("created_at", -1).limit(8).to_list(8)
+    for lead in leads:
+        creator = await db.users.find_one({"_id": ObjectId(lead.get("created_by"))}) if lead.get("created_by") else None
+        activities.append({
+            "type": "lead_created",
+            "actor": creator["name"] if creator else "System",
+            "text": f"created lead {lead['name']}",
+            "timestamp": lead["created_at"].isoformat() if isinstance(lead["created_at"], datetime) else lead["created_at"],
+            "color": "violet",
+        })
+    # Recent admissions
+    admissions = await db.admissions.find({"organization_id": org_id}).sort("created_at", -1).limit(5).to_list(5)
+    for adm in admissions:
+        activities.append({
+            "type": "admission",
+            "actor": adm.get("counselor_name", "System"),
+            "text": f"recorded admission for {adm['student_name']}",
+            "timestamp": adm["created_at"].isoformat() if isinstance(adm["created_at"], datetime) else adm["created_at"],
+            "color": "emerald",
+        })
+    activities.sort(key=lambda x: x["timestamp"], reverse=True)
+    return activities[:10]
+
+@api_router.get("/dashboard/today-followups")
+async def get_today_followups(current_user: dict = Depends(get_current_user)):
+    org_id = ObjectId(current_user["organization_id"])
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    followups = await db.followups.find({"organization_id": org_id, "followup_date": today}).limit(5).to_list(5)
+    for fu in followups:
+        fu["_id"] = str(fu["_id"])
+        fu.pop("organization_id", None)
+        lead = await db.leads.find_one({"_id": ObjectId(fu["lead_id"])}, {"name": 1, "mobile": 1})
+        if lead:
+            fu["lead_name"] = lead["name"]
+            fu["lead_mobile"] = lead["mobile"]
+    return followups
+
+# ==================== Activity Logs ====================
+@api_router.get("/activity-logs")
+async def get_activity_logs(current_user: dict = Depends(get_current_user), limit: int = 50):
+    org_id = ObjectId(current_user["organization_id"])
+    if current_user["role"] not in ["super_admin", "org_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    logs = await db.activity_logs.find({"organization_id": org_id}, {"organization_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
+    for log in logs:
+        log["_id"] = str(log["_id"])
+    return logs
+
+async def log_activity(org_id, user_id, user_name, action, target_type, target_id, details=""):
+    await db.activity_logs.insert_one({
+        "organization_id": org_id,
+        "user_id": user_id,
+        "user_name": user_name,
+        "action": action,
+        "target_type": target_type,
+        "target_id": str(target_id) if target_id else None,
+        "details": details,
+        "timestamp": datetime.now(timezone.utc),
+    })
+
+# ==================== CSV Lead Import ====================
+@api_router.post("/leads/import-csv")
+async def import_leads_csv(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["super_admin", "org_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    org_id = ObjectId(current_user["organization_id"])
+    contents = await file.read()
+    
+    try:
+        text = contents.decode("utf-8")
+        reader = csv.DictReader(io.StringIO(text))
+        rows = list(reader)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid CSV file: {str(e)}")
+    
+    imported = 0
+    errors = []
+    for idx, row in enumerate(rows, start=2):
+        try:
+            name = (row.get("name") or row.get("Name") or "").strip()
+            mobile = (row.get("mobile") or row.get("Mobile") or "").strip()
+            if not name or not mobile:
+                errors.append(f"Row {idx}: missing name or mobile")
+                continue
+            lead_count = await db.leads.count_documents({"organization_id": org_id})
+            lead_id = f"LEAD{lead_count + 1:05d}"
+            await db.leads.insert_one({
+                "lead_id": lead_id,
+                "name": name,
+                "mobile": mobile,
+                "email": row.get("email") or row.get("Email") or "",
+                "course_interested": row.get("course") or row.get("Course") or "General",
+                "state": row.get("state") or row.get("State") or "",
+                "city": row.get("city") or row.get("City") or "",
+                "lead_source": row.get("source") or row.get("Source") or "CSV Import",
+                "assigned_to": None,
+                "status": "New",
+                "organization_id": org_id,
+                "created_by": current_user["id"],
+                "created_at": datetime.now(timezone.utc),
+            })
+            imported += 1
+        except Exception as e:
+            errors.append(f"Row {idx}: {str(e)}")
+    
+    await log_activity(org_id, current_user["id"], current_user["name"], "imported_csv", "leads", None, f"{imported} leads imported")
+    return {"imported": imported, "errors": errors[:10], "total_errors": len(errors)}
+
+# ==================== Excel Export ====================
+@api_router.get("/reports/export-leads-excel")
+async def export_leads_excel(current_user: dict = Depends(get_current_user)):
+    org_id = ObjectId(current_user["organization_id"])
+    leads = await db.leads.find({"organization_id": org_id}).sort("created_at", -1).to_list(10000)
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Leads"
+    headers = ["Lead ID", "Name", "Mobile", "Email", "Course", "Source", "Status", "State", "City", "Created"]
+    ws.append(headers)
+    for lead in leads:
+        ws.append([
+            lead.get("lead_id", ""),
+            lead.get("name", ""),
+            lead.get("mobile", ""),
+            lead.get("email", ""),
+            lead.get("course_interested", ""),
+            lead.get("lead_source", ""),
+            lead.get("status", ""),
+            lead.get("state", ""),
+            lead.get("city", ""),
+            lead.get("created_at").strftime("%Y-%m-%d %H:%M") if isinstance(lead.get("created_at"), datetime) else str(lead.get("created_at", "")),
+        ])
+    
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=leads_{datetime.now().strftime('%Y%m%d')}.xlsx"},
+    )
+
+# ==================== WhatsApp Templates ====================
+class WhatsAppTemplateCreate(BaseModel):
+    name: str
+    body: str
+    category: Optional[str] = "general"
+
+@api_router.post("/whatsapp-templates")
+async def create_template(data: WhatsAppTemplateCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["super_admin", "org_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    org_id = ObjectId(current_user["organization_id"])
+    doc = {
+        "name": data.name,
+        "body": data.body,
+        "category": data.category,
+        "organization_id": org_id,
+        "created_by": current_user["id"],
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = await db.whatsapp_templates.insert_one(doc)
+    doc["_id"] = str(result.inserted_id)
+    doc["organization_id"] = str(org_id)
+    return doc
+
+@api_router.get("/whatsapp-templates")
+async def list_templates(current_user: dict = Depends(get_current_user)):
+    org_id = ObjectId(current_user["organization_id"])
+    templates = await db.whatsapp_templates.find({"organization_id": org_id}, {"organization_id": 0}).sort("created_at", -1).to_list(100)
+    for t in templates:
+        t["_id"] = str(t["_id"])
+    return templates
+
+@api_router.delete("/whatsapp-templates/{tpl_id}")
+async def delete_template(tpl_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["super_admin", "org_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    org_id = ObjectId(current_user["organization_id"])
+    result = await db.whatsapp_templates.delete_one({"_id": ObjectId(tpl_id), "organization_id": org_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"message": "Deleted"}
+
+# ==================== Public Lead Capture Widget ====================
+class PublicLeadCreate(BaseModel):
+    name: str
+    mobile: str
+    email: Optional[str] = None
+    course_interested: Optional[str] = "Inquiry"
+    message: Optional[str] = ""
+
+@api_router.get("/widget/token")
+async def get_widget_token(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["super_admin", "org_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    org_id = ObjectId(current_user["organization_id"])
+    org = await db.organizations.find_one({"_id": org_id})
+    if not org.get("widget_token"):
+        token = secrets.token_urlsafe(16)
+        await db.organizations.update_one({"_id": org_id}, {"$set": {"widget_token": token}})
+        return {"widget_token": token}
+    return {"widget_token": org["widget_token"]}
+
+@api_router.post("/widget/lead/{widget_token}")
+async def public_widget_lead(widget_token: str, data: PublicLeadCreate):
+    org = await db.organizations.find_one({"widget_token": widget_token})
+    if not org:
+        raise HTTPException(status_code=404, detail="Invalid widget token")
+    org_id = org["_id"]
+    lead_count = await db.leads.count_documents({"organization_id": org_id})
+    lead_id = f"LEAD{lead_count + 1:05d}"
+    await db.leads.insert_one({
+        "lead_id": lead_id,
+        "name": data.name,
+        "mobile": data.mobile,
+        "email": data.email,
+        "course_interested": data.course_interested or "Inquiry",
+        "state": "",
+        "city": "",
+        "lead_source": "Website Widget",
+        "assigned_to": None,
+        "status": "New",
+        "remarks": data.message or "",
+        "organization_id": org_id,
+        "created_by": None,
+        "created_at": datetime.now(timezone.utc),
+    })
+    return {"status": "success", "message": "Thanks! We'll be in touch shortly."}
+
+# ==================== Drip Campaigns (P2) ====================
+class CampaignCreate(BaseModel):
+    name: str
+    trigger: str
+    steps: List[Dict[str, Any]]
+
+@api_router.post("/campaigns")
+async def create_campaign(data: CampaignCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ["super_admin", "org_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    org_id = ObjectId(current_user["organization_id"])
+    doc = {
+        "name": data.name,
+        "trigger": data.trigger,
+        "steps": data.steps,
+        "active": True,
+        "organization_id": org_id,
+        "created_by": current_user["id"],
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = await db.campaigns.insert_one(doc)
+    doc["_id"] = str(result.inserted_id)
+    doc["organization_id"] = str(org_id)
+    return doc
+
+@api_router.get("/campaigns")
+async def list_campaigns(current_user: dict = Depends(get_current_user)):
+    org_id = ObjectId(current_user["organization_id"])
+    items = await db.campaigns.find({"organization_id": org_id}, {"organization_id": 0}).to_list(100)
+    for c in items:
+        c["_id"] = str(c["_id"])
+    return items
+
+# ==================== Advanced Analytics (P2) ====================
+@api_router.get("/analytics/cohort")
+async def get_cohort_analysis(current_user: dict = Depends(get_current_user)):
+    org_id = ObjectId(current_user["organization_id"])
+    # Cohort by source: leads vs admissions
+    pipeline = [
+        {"$match": {"organization_id": org_id}},
+        {"$group": {
+            "_id": "$lead_source",
+            "leads": {"$sum": 1},
+            "admissions": {"$sum": {"$cond": [{"$eq": ["$status", "Admission Done"]}, 1, 0]}},
+        }},
+    ]
+    rows = await db.leads.aggregate(pipeline).to_list(50)
+    return [
+        {
+            "source": r["_id"],
+            "leads": r["leads"],
+            "admissions": r["admissions"],
+            "conversion_rate": round(r["admissions"] / r["leads"] * 100, 1) if r["leads"] else 0,
+        }
+        for r in rows
+    ]
 
 # Include the router in the main app
 app.include_router(api_router)

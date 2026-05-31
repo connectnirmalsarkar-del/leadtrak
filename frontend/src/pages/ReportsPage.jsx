@@ -29,8 +29,24 @@ export default function ReportsPage() {
     }
   };
 
-  const handleExport = (format) => {
-    toast.success(`${format} export will be available in next release`);
+  const handleExport = async (format) => {
+    if (format === 'Excel') {
+      try {
+        const res = await axios.get(`${API}/reports/export-leads-excel`, { responseType: 'blob' });
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `leads_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        toast.success('Excel report downloaded');
+      } catch (e) {
+        toast.error('Export failed');
+      }
+    } else {
+      toast.info('PDF export — coming soon');
+    }
   };
 
   return (

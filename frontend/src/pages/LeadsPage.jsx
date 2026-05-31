@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API } from '@/context/AuthContext';
-import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare } from 'lucide-react';
+import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare, Upload, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -140,6 +140,39 @@ export default function LeadsPage() {
     }
   };
 
+  const handleCSVImport = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const { data } = await axios.post(`${API}/leads/import-csv`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success(`Imported ${data.imported} leads. ${data.total_errors} errors.`);
+      fetchLeads();
+    } catch (err) {
+      toast.error('Import failed');
+    }
+    e.target.value = '';
+  };
+
+  const handleExcelExport = async () => {
+    try {
+      const res = await axios.get(`${API}/reports/export-leads-excel`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `leads_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Excel downloaded');
+    } catch (err) {
+      toast.error('Export failed');
+    }
+  };
+
   return (
     <div className="space-y-6" data-testid="leads-page">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -149,15 +182,28 @@ export default function LeadsPage() {
           <p className="text-sm text-slate-600 mt-1">{leads.length} {leads.length === 1 ? 'lead' : 'leads'} total</p>
         </div>
 
-        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-          <DialogTrigger asChild>
-            <Button className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="add-lead-btn">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Lead
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
+        <div className="flex items-center gap-2">
+          <label htmlFor="csv-upload" className="cursor-pointer">
+            <div className="inline-flex items-center gap-1.5 h-10 px-3 border border-slate-300 hover:bg-slate-50 rounded-md text-sm font-medium text-slate-700">
+              <Upload className="w-4 h-4" />
+              Import CSV
+            </div>
+            <input id="csv-upload" type="file" accept=".csv" onChange={handleCSVImport} className="hidden" data-testid="csv-import-input" />
+          </label>
+          <Button variant="outline" onClick={handleExcelExport} data-testid="export-excel-leads-btn">
+            <Download className="w-4 h-4 mr-1.5" />
+            Excel
+          </Button>
+
+          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+            <DialogTrigger asChild>
+              <Button className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="add-lead-btn">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Lead
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
               <DialogTitle>Add New Lead</DialogTitle>
               <DialogDescription>Capture a new prospect into your pipeline</DialogDescription>
             </DialogHeader>
@@ -211,6 +257,7 @@ export default function LeadsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Filters */}

@@ -1,0 +1,38 @@
+{
+  "name": "EduCRM — Education CRM",
+  "short_name": "EduCRM",
+  "description": "AI-powered CRM built for schools, coaching institutes, and universities.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F8FAFC",
+  "theme_color": "#7C3AED",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity", "education"],
+  "shortcuts": [
+    {
+      "name": "Add Lead",
+      "url": "/leads",
+      "description": "Quickly add a new lead"
+    },
+    {
+      "name": "Dashboard",
+      "url": "/dashboard",
+      "description": "View your CRM dashboard"
+    }
+  ]
+}

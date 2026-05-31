@@ -16,6 +16,9 @@ import {
   Menu,
   X,
   Building2,
+  MessageSquare,
+  History,
+  Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -34,11 +37,14 @@ const navItems = [
   { path: '/followups', label: 'Follow-ups', icon: Calendar, testId: 'nav-followups' },
   { path: '/admissions', label: 'Admissions', icon: GraduationCap, testId: 'nav-admissions' },
   { path: '/tasks', label: 'Tasks', icon: CheckSquare, testId: 'nav-tasks' },
+  { path: '/whatsapp-templates', label: 'WhatsApp', icon: MessageSquare, testId: 'nav-whatsapp' },
   { path: '/reports', label: 'Reports', icon: BarChart3, testId: 'nav-reports' },
 ];
 
 const adminNavItems = [
   { path: '/users', label: 'Team Members', icon: Users, testId: 'nav-users' },
+  { path: '/lead-widget', label: 'Lead Widget', icon: Globe, testId: 'nav-widget' },
+  { path: '/activity-logs', label: 'Activity Logs', icon: History, testId: 'nav-activity' },
   { path: '/subscription', label: 'Subscription', icon: CreditCard, testId: 'nav-subscription' },
   { path: '/settings', label: 'Settings', icon: Settings, testId: 'nav-settings' },
 ];

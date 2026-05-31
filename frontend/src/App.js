@@ -15,6 +15,9 @@ import ReportsPage from '@/pages/ReportsPage';
 import UsersPage from '@/pages/UsersPage';
 import SettingsPage from '@/pages/SettingsPage';
 import SubscriptionPage from '@/pages/SubscriptionPage';
+import WhatsAppTemplatesPage from '@/pages/WhatsAppTemplatesPage';
+import ActivityLogsPage from '@/pages/ActivityLogsPage';
+import LeadWidgetPage from '@/pages/LeadWidgetPage';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const ProtectedRoute = ({ children }) => {
@@ -71,6 +74,9 @@ function App() {
           <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
+          <Route path="/whatsapp-templates" element={<ProtectedRoute><WhatsAppTemplatesPage /></ProtectedRoute>} />
+          <Route path="/activity-logs" element={<ProtectedRoute><ActivityLogsPage /></ProtectedRoute>} />
+          <Route path="/lead-widget" element={<ProtectedRoute><LeadWidgetPage /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
