@@ -35,6 +35,15 @@ import { toast } from 'sonner';
 const STATUS_OPTIONS = ['New', 'Contacted', 'Interested', 'Follow-up', 'Admission Done', 'Not Interested', 'Lost'];
 const SOURCES = ['Facebook Ads', 'Website', 'Google Ads', 'Referral', 'Walk-in', 'Telecalling'];
 
+const TEMP_OPTIONS = ['hot', 'warm', 'cold'];
+const tempBadgeClass = (t) => {
+  const k = (t || 'warm').toLowerCase();
+  if (k === 'hot') return 'bg-red-100 text-red-700 border-red-200';
+  if (k === 'cold') return 'bg-sky-100 text-sky-700 border-sky-200';
+  return 'bg-amber-100 text-amber-700 border-amber-200';
+};
+const tempEmoji = { hot: '🔥', warm: '☀️', cold: '❄️' };
+
 const statusBadgeClass = (status) => {
   const map = {
     'New': 'status-new',
@@ -72,7 +81,7 @@ export default function LeadsPage() {
 
   const [newLead, setNewLead] = useState({
     name: '', mobile: '', email: '', course_interested: '', state: '', city: '',
-    lead_source: 'Website', assigned_to: '', status: 'New'
+    lead_source: 'Website', assigned_to: '', status: 'New', temperature: 'warm'
   });
 
   const [followup, setFollowup] = useState({
@@ -124,7 +133,7 @@ export default function LeadsPage() {
       setDuplicate(null);
       setNewLead({
         name: '', mobile: '', email: '', course_interested: '', state: '', city: '',
-        lead_source: 'Website', assigned_to: '', status: 'New'
+        lead_source: 'Website', assigned_to: '', status: 'New', temperature: 'warm'
       });
       fetchLeads();
     } catch (e) {
@@ -419,6 +428,19 @@ export default function LeadsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2 col-span-2">
+                <Label>Temperature</Label>
+                <Select value={newLead.temperature} onValueChange={(v) => setNewLead({...newLead, temperature: v})}>
+                  <SelectTrigger data-testid="lead-temp-select"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TEMP_OPTIONS.map(opt => (
+                      <SelectItem key={opt} value={opt}>
+                        {tempEmoji[opt]} {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => { setShowAddDialog(false); setDuplicate(null); }} data-testid="cancel-add-lead-btn">Cancel</Button>
@@ -469,6 +491,7 @@ export default function LeadsPage() {
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Name</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">{t.offering}</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Source</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Temp</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Status</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Created</TableHead>
             </TableRow>
@@ -476,7 +499,7 @@ export default function LeadsPage() {
           <TableBody>
             {leads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-slate-500">
+                <TableCell colSpan={7} className="text-center py-12 text-slate-500">
                   No {t.leads.toLowerCase()} found. Click "Add {t.lead}" to get started.
                 </TableCell>
               </TableRow>
@@ -497,6 +520,11 @@ export default function LeadsPage() {
                   </TableCell>
                   <TableCell className="text-sm text-slate-700">{lead.course_interested}</TableCell>
                   <TableCell className="text-sm text-slate-600">{lead.lead_source}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={tempBadgeClass(lead.temperature)} data-testid={`temp-badge-${lead._id}`}>
+                      {tempEmoji[(lead.temperature || 'warm').toLowerCase()]} {(lead.temperature || 'warm')}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={statusBadgeClass(lead.status)}>{lead.status}</Badge>
                   </TableCell>
@@ -614,6 +642,31 @@ export default function LeadsPage() {
                   <div className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">{t.lead} Source</p>
                     <p className="text-sm text-slate-900">{selectedLead.lead_source}</p>
+                  </div>
+
+                  {/* Temperature */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Temperature</Label>
+                    <Select value={selectedLead.temperature || 'warm'} onValueChange={async (v) => {
+                      try {
+                        await axios.put(`${API}/leads/${selectedLead._id}`, { temperature: v });
+                        setSelectedLead({ ...selectedLead, temperature: v });
+                        setTimelineRefresh((r) => r + 1);
+                        fetchLeads();
+                        toast.success(`Marked as ${v}`);
+                      } catch (e) {
+                        toast.error('Failed to update temperature');
+                      }
+                    }}>
+                      <SelectTrigger data-testid="lead-detail-temp-select"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {TEMP_OPTIONS.map(opt => (
+                          <SelectItem key={opt} value={opt} data-testid={`temp-option-${opt}`}>
+                            {tempEmoji[opt]} {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Created */}

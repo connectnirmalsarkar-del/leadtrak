@@ -244,6 +244,7 @@ class LeadCreate(BaseModel):
     lead_source: str
     assigned_to: Optional[str] = None
     status: str = "New"
+    temperature: Optional[str] = "warm"  # hot | warm | cold
 
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
@@ -255,6 +256,7 @@ class LeadUpdate(BaseModel):
     lead_source: Optional[str] = None
     assigned_to: Optional[str] = None
     status: Optional[str] = None
+    temperature: Optional[str] = None  # hot | warm | cold
 
 class FollowupCreate(BaseModel):
     lead_id: str
@@ -1113,6 +1115,7 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
         "lead_source": data.lead_source,
         "assigned_to": assignee,
         "status": data.status,
+        "temperature": (data.temperature or "warm").lower(),
         "organization_id": org_id,
         "created_by": current_user["id"],
         "created_at": datetime.now(timezone.utc)
@@ -1262,6 +1265,14 @@ async def update_lead(lead_id: str, data: LeadUpdate, current_user: dict = Depen
             lead_id,
             "assigned",
             {"from": current.get("assigned_to"), "to": update_data["assigned_to"]},
+            current_user,
+            org_id,
+        )
+    if "temperature" in update_data and current.get("temperature") != update_data["temperature"]:
+        await log_lead_event(
+            lead_id,
+            "temperature_changed",
+            {"from": current.get("temperature") or "warm", "to": update_data["temperature"]},
             current_user,
             org_id,
         )
@@ -2259,6 +2270,111 @@ async def get_revenue_report(current_user: dict = Depends(get_current_user)):
     total_revenue = result[0]["total_revenue"] if result else 0
     
     return {"total_revenue": total_revenue}
+
+
+@api_router.get("/reports/lead-temperature")
+async def report_lead_temperature(current_user: dict = Depends(get_current_user)):
+    """Counts of hot / warm / cold leads (active leads only — exclude Lost & Admission Done)."""
+    org_id = ObjectId(current_user["organization_id"])
+    match = {"organization_id": org_id, "status": {"$nin": ["Lost", "Admission Done"]}}
+    if current_user["role"] in ("counselor", "telecaller"):
+        match["assigned_to"] = current_user["id"]
+    pipeline = [
+        {"$match": match},
+        {"$group": {"_id": {"$ifNull": ["$temperature", "warm"]}, "count": {"$sum": 1}}},
+    ]
+    results = await db.leads.aggregate(pipeline).to_list(10)
+    counts = {"hot": 0, "warm": 0, "cold": 0}
+    for r in results:
+        key = (r["_id"] or "warm").lower()
+        if key in counts:
+            counts[key] = r["count"]
+    counts["total"] = counts["hot"] + counts["warm"] + counts["cold"]
+    return counts
+
+
+@api_router.get("/reports/by-caller")
+async def report_by_caller(current_user: dict = Depends(get_current_user)):
+    """Per-caller performance: total leads, hot/warm/cold split, conversions, revenue."""
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only managers and admins can view team reports")
+    org_id = ObjectId(current_user["organization_id"])
+    users = await db.users.find(
+        {"organization_id": org_id, "role": {"$in": ["counselor", "telecaller", "manager"]}}
+    ).to_list(200)
+    rows = []
+    for u in users:
+        uid = str(u["_id"])
+        # Tenant + caller leads
+        leads_match = {"organization_id": org_id, "assigned_to": uid}
+        total_leads = await db.leads.count_documents(leads_match)
+        hot = await db.leads.count_documents({**leads_match, "temperature": "hot"})
+        warm = await db.leads.count_documents({**leads_match, "temperature": "warm"})
+        cold = await db.leads.count_documents({**leads_match, "temperature": "cold"})
+        lost = await db.leads.count_documents({**leads_match, "status": "Lost"})
+        converted = await db.leads.count_documents({**leads_match, "status": "Admission Done"})
+        revenue_pipe = [
+            {"$match": {"organization_id": org_id, "created_by": uid}},
+            {"$group": {"_id": None, "total": {"$sum": "$fees"}}},
+        ]
+        rev = await db.admissions.aggregate(revenue_pipe).to_list(1)
+        revenue = rev[0]["total"] if rev else 0
+        # Demos owned
+        demos_total = await db.demos.count_documents({"organization_id": org_id, "demo_owner_id": uid})
+        demos_done = await db.demos.count_documents({"organization_id": org_id, "demo_owner_id": uid, "status": "Completed"})
+        rows.append({
+            "user_id": uid,
+            "name": u.get("name"),
+            "role": u.get("role"),
+            "total_leads": total_leads,
+            "hot": hot, "warm": warm, "cold": cold,
+            "converted": converted,
+            "lost": lost,
+            "revenue": revenue,
+            "conversion_rate": round((converted / total_leads * 100) if total_leads else 0, 1),
+            "demos_total": demos_total,
+            "demos_done": demos_done,
+        })
+    rows.sort(key=lambda r: (-r["converted"], -r["revenue"], -r["total_leads"]))
+    return rows
+
+
+@api_router.get("/reports/by-demo-owner")
+async def report_by_demo_owner(current_user: dict = Depends(get_current_user)):
+    """Per-demo-owner stats: total scheduled, completed, outcomes split."""
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only managers and admins can view demo reports")
+    org_id = ObjectId(current_user["organization_id"])
+    pipeline = [
+        {"$match": {"organization_id": org_id}},
+        {"$group": {
+            "_id": {"id": "$demo_owner_id", "name": "$demo_owner_name"},
+            "total": {"$sum": 1},
+            "completed": {"$sum": {"$cond": [{"$eq": ["$status", "Completed"]}, 1, 0]}},
+            "interested": {"$sum": {"$cond": [{"$eq": ["$outcome", "interested"]}, 1, 0]}},
+            "not_interested": {"$sum": {"$cond": [{"$eq": ["$outcome", "not_interested"]}, 1, 0]}},
+            "reschedule": {"$sum": {"$cond": [{"$eq": ["$outcome", "reschedule"]}, 1, 0]}},
+            "no_show": {"$sum": {"$cond": [{"$eq": ["$outcome", "no_show"]}, 1, 0]}},
+        }},
+    ]
+    results = await db.demos.aggregate(pipeline).to_list(200)
+    rows = []
+    for r in results:
+        total = r["total"]
+        completed = r["completed"]
+        rows.append({
+            "demo_owner_id": r["_id"].get("id"),
+            "demo_owner_name": r["_id"].get("name"),
+            "total": total,
+            "completed": completed,
+            "interested": r["interested"],
+            "not_interested": r["not_interested"],
+            "reschedule": r["reschedule"],
+            "no_show": r["no_show"],
+            "completion_rate": round((completed / total * 100) if total else 0, 1),
+        })
+    rows.sort(key=lambda r: -r["completed"])
+    return rows
 
 # ==================== Integration Routes ====================
 @api_router.post("/integrations/facebook-leads")
