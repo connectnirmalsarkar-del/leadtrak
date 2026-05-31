@@ -1,0 +1,176 @@
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { API } from '@/context/AuthContext';
+import {
+  UserPlus,
+  ArrowRightLeft,
+  Phone,
+  RefreshCw,
+  Trophy,
+  XCircle,
+  StickyNote,
+  CircleDot,
+  Mic,
+} from 'lucide-react';
+
+const formatDate = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+};
+
+const EVENT_META = {
+  lead_created: { icon: UserPlus, color: 'violet', title: 'Lead created' },
+  status_changed: { icon: RefreshCw, color: 'blue', title: 'Status changed' },
+  assigned: { icon: UserPlus, color: 'indigo', title: 'Assigned' },
+  transferred: { icon: ArrowRightLeft, color: 'amber', title: 'Transferred' },
+  followup_added: { icon: Phone, color: 'sky', title: 'Follow-up logged' },
+  note_added: { icon: StickyNote, color: 'slate', title: 'Note added' },
+  admission_recorded: { icon: Trophy, color: 'emerald', title: 'Converted' },
+  lead_lost: { icon: XCircle, color: 'red', title: 'Marked as lost' },
+};
+
+const COLOR_CLASS = {
+  violet: 'bg-violet-100 text-violet-700 border-violet-200',
+  blue: 'bg-blue-100 text-blue-700 border-blue-200',
+  indigo: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+  amber: 'bg-amber-100 text-amber-700 border-amber-200',
+  sky: 'bg-sky-100 text-sky-700 border-sky-200',
+  slate: 'bg-slate-100 text-slate-700 border-slate-200',
+  emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  red: 'bg-red-100 text-red-700 border-red-200',
+};
+
+const EventBody = ({ event }) => {
+  const p = event.payload || {};
+  switch (event.event_type) {
+    case 'lead_created':
+      return (
+        <p className="text-sm text-slate-600">
+          Captured from <span className="font-medium text-slate-900">{p.source || 'Unknown'}</span> with status{' '}
+          <span className="font-medium text-slate-900">{p.status || 'New'}</span>
+        </p>
+      );
+    case 'status_changed':
+      return (
+        <p className="text-sm text-slate-600">
+          <span className="font-medium text-slate-900">{p.from || '—'}</span> → <span className="font-medium text-slate-900">{p.to || '—'}</span>
+        </p>
+      );
+    case 'assigned':
+      return (
+        <p className="text-sm text-slate-600">
+          Re-assigned <span className="font-medium text-slate-900">{p.from || 'unassigned'}</span> → <span className="font-medium text-slate-900">{p.to || 'unassigned'}</span>
+        </p>
+      );
+    case 'transferred':
+      return (
+        <div className="text-sm text-slate-600 space-y-1">
+          <p>
+            <span className="font-medium text-slate-900">{p.from_user_name || 'Unassigned'}</span>
+            {' → '}
+            <span className="font-medium text-slate-900">{p.to_user_name || '—'}</span>
+          </p>
+          {p.reason && <p className="text-xs italic text-slate-500">"{p.reason}"</p>}
+        </div>
+      );
+    case 'followup_added':
+      return (
+        <div className="space-y-2">
+          <p className="text-sm text-slate-700">{p.remarks}</p>
+          <p className="text-xs text-slate-500">
+            Scheduled for {p.followup_date} {p.followup_time}
+            {p.next_followup ? ` · next on ${p.next_followup}` : ''}
+          </p>
+          {p.voice_recording_url && (
+            <div className="bg-slate-50 border border-slate-200 rounded-md p-2 flex items-center gap-2" data-testid="timeline-voice-player">
+              <Mic className="w-3.5 h-3.5 text-violet-600 flex-shrink-0" />
+              <audio src={p.voice_recording_url} controls className="flex-1 h-8" />
+              {p.voice_recording_duration && (
+                <span className="text-[10px] font-mono text-slate-500">
+                  {Math.floor(p.voice_recording_duration)}s
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    case 'admission_recorded':
+      return (
+        <p className="text-sm text-slate-600">
+          {p.offering ? <>{p.offering} · </> : null}
+          <span className="font-mono text-slate-900">₹{Number(p.amount || 0).toLocaleString('en-IN')}</span>
+          {p.date ? <> · {p.date}</> : null}
+        </p>
+      );
+    case 'lead_lost':
+      return (
+        <p className="text-sm text-slate-600">Lead moved to Lost. Previous status: <span className="font-medium text-slate-900">{p.from}</span></p>
+      );
+    case 'note_added':
+      return <p className="text-sm text-slate-700">{p.note}</p>;
+    default:
+      return <p className="text-sm text-slate-500">{JSON.stringify(p)}</p>;
+  }
+};
+
+export default function LeadTimeline({ leadId, refreshKey }) {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!leadId) return;
+    setLoading(true);
+    axios
+      .get(`${API}/leads/${leadId}/timeline`)
+      .then(({ data }) => setEvents(data))
+      .catch(() => setEvents([]))
+      .finally(() => setLoading(false));
+  }, [leadId, refreshKey]);
+
+  if (loading) {
+    return <div className="py-8 text-center text-sm text-slate-400" data-testid="timeline-loading">Loading timeline…</div>;
+  }
+
+  if (events.length === 0) {
+    return (
+      <div className="py-10 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg" data-testid="timeline-empty">
+        <CircleDot className="w-6 h-6 mx-auto mb-2 text-slate-300" />
+        No activity yet. Events will appear here as work happens on this lead.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-0" data-testid="lead-timeline">
+      {events.map((e, idx) => {
+        const meta = EVENT_META[e.event_type] || { icon: CircleDot, color: 'slate', title: e.event_type };
+        const Icon = meta.icon;
+        const isLast = idx === events.length - 1;
+        return (
+          <div key={e._id} className="flex gap-3 pb-5 relative" data-testid={`timeline-event-${e.event_type}`}>
+            {/* Connector */}
+            {!isLast && (
+              <div className="absolute left-[15px] top-8 bottom-0 w-px bg-slate-200" aria-hidden />
+            )}
+            {/* Icon */}
+            <div className={`w-8 h-8 rounded-full border flex items-center justify-center flex-shrink-0 ${COLOR_CLASS[meta.color]}`}>
+              <Icon className="w-4 h-4" />
+            </div>
+            {/* Content */}
+            <div className="flex-1 min-w-0 pt-0.5">
+              <div className="flex items-baseline justify-between gap-2 mb-1">
+                <p className="text-sm font-semibold text-slate-900">{meta.title}</p>
+                <p className="text-[11px] text-slate-400 flex-shrink-0">{formatDate(e.created_at)}</p>
+              </div>
+              <p className="text-[11px] text-slate-500 mb-1.5">
+                by <span className="font-medium text-slate-700">{e.actor_name}</span>
+                {e.actor_role && <span className="text-slate-400"> · {e.actor_role.replace('_', ' ')}</span>}
+              </p>
+              <EventBody event={e} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

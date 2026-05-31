@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API } from '@/context/AuthContext';
-import { Calendar, Phone, MessageSquare, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { Calendar, Phone, MessageSquare, CheckCircle2, Clock, AlertCircle, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
@@ -31,6 +31,17 @@ const FollowupCard = ({ followup, onComplete, type }) => {
             )}
           </div>
           <p className="text-sm text-slate-600 mb-2">{followup.remarks}</p>
+          {followup.voice_recording_url && (
+            <div className="bg-violet-50 border border-violet-200 rounded-md p-2 flex items-center gap-2 mb-2" data-testid={`followup-voice-${followup._id}`}>
+              <Mic className="w-3.5 h-3.5 text-violet-600 flex-shrink-0" />
+              <audio src={followup.voice_recording_url} controls className="flex-1 h-8" />
+              {followup.voice_recording_duration && (
+                <span className="text-[10px] font-mono text-slate-500">
+                  {Math.floor(followup.voice_recording_duration)}s
+                </span>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
             <span className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />

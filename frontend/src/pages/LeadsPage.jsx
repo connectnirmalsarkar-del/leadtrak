@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { API } from '@/context/AuthContext';
+import { API, useAuth } from '@/context/AuthContext';
 import { useTerminology } from '@/lib/terminology';
-import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare, Upload, Download } from 'lucide-react';
+import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare, Upload, Download, ArrowRightLeft, AlertCircle, Clock, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import VoiceRecorder from '@/components/VoiceRecorder';
+import LeadTimeline from '@/components/LeadTimeline';
 import {
   Dialog,
   DialogContent,
@@ -46,6 +49,7 @@ const statusBadgeClass = (status) => {
 
 export default function LeadsPage() {
   const t = useTerminology();
+  const { user } = useAuth();
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -53,6 +57,15 @@ export default function LeadsPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [showFollowupDialog, setShowFollowupDialog] = useState(false);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [transferTo, setTransferTo] = useState('');
+  const [transferReason, setTransferReason] = useState('');
+  const [duplicate, setDuplicate] = useState(null);
+  const [timelineRefresh, setTimelineRefresh] = useState(0);
+  const [activeTab, setActiveTab] = useState('details');
+
+  const canTransfer = user && ['super_admin', 'org_admin', 'manager'].includes(user.role);
+  const canRecordVoice = user && ['super_admin', 'org_admin', 'manager', 'counselor', 'telecaller'].includes(user.role);
 
   const [newLead, setNewLead] = useState({
     name: '', mobile: '', email: '', course_interested: '', state: '', city: '',
@@ -60,7 +73,8 @@ export default function LeadsPage() {
   });
 
   const [followup, setFollowup] = useState({
-    followup_date: '', followup_time: '', remarks: '', next_followup: ''
+    followup_date: '', followup_time: '', remarks: '', next_followup: '',
+    voice: null,
   });
 
   useEffect(() => {
@@ -94,13 +108,69 @@ export default function LeadsPage() {
       await axios.post(`${API}/leads`, newLead);
       toast.success('Lead added successfully');
       setShowAddDialog(false);
+      setDuplicate(null);
       setNewLead({
         name: '', mobile: '', email: '', course_interested: '', state: '', city: '',
         lead_source: 'Website', assigned_to: '', status: 'New'
       });
       fetchLeads();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to add lead');
+      const detail = e.response?.data?.detail;
+      if (e.response?.status === 409 && detail && typeof detail === 'object') {
+        // Duplicate — show inline
+        setDuplicate(detail);
+        toast.error(detail.message || 'Duplicate lead');
+      } else {
+        toast.error(typeof detail === 'string' ? detail : 'Failed to add lead');
+      }
+    }
+  };
+
+  const checkForDuplicate = async () => {
+    const mobile = (newLead.mobile || '').trim();
+    const email = (newLead.email || '').trim();
+    if (!mobile && !email) {
+      setDuplicate(null);
+      return;
+    }
+    try {
+      const params = {};
+      if (mobile) params.mobile = mobile;
+      if (email) params.email = email;
+      const { data } = await axios.get(`${API}/leads/check-duplicate`, { params });
+      if (data.duplicate) {
+        setDuplicate({
+          message: `Lead with this ${data.matched_on} already exists`,
+          existing_lead: data.existing_lead,
+        });
+      } else {
+        setDuplicate(null);
+      }
+    } catch (e) {
+      // silent
+    }
+  };
+
+  const handleTransfer = async () => {
+    if (!selectedLead || !transferTo) {
+      toast.error('Please select a team member');
+      return;
+    }
+    try {
+      await axios.post(`${API}/leads/${selectedLead._id}/transfer`, {
+        new_assignee_id: transferTo,
+        reason: transferReason,
+      });
+      toast.success('Lead transferred');
+      setShowTransferDialog(false);
+      setTransferTo('');
+      setTransferReason('');
+      const newAssignee = users.find((u) => u._id === transferTo);
+      setSelectedLead({ ...selectedLead, assigned_to: transferTo, assigned_to_name: newAssignee?.name });
+      setTimelineRefresh((r) => r + 1);
+      fetchLeads();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to transfer lead');
     }
   };
 
@@ -110,6 +180,7 @@ export default function LeadsPage() {
       toast.success('Status updated');
       fetchLeads();
       if (selectedLead) setSelectedLead({ ...selectedLead, status });
+      setTimelineRefresh((r) => r + 1);
     } catch (e) {
       toast.error('Failed to update status');
     }
@@ -118,13 +189,24 @@ export default function LeadsPage() {
   const handleAddFollowup = async () => {
     if (!selectedLead) return;
     try {
-      await axios.post(`${API}/followups`, {
+      const payload = {
         lead_id: selectedLead._id,
-        ...followup
-      });
+        followup_date: followup.followup_date,
+        followup_time: followup.followup_time,
+        remarks: followup.remarks,
+        next_followup: followup.next_followup,
+      };
+      if (followup.voice) {
+        payload.voice_recording_url = followup.voice.url;
+        payload.voice_recording_public_id = followup.voice.public_id;
+        payload.voice_recording_duration = followup.voice.duration;
+      }
+      await axios.post(`${API}/followups`, payload);
       toast.success('Follow-up added');
       setShowFollowupDialog(false);
-      setFollowup({ followup_date: '', followup_time: '', remarks: '', next_followup: '' });
+      setFollowup({ followup_date: '', followup_time: '', remarks: '', next_followup: '', voice: null });
+      setTimelineRefresh((r) => r + 1);
+      setActiveTab('timeline');
     } catch (e) {
       toast.error('Failed to add follow-up');
     }
@@ -216,12 +298,37 @@ export default function LeadsPage() {
               </div>
               <div className="space-y-2">
                 <Label>Mobile *</Label>
-                <Input value={newLead.mobile} onChange={(e) => setNewLead({...newLead, mobile: e.target.value})} data-testid="lead-mobile-input" />
+                <Input
+                  value={newLead.mobile}
+                  onChange={(e) => setNewLead({...newLead, mobile: e.target.value})}
+                  onBlur={checkForDuplicate}
+                  data-testid="lead-mobile-input"
+                />
               </div>
               <div className="space-y-2 col-span-2">
                 <Label>Email</Label>
-                <Input type="email" value={newLead.email} onChange={(e) => setNewLead({...newLead, email: e.target.value})} data-testid="lead-email-input" />
+                <Input
+                  type="email"
+                  value={newLead.email}
+                  onChange={(e) => setNewLead({...newLead, email: e.target.value})}
+                  onBlur={checkForDuplicate}
+                  data-testid="lead-email-input"
+                />
               </div>
+              {duplicate && (
+                <div className="col-span-2 p-3 bg-red-50 border border-red-200 rounded-md flex items-start gap-2" data-testid="duplicate-warning">
+                  <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm">
+                    <p className="font-semibold text-red-800">{duplicate.message}</p>
+                    {duplicate.existing_lead && (
+                      <p className="text-xs text-red-700 mt-0.5">
+                        Existing: <span className="font-mono">{duplicate.existing_lead.lead_id}</span> · {duplicate.existing_lead.name} ({duplicate.existing_lead.mobile})
+                      </p>
+                    )}
+                    <p className="text-xs text-red-600 mt-1">Duplicate leads are blocked. Please use the existing record.</p>
+                  </div>
+                </div>
+              )}
               <div className="space-y-2 col-span-2">
                 <Label>{t.offering} Interested In *</Label>
                 <Input value={newLead.course_interested} onChange={(e) => setNewLead({...newLead, course_interested: e.target.value})} data-testid="lead-course-input" />
@@ -254,8 +361,15 @@ export default function LeadsPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddDialog(false)} data-testid="cancel-add-lead-btn">Cancel</Button>
-              <Button onClick={handleAddLead} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="submit-add-lead-btn">Create {t.lead}</Button>
+              <Button variant="outline" onClick={() => { setShowAddDialog(false); setDuplicate(null); }} data-testid="cancel-add-lead-btn">Cancel</Button>
+              <Button
+                onClick={handleAddLead}
+                disabled={!!duplicate}
+                className="bg-violet-700 hover:bg-violet-800 disabled:bg-slate-300 text-white"
+                data-testid="submit-add-lead-btn"
+              >
+                Create {t.lead}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -337,8 +451,9 @@ export default function LeadsPage() {
       </div>
 
       {/* Lead Detail Drawer */}
-      <Sheet open={!!selectedLead} onOpenChange={(o) => !o && setSelectedLead(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto" data-testid="lead-detail-drawer">
+      {/* Lead Detail Drawer */}
+      <Sheet open={!!selectedLead} onOpenChange={(o) => { if (!o) { setSelectedLead(null); setActiveTab('details'); } }}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto" data-testid="lead-detail-drawer">
           {selectedLead && (
             <>
               <SheetHeader>
@@ -350,79 +465,158 @@ export default function LeadsPage() {
                 <SheetDescription>{selectedLead.course_interested}</SheetDescription>
               </SheetHeader>
 
-              <div className="space-y-6 mt-6">
-                {/* Contact Info */}
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Contact</p>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3 text-sm">
-                      <Phone className="w-4 h-4 text-slate-400" />
-                      <a href={`tel:${selectedLead.mobile}`} className="text-slate-900 hover:underline">{selectedLead.mobile}</a>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
+                <TabsList className="w-full grid grid-cols-2" data-testid="lead-detail-tabs">
+                  <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
+                  <TabsTrigger value="timeline" data-testid="tab-timeline">
+                    <Activity className="w-3.5 h-3.5 mr-1.5" />
+                    Timeline
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="details" className="space-y-6 mt-5">
+                  {/* Contact Info */}
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Contact</p>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3 text-sm">
+                        <Phone className="w-4 h-4 text-slate-400" />
+                        <a href={`tel:${selectedLead.mobile}`} className="text-slate-900 hover:underline">{selectedLead.mobile}</a>
+                      </div>
+                      {selectedLead.email && (
+                        <div className="flex items-center gap-3 text-sm">
+                          <Mail className="w-4 h-4 text-slate-400" />
+                          <a href={`mailto:${selectedLead.email}`} className="text-slate-900 hover:underline">{selectedLead.email}</a>
+                        </div>
+                      )}
+                      {(selectedLead.city || selectedLead.state) && (
+                        <div className="flex items-center gap-3 text-sm">
+                          <MapPin className="w-4 h-4 text-slate-400" />
+                          <span className="text-slate-900">{[selectedLead.city, selectedLead.state].filter(Boolean).join(', ')}</span>
+                        </div>
+                      )}
                     </div>
-                    {selectedLead.email && (
-                      <div className="flex items-center gap-3 text-sm">
-                        <Mail className="w-4 h-4 text-slate-400" />
-                        <a href={`mailto:${selectedLead.email}`} className="text-slate-900 hover:underline">{selectedLead.email}</a>
-                      </div>
-                    )}
-                    {(selectedLead.city || selectedLead.state) && (
-                      <div className="flex items-center gap-3 text-sm">
-                        <MapPin className="w-4 h-4 text-slate-400" />
-                        <span className="text-slate-900">{[selectedLead.city, selectedLead.state].filter(Boolean).join(', ')}</span>
-                      </div>
-                    )}
                   </div>
-                </div>
 
-                {/* Quick Actions */}
-                <div className="flex gap-2">
-                  <Button
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                    onClick={() => window.open(`https://wa.me/${selectedLead.mobile.replace(/\D/g, '')}`, '_blank')}
-                    data-testid="whatsapp-lead-btn"
-                  >
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    WhatsApp
-                  </Button>
-                  <Button variant="outline" className="flex-1" onClick={() => setShowFollowupDialog(true)} data-testid="add-followup-btn">
-                    Add Follow-up
-                  </Button>
-                </div>
+                  {/* Quick Actions */}
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      onClick={() => window.open(`https://wa.me/${selectedLead.mobile.replace(/\D/g, '')}`, '_blank')}
+                      data-testid="whatsapp-lead-btn"
+                    >
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                      WhatsApp
+                    </Button>
+                    <Button variant="outline" className="flex-1" onClick={() => setShowFollowupDialog(true)} data-testid="add-followup-btn">
+                      <Clock className="w-4 h-4 mr-2" />
+                      Follow-up
+                    </Button>
+                  </div>
 
-                {/* Status Update */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Status</Label>
-                  <Select value={selectedLead.status} onValueChange={(v) => handleStatusChange(selectedLead._id, v)}>
-                    <SelectTrigger data-testid="lead-detail-status-select"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+                  {/* Status Update */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Status</Label>
+                    <Select value={selectedLead.status} onValueChange={(v) => handleStatusChange(selectedLead._id, v)}>
+                      <SelectTrigger data-testid="lead-detail-status-select"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                {/* Source */}
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Lead Source</p>
-                  <p className="text-sm text-slate-900">{selectedLead.lead_source}</p>
-                </div>
+                  {/* Assigned To + Transfer */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Assigned To</Label>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-slate-900 flex-1">
+                        {users.find((u) => u._id === selectedLead.assigned_to)?.name || <span className="text-slate-400">Unassigned</span>}
+                      </p>
+                      {canTransfer && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowTransferDialog(true)}
+                          data-testid="transfer-lead-btn"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5 mr-1.5" />
+                          Transfer
+                        </Button>
+                      )}
+                    </div>
+                  </div>
 
-                {/* Created */}
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Created</p>
-                  <p className="text-sm text-slate-900">{new Date(selectedLead.created_at).toLocaleString()}</p>
-                </div>
+                  {/* Source */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">{t.lead} Source</p>
+                    <p className="text-sm text-slate-900">{selectedLead.lead_source}</p>
+                  </div>
 
-                {/* Delete */}
-                <div className="pt-4 border-t border-slate-200">
-                  <Button variant="outline" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200" onClick={() => handleDelete(selectedLead._id)} data-testid="delete-lead-btn">
-                    Delete Lead
-                  </Button>
-                </div>
-              </div>
+                  {/* Created */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Created</p>
+                    <p className="text-sm text-slate-900">{new Date(selectedLead.created_at).toLocaleString()}</p>
+                  </div>
+
+                  {/* Delete */}
+                  <div className="pt-4 border-t border-slate-200">
+                    <Button variant="outline" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200" onClick={() => handleDelete(selectedLead._id)} data-testid="delete-lead-btn">
+                      Delete {t.lead}
+                    </Button>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="timeline" className="mt-5">
+                  <LeadTimeline leadId={selectedLead._id} refreshKey={timelineRefresh} />
+                </TabsContent>
+              </Tabs>
             </>
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Transfer Lead Dialog */}
+      <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transfer {t.lead}</DialogTitle>
+            <DialogDescription>Reassign this {t.lead.toLowerCase()} to another team member. The new owner will be notified.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>New owner *</Label>
+              <Select value={transferTo} onValueChange={setTransferTo}>
+                <SelectTrigger data-testid="transfer-to-select"><SelectValue placeholder="Select team member" /></SelectTrigger>
+                <SelectContent>
+                  {users
+                    .filter((u) => u._id !== selectedLead?.assigned_to)
+                    .map((u) => (
+                      <SelectItem key={u._id} value={u._id} data-testid={`transfer-option-${u._id}`}>
+                        {u.name} <span className="text-slate-400">({u.role.replace('_', ' ')})</span>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Reason (optional)</Label>
+              <Textarea
+                value={transferReason}
+                onChange={(e) => setTransferReason(e.target.value)}
+                rows={2}
+                placeholder="Why are you transferring this lead?"
+                data-testid="transfer-reason-input"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTransferDialog(false)}>Cancel</Button>
+            <Button onClick={handleTransfer} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="submit-transfer-btn">
+              Transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Follow-up Dialog */}
       <Dialog open={showFollowupDialog} onOpenChange={setShowFollowupDialog}>
@@ -446,6 +640,15 @@ export default function LeadsPage() {
               <Label>Remarks *</Label>
               <Textarea value={followup.remarks} onChange={(e) => setFollowup({...followup, remarks: e.target.value})} rows={3} data-testid="followup-remarks-input" />
             </div>
+            {canRecordVoice && (
+              <div className="space-y-2">
+                <Label>Voice note (optional)</Label>
+                <VoiceRecorder
+                  value={followup.voice}
+                  onChange={(v) => setFollowup({ ...followup, voice: v })}
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Next Follow-up (optional)</Label>
               <Input type="date" value={followup.next_followup} onChange={(e) => setFollowup({...followup, next_followup: e.target.value})} data-testid="followup-next-input" />

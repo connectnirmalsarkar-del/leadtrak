@@ -137,6 +137,29 @@ async def record_failed_attempt(identifier: str):
 async def clear_failed_attempts(identifier: str):
     await db.login_attempts.delete_one({"identifier": identifier})
 
+# ==================== Lead Timeline Helper ====================
+async def log_lead_event(
+    lead_id, event_type: str, payload: dict, user: dict, organization_id
+):
+    """Append an event to the lead_timeline collection.
+
+    event_type ∈ {lead_created, status_changed, assigned, transferred,
+                  followup_added, note_added, admission_recorded, lead_lost,
+                  lead_updated}
+    """
+    lead_oid = lead_id if isinstance(lead_id, ObjectId) else ObjectId(lead_id)
+    org_oid = organization_id if isinstance(organization_id, ObjectId) else ObjectId(organization_id)
+    await db.lead_timeline.insert_one({
+        "lead_id": lead_oid,
+        "organization_id": org_oid,
+        "event_type": event_type,
+        "payload": payload,
+        "actor_id": user.get("id"),
+        "actor_name": user.get("name"),
+        "actor_role": user.get("role"),
+        "created_at": datetime.now(timezone.utc),
+    })
+
 # ==================== Pydantic Models ====================
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -195,6 +218,13 @@ class FollowupCreate(BaseModel):
     followup_time: str
     remarks: str
     next_followup: Optional[str] = None
+    voice_recording_url: Optional[str] = None
+    voice_recording_public_id: Optional[str] = None
+    voice_recording_duration: Optional[float] = None
+
+class LeadTransfer(BaseModel):
+    new_assignee_id: str
+    reason: Optional[str] = ""
 
 class AdmissionCreate(BaseModel):
     student_name: str
@@ -395,7 +425,11 @@ async def startup_db():
     await db.login_attempts.create_index("identifier")
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.leads.create_index([("organization_id", 1), ("created_at", -1)])
+    await db.leads.create_index([("organization_id", 1), ("mobile", 1)])
+    await db.leads.create_index([("organization_id", 1), ("email", 1)])
     await db.followups.create_index([("organization_id", 1), ("followup_date", 1)])
+    await db.lead_timeline.create_index([("lead_id", 1), ("created_at", 1)])
+    await db.lead_timeline.create_index([("organization_id", 1), ("created_at", -1)])
     await seed_admin()
     await seed_demo_org_and_users()
     await seed_subscription_plans()
@@ -685,10 +719,57 @@ async def get_monthly_trend(current_user: dict = Depends(get_current_user)):
     return [{"month": f"{item['_id']['year']}-{item['_id']['month']:02d}", "count": item["count"]} for item in result]
 
 # ==================== Lead Routes ====================
+@api_router.get("/leads/check-duplicate")
+async def check_duplicate_lead(
+    mobile: Optional[str] = None,
+    email: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Check if a lead with the given mobile or email already exists.
+
+    Returns the existing lead summary if duplicate found, else `{duplicate: False}`.
+    """
+    if not mobile and not email:
+        return {"duplicate": False}
+    org_id = ObjectId(current_user["organization_id"])
+    or_clauses = []
+    if mobile:
+        or_clauses.append({"mobile": mobile})
+    if email:
+        or_clauses.append({"email": email})
+    existing = await db.leads.find_one(
+        {"organization_id": org_id, "$or": or_clauses},
+        {"name": 1, "mobile": 1, "email": 1, "lead_id": 1, "status": 1, "assigned_to": 1, "created_at": 1},
+    )
+    if not existing:
+        return {"duplicate": False}
+    existing["_id"] = str(existing["_id"])
+    matched_on = "mobile" if mobile and existing.get("mobile") == mobile else "email"
+    return {"duplicate": True, "matched_on": matched_on, "existing_lead": existing}
+
+
 @api_router.post("/leads")
 async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
-    
+
+    # Hard-block duplicates on mobile OR email
+    or_clauses = [{"mobile": data.mobile}]
+    if data.email:
+        or_clauses.append({"email": data.email})
+    duplicate = await db.leads.find_one(
+        {"organization_id": org_id, "$or": or_clauses},
+        {"name": 1, "mobile": 1, "email": 1, "lead_id": 1},
+    )
+    if duplicate:
+        duplicate["_id"] = str(duplicate["_id"])
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": f"Lead already exists with this {'mobile' if duplicate.get('mobile') == data.mobile else 'email'}",
+                "existing_lead": duplicate,
+            },
+        )
+
     # Generate lead_id
     lead_count = await db.leads.count_documents({"organization_id": org_id})
     lead_id = f"LEAD{lead_count + 1:05d}"
@@ -711,6 +792,21 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
     
     result = await db.leads.insert_one(lead_doc)
     lead_doc["_id"] = str(result.inserted_id)
+
+    # Log timeline event
+    await log_lead_event(
+        result.inserted_id,
+        "lead_created",
+        {
+            "name": data.name,
+            "source": data.lead_source,
+            "status": data.status,
+            "assigned_to": data.assigned_to,
+        },
+        current_user,
+        org_id,
+    )
+
     lead_doc["organization_id"] = str(org_id)
     
     # Create notification for assigned user
@@ -723,7 +819,7 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
             "organization_id": org_id,
             "created_at": datetime.now(timezone.utc)
         })
-    
+
     return lead_doc
 
 @api_router.get("/leads")
@@ -774,7 +870,12 @@ async def update_lead(lead_id: str, data: LeadUpdate, current_user: dict = Depen
     
     if not update_data:
         raise HTTPException(status_code=400, detail="No data to update")
-    
+
+    # Read current lead so we can log diffs
+    current = await db.leads.find_one({"_id": ObjectId(lead_id), "organization_id": org_id})
+    if not current:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
     result = await db.leads.update_one(
         {"_id": ObjectId(lead_id), "organization_id": org_id},
         {"$set": update_data}
@@ -782,7 +883,30 @@ async def update_lead(lead_id: str, data: LeadUpdate, current_user: dict = Depen
     
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
+    # Log meaningful changes
+    if "status" in update_data and current.get("status") != update_data["status"]:
+        new_status = update_data["status"]
+        event_type = (
+            "lead_lost" if new_status == "Lost"
+            else "admission_recorded" if new_status == "Admission Done"
+            else "status_changed"
+        )
+        await log_lead_event(
+            lead_id,
+            event_type,
+            {"from": current.get("status"), "to": new_status},
+            current_user,
+            org_id,
+        )
+    if "assigned_to" in update_data and current.get("assigned_to") != update_data["assigned_to"]:
+        await log_lead_event(
+            lead_id,
+            "assigned",
+            {"from": current.get("assigned_to"), "to": update_data["assigned_to"]},
+            current_user,
+            org_id,
+        )
     return {"message": "Lead updated successfully"}
 
 @api_router.delete("/leads/{lead_id}")
@@ -824,27 +948,120 @@ async def assign_lead(lead_id: str, assigned_to: str, current_user: dict = Depen
     
     return {"message": "Lead assigned successfully"}
 
+
+@api_router.post("/leads/{lead_id}/transfer")
+async def transfer_lead(lead_id: str, data: LeadTransfer, current_user: dict = Depends(get_current_user)):
+    """Transfer a lead to another team member. Only manager / org_admin / super_admin can transfer."""
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only managers and admins can transfer leads")
+
+    org_id = ObjectId(current_user["organization_id"])
+    lead = await db.leads.find_one({"_id": ObjectId(lead_id), "organization_id": org_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Validate new assignee belongs to same org
+    new_assignee = await db.users.find_one({"_id": ObjectId(data.new_assignee_id), "organization_id": org_id})
+    if not new_assignee:
+        raise HTTPException(status_code=400, detail="New assignee not found in your organization")
+
+    previous_assignee_id = lead.get("assigned_to")
+    previous_assignee = None
+    if previous_assignee_id:
+        previous_assignee = await db.users.find_one({"_id": ObjectId(previous_assignee_id)}, {"name": 1})
+
+    await db.leads.update_one(
+        {"_id": ObjectId(lead_id), "organization_id": org_id},
+        {"$set": {"assigned_to": data.new_assignee_id}},
+    )
+
+    await log_lead_event(
+        lead_id,
+        "transferred",
+        {
+            "from_user_id": previous_assignee_id,
+            "from_user_name": previous_assignee.get("name") if previous_assignee else None,
+            "to_user_id": data.new_assignee_id,
+            "to_user_name": new_assignee.get("name"),
+            "reason": data.reason or "",
+        },
+        current_user,
+        org_id,
+    )
+
+    # Notify new assignee
+    await db.notifications.insert_one({
+        "user_id": data.new_assignee_id,
+        "message": f"Lead '{lead['name']}' has been transferred to you by {current_user['name']}",
+        "type": "lead_transferred",
+        "read": False,
+        "organization_id": org_id,
+        "created_at": datetime.now(timezone.utc),
+    })
+
+    return {"message": "Lead transferred successfully"}
+
+
+@api_router.get("/leads/{lead_id}/timeline")
+async def get_lead_timeline(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Return the full chronological timeline for a lead. Tenant isolated."""
+    org_id = ObjectId(current_user["organization_id"])
+    lead = await db.leads.find_one({"_id": ObjectId(lead_id), "organization_id": org_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    events = await db.lead_timeline.find(
+        {"lead_id": ObjectId(lead_id), "organization_id": org_id}
+    ).sort("created_at", 1).to_list(1000)
+    for e in events:
+        e["_id"] = str(e["_id"])
+        e["lead_id"] = str(e["lead_id"])
+        e.pop("organization_id", None)
+        if isinstance(e.get("created_at"), datetime):
+            e["created_at"] = e["created_at"].isoformat()
+    return events
+
 # ==================== Followup Routes ====================
 @api_router.post("/followups")
 async def create_followup(data: FollowupCreate, current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
-    
+
     followup_doc = {
         "lead_id": data.lead_id,
         "followup_date": data.followup_date,
         "followup_time": data.followup_time,
         "remarks": data.remarks,
         "next_followup": data.next_followup,
+        "voice_recording_url": data.voice_recording_url,
+        "voice_recording_public_id": data.voice_recording_public_id,
+        "voice_recording_duration": data.voice_recording_duration,
         "completed": False,
         "organization_id": org_id,
         "created_by": current_user["id"],
+        "created_by_name": current_user.get("name"),
         "created_at": datetime.now(timezone.utc)
     }
     
     result = await db.followups.insert_one(followup_doc)
     followup_doc["_id"] = str(result.inserted_id)
     followup_doc["organization_id"] = str(org_id)
-    
+
+    # Log timeline event for this lead
+    await log_lead_event(
+        data.lead_id,
+        "followup_added",
+        {
+            "followup_id": followup_doc["_id"],
+            "followup_date": data.followup_date,
+            "followup_time": data.followup_time,
+            "remarks": data.remarks,
+            "next_followup": data.next_followup,
+            "voice_recording_url": data.voice_recording_url,
+            "voice_recording_duration": data.voice_recording_duration,
+        },
+        current_user,
+        org_id,
+    )
+
     return followup_doc
 
 @api_router.get("/followups")
@@ -913,13 +1130,25 @@ async def create_admission(data: AdmissionCreate, current_user: dict = Depends(g
     admission_doc["_id"] = str(result.inserted_id)
     admission_doc["organization_id"] = str(org_id)
     
-    # Update lead status if lead_id provided
+    # Update lead status if lead_id provided + log timeline event
     if data.lead_id:
         await db.leads.update_one(
             {"_id": ObjectId(data.lead_id)},
             {"$set": {"status": "Admission Done"}}
         )
-    
+        await log_lead_event(
+            data.lead_id,
+            "admission_recorded",
+            {
+                "admission_id": admission_doc["_id"],
+                "offering": data.course,
+                "amount": data.fees,
+                "date": data.admission_date,
+            },
+            current_user,
+            org_id,
+        )
+
     return admission_doc
 
 @api_router.get("/admissions")
@@ -1756,6 +1985,55 @@ async def delete_organization(org_id: str, current_user: dict = Depends(get_curr
     await db.support_tickets.delete_many({"organization_id": oid})
     await db.organizations.delete_one({"_id": oid})
     return {"message": "Organization and all related data deleted"}
+
+# ==================== Voice Recording Upload ====================
+ALLOWED_VOICE_MIME = {
+    "audio/webm", "audio/mp4", "audio/mpeg", "audio/mp3", "audio/ogg",
+    "audio/wav", "audio/x-wav", "audio/x-m4a", "audio/aac",
+    # Some browsers send video/* for webm audio recordings
+    "video/webm",
+}
+MAX_VOICE_SIZE = 3 * 1024 * 1024  # 3 MB
+
+@api_router.post("/uploads/voice-recording")
+async def upload_voice_recording(
+    file: UploadFile = File(...),
+    duration: Optional[float] = Form(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload a follow-up voice recording (max 3 minutes, 3 MB) to Cloudinary.
+
+    Allowed roles: counselor, telecaller, manager, org_admin, super_admin.
+    """
+    if current_user["role"] not in ("super_admin", "org_admin", "manager", "counselor", "telecaller"):
+        raise HTTPException(status_code=403, detail="Not authorized to upload voice recordings")
+    if not os.environ.get("CLOUDINARY_CLOUD_NAME"):
+        raise HTTPException(status_code=500, detail="Voice uploads not configured")
+    if file.content_type not in ALLOWED_VOICE_MIME:
+        raise HTTPException(status_code=400, detail=f"Audio type {file.content_type} not allowed")
+    content = await file.read()
+    if len(content) > MAX_VOICE_SIZE:
+        raise HTTPException(status_code=400, detail="Recording too large. Max 3 MB (≈3 minutes) allowed.")
+    if duration is not None and duration > 180:
+        raise HTTPException(status_code=400, detail="Recording duration exceeds 3 minutes")
+    folder = f"leadtrak/voice/{current_user['organization_id']}"
+    try:
+        result = cloudinary.uploader.upload(
+            content,
+            folder=folder,
+            resource_type="video",  # Cloudinary stores audio under 'video' resource type
+        )
+    except Exception as e:
+        logger.error(f"Cloudinary voice upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Voice upload failed")
+    return {
+        "url": result.get("secure_url"),
+        "public_id": result.get("public_id"),
+        "duration": result.get("duration") or duration,
+        "size": len(content),
+        "mime_type": file.content_type,
+    }
+
 
 # ==================== Support Tickets ====================
 ALLOWED_TICKET_MIME = {
