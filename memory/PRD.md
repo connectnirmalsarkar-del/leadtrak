@@ -229,7 +229,14 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Lead Add form: **State** and **City** are now cascading Select dropdowns (city options re-populate when state changes)
 - ✅ New page **/platform/locations** for Super Admin — search, state filter, toggle active/inactive, edit, delete, custom vs default badges
 
-### Completed 2026-05-31 — Lead Capture Widget Redesign
+### Completed 2026-05-31 — Unified Lead Capture (Manual + CSV + Widget + FB + Google)
+- ✅ **Schema parity** — `LeadCreate` / `LeadUpdate` now accept `company_name`, `budget_range`, `preferred_date`, `travellers`, `remarks` (all sources persist same fields)
+- ✅ **Manual Entry industry-aware** — `GET /api/leads/form-config` returns the same field list as the widget; LeadsPage Add dialog renders Industry-specific extras dynamically
+- ✅ **CSV importer** — sample CSV is now 12 columns; parser recognizes `company_name`, `budget_range`, `preferred_date`, `travellers`, `temperature` (case-insensitive header variants supported)
+- ✅ **Facebook Lead Ads webhook** — `GET /api/integrations/facebook-leads` for hub.challenge verify; `POST` with full HMAC-SHA256 signature verification (constant-time compare), tenant resolution by page_id, Graph API leadgen fetch with per-tenant page_access_token, FB → CRM field mapping
+- ✅ **Google Ads webhook** — `POST /api/integrations/google-ads/{tenant_id}` accepts both Google's native `user_column_data` array and flat JSON (Zapier-style); auth via per-tenant `webhook_secret`
+- ✅ **Cross-channel idempotency** — partial unique index on `(organization_id, source_external_id)` prevents duplicate webhook ingestion; helper `_ingest_external_lead()` shared by FB + Google
+- ✅ **17/17 new backend tests + 41/41 regression pass** (iteration_8 report)
 - ✅ **Industry-aware** fields — config endpoint `GET /api/widget/config/{token}` returns the right field list for tenant's industry (Education → Course; IT → Company + Service; Real Estate → Property Type + Budget; Healthcare → Treatment + Date; Insurance → Type + Premium; Travel → Destination + Date + Travellers; Retail → Product; Fitness → Plan; Generic → Inquiry)
 - ✅ **Services Catalog connection** — primary Service/Course/Plan/Product field is `service-select` type, dropdown auto-populated from the org's active services collection (Education shows actual courses; IT shows actual services etc.). Falls back to text input if catalog is empty.
 - ✅ Cascading **State + City** dropdown — public endpoint `GET /api/widget/cities/{token}?state=…` powers it; no auth required

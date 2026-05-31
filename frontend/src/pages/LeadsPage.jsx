@@ -121,7 +121,9 @@ export default function LeadsPage() {
   const [formConfig, setFormConfig] = useState({ fields: [], services: [] });
 
   useEffect(() => {
-    axios.get(`${API}/leads/form-config`).then(({ data }) => setFormConfig(data)).catch(() => {});
+    axios.get(`${API}/leads/form-config`)
+      .then(({ data }) => setFormConfig(data))
+      .catch((e) => console.warn('Could not load lead form config:', e?.response?.status));
   }, []);
 
   const [followup, setFollowup] = useState({
