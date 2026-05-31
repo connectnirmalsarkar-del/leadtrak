@@ -1,0 +1,66 @@
+{
+  "summary": "Iteration 9 — FINAL QA pass. Comprehensive end-to-end UI walkthrough + backend regression. Backend: 25/25 new tests + 58/58 regression (saas_billing, multi_industry, lead_capture_sources) all PASS. Frontend: logged in as org_admin / counselor / super_admin; visited every major page; verified subscription badge, Webhook Health (NEW), Lead Widget services dropdown, cascading state/city, Platform Locations (36 states / 386 cities), Platform Organizations (4 tabs + per-row wallet/calendar/suspend/delete), tenant isolation, RBAC, mobile responsiveness.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Counselor route guard on /integrations/webhooks",
+        "issue": "Before redirecting counselor to /dashboard, the WebhookHealth page briefly mounts and fires /api/webhook-logs + /api/webhook-logs/stats which return 403. A 'Failed to load webhook logs' toast flashes for ~300ms before the redirect. Functionally correct (backend enforces 403, counselor cannot read data) but the error toast is unwanted UX noise. Fix: check role in route loader/effect BEFORE issuing API calls, OR suppress toast on 403 from this page.",
+        "selector": "/integrations/webhooks route, useEffect fetch",
+        "priority": "LOW"
+      },
+      {
+        "component": "Recharts containers on Dashboard",
+        "issue": "Console warnings 'The width(-1) and height(-1) of chart should be greater than 0' fire many times on dashboard load. Charts still render visibly. Caused by ResponsiveContainer parent having zero initial height on first paint. Cosmetic console noise only.",
+        "selector": "ResponsiveContainer in dashboard charts",
+        "priority": "LOW"
+      },
+      {
+        "component": "Integrations / Google Ads card (carry-over from iter 8)",
+        "issue": "Card 'Connected' badge does not reflect presence of webhook_secret only. Webhook ingestion works fine; cosmetic mismatch.",
+        "selector": "Integrations → Google Ads card",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Counselor dashboard at /dashboard",
+        "issues": ["After counselor login, sidebar correctly hides Admin section but the 'HELP' label still shows even with only Support — minor visual artifact, acceptable."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration9_final_qa.py",
+    "/app/test_reports/pytest/iteration_9.xml"
+  ],
+  "action_items": [
+    "LOW: Guard /integrations/webhooks route by role on client BEFORE issuing API fetches to avoid 'Failed to load webhook logs' toast flash for counselor.",
+    "LOW: Set explicit min-height on ResponsiveContainer wrappers on Dashboard to silence Recharts width/height warnings.",
+    "LOW (carry-over): Update Google Ads integration card 'Connected' badge to read webhook_secret presence."
+  ],
+  "critical_code_review_comments": [
+    "server.py is still ~4500 lines — recommended modular split (leads / billing / integrations / webhooks / platform).",
+    "Webhook Health: orgadmin-scoped queries on webhook_logs collection look correctly filtered by organization_id; counselor 403 enforced via require_admin dependency — verified.",
+    "Lead Widget /api/widget/config/{token} is correctly public (no auth) and exposes only the org's services + brand + industry config — no PII leak.",
+    "Platform Locations endpoints correctly require super_admin; org_admin gets 401/403 — verified.",
+    "Tenant isolation: orgadmin@demo.com cannot read super-admin org leads (auth/me + /leads filtered by organization_id at query layer) — verified.",
+    "Subscription badge hidden for super_admin (Header conditional on user.role !== 'super_admin') — verified visually."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration9_final_qa.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (25/25 new + 58/58 regression = 83/83)",
+    "frontend": "100% (14/14 page navigations, login as 3 roles, tenant + RBAC + mobile all pass)"
+  },
+  "test_credentials": "Super Admin: admin@educationcrm.com / Admin@123 ; Org Admin: orgadmin@demo.com / Demo@123 ; Counselor: counselor@demo.com / Demo@123 (httpOnly cookies, requests.Session in pytest).",
+  "seed_data_creation": "Test 9 created 1 widget lead (TEST_WIDGET_*) in demo org via /api/widget/lead/{token}, and 1 transient city under Goa state which was immediately deleted. No persistent side-effects beyond a single widget lead.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "App is in solid green state. All five lead capture channels (Manual, CSV, Lead Widget, Facebook webhook, Google Ads webhook) + Webhook Health dashboard + SaaS billing/trials + multi-industry terminology + locations (36 states / 386 cities incl. West Bengal 186) + Platform admin (Organizations + Locations) + RBAC + tenant isolation all verified end-to-end. Only LOW-priority cosmetic items remain (counselor 403 toast flash on /integrations/webhooks, Recharts width-warning, Google Ads connected-badge logic). FB webhook outbound Graph API call uses fake token by design — imported=0 expected.",
+  "rca of the issue": "N/A — no production bugs. Two test-script fixes during the run: (1) /api/platform/locations/cities expects field 'city' not 'name'; (2) /api/widget/cities/{token} returns {cities:[...]} not a bare list. Both are correct API shapes; test was adjusted."
+}
