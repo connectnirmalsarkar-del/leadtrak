@@ -1,132 +1,164 @@
 {
-  "theme": "light",
-  "archetype": "5 (Luxury / Corporate Premium)",
-  "design_direction": "LeadSquared-inspired Enterprise CRM. High-contrast, dense data presentation, premium enterprise aesthetics, distinctive deep purple brand color, dark sidebar with light main content area for the dashboard, and a rich, deep-gradient hero section for the marketing page.",
+  "theme_and_archetype": {
+    "domain": "Enterprise Education CRM",
+    "theme": "Light",
+    "archetype": "Hybrid 3/4 (Pastel & Soft / Swiss & High-Contrast)",
+    "rationale": "Balances the deep violet branding (#7C3AED) and requested rounded-xl/Sora styling (soft/friendly) with the high density and structural clarity needed for an enterprise CRM dashboard (Swiss)."
+  },
+  "typography": {
+    "headings": {
+      "family": "Sora",
+      "weights": "font-semibold, font-bold",
+      "classes": "tracking-tight"
+    },
+    "body": {
+      "family": "Plus Jakarta Sans",
+      "weights": "font-normal, font-medium, font-semibold",
+      "classes": "tracking-normal"
+    },
+    "numbers": {
+      "family": "JetBrains Mono",
+      "weights": "font-medium, font-bold",
+      "classes": "tracking-tighter"
+    },
+    "hierarchy": {
+      "h1": "text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900",
+      "h2": "text-lg sm:text-xl font-semibold text-slate-800",
+      "h3": "text-base font-semibold text-slate-800",
+      "body": "text-sm text-slate-600",
+      "label": "text-[11px] sm:text-xs font-semibold tracking-wider uppercase text-slate-500",
+      "stat_number": "text-2xl sm:text-3xl font-bold font-mono tracking-tighter text-slate-900"
+    }
+  },
   "colors": {
     "primary": {
-      "DEFAULT": "#5B3CC4",
-      "50": "#F5F3FF",
-      "100": "#EDE9FE",
-      "200": "#DDD6FE",
-      "300": "#C4B5FD",
-      "400": "#A78BFA",
-      "500": "#8B5CF6",
-      "600": "#7C3AED",
-      "700": "#6D28D9",
-      "800": "#5B21B6",
-      "900": "#4C1D95",
-      "950": "#2E1065"
+      "DEFAULT": "#7C3AED",
+      "hover": "#6D28D9",
+      "light": "#EDE9FE",
+      "light_hover": "#DDD6FE"
     },
     "background": {
-      "marketing": "#FFFFFF",
-      "dashboard": "#F8FAFC",
-      "sidebar": "#0F172A"
-    },
-    "surface": {
-      "DEFAULT": "#FFFFFF",
-      "glass": "rgba(255, 255, 255, 0.7)",
-      "dark_glass": "rgba(15, 23, 42, 0.6)"
-    },
-    "text": {
-      "primary": "#0F172A",
-      "secondary": "#475569",
-      "muted": "#94A3B8",
-      "inverse": "#FFFFFF",
-      "sidebar": "#CBD5E1",
-      "sidebar_active": "#FFFFFF"
+      "app": "#F8FAFC",
+      "card": "#FFFFFF",
+      "sidebar": "#0F172A",
+      "sidebar_hover": "#1E293B"
     },
     "border": {
       "DEFAULT": "#E2E8F0",
       "sidebar": "#1E293B"
     },
-    "accent": {
-      "success": "#10B981",
-      "warning": "#F59E0B",
-      "danger": "#EF4444",
-      "info": "#3B82F6"
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#475569",
+      "tertiary": "#94A3B8",
+      "sidebar": "#94A3B8",
+      "sidebar_active": "#FFFFFF"
+    },
+    "chart_palette": [
+      "#7C3AED",
+      "#4F46E5",
+      "#D946EF",
+      "#10B981",
+      "#F59E0B"
+    ],
+    "status": {
+      "success": { "bg": "#D1FAE5", "text": "#065F46", "icon": "#10B981" },
+      "warning": { "bg": "#FEF3C7", "text": "#92400E", "icon": "#F59E0B" },
+      "danger": { "bg": "#FEE2E2", "text": "#991B1B", "icon": "#EF4444" },
+      "info": { "bg": "#DBEAFE", "text": "#1E40AF", "icon": "#3B82F6" }
     }
   },
-  "typography": {
-    "headings": {
-      "family": "'Sora', sans-serif",
-      "weight": "600, 700",
-      "tracking": "tight"
-    },
-    "body": {
-      "family": "'Plus Jakarta Sans', sans-serif",
-      "weight": "400, 500"
-    },
-    "mono": {
-      "family": "'JetBrains Mono', monospace"
+  "grids_and_layouts": {
+    "page_container": "min-h-screen bg-slate-50",
+    "dashboard_container": "max-w-[1440px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6",
+    "control_room_grid": "grid grid-cols-12 gap-6",
+    "card": "bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 p-5",
+    "sections": {
+      "header": "col-span-12 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2",
+      "top_stats": "col-span-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4",
+      "funnel": "col-span-12 lg:col-span-8",
+      "source_pie": "col-span-12 lg:col-span-4",
+      "trends_chart": "col-span-12 lg:col-span-8",
+      "leaderboard": "col-span-12 lg:col-span-4",
+      "follow_ups": "col-span-12 lg:col-span-8",
+      "activity_feed": "col-span-12 lg:col-span-4"
     }
   },
-  "spacing_and_layout": {
-    "marketing": {
-      "padding": "py-24",
-      "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
-      "hero_padding": "pt-32 pb-20"
+  "component_usage": {
+    "header": {
+      "title": "Page Title + Date string (e.g., Today, 24 Oct)",
+      "actions": "Date Range Filter (Shadcn Select) + Primary Button (+ New Lead) in Violet"
     },
-    "dashboard": {
-      "sidebar_width": "w-64",
-      "header_height": "h-16",
-      "content_padding": "p-6 lg:p-8"
+    "topbar": {
+      "structure": "Org switcher dropdown (left), Search (center/optional), Notification Bell with Red Dot & Dropdown + User Avatar (right)"
     },
-    "border_radius": {
-      "card": "rounded-xl",
-      "button": "rounded-lg",
-      "input": "rounded-md"
+    "sidebar": {
+      "style": "bg-slate-900 border-r border-slate-800 text-slate-400. Active states text-white bg-slate-800 rounded-lg. Logo in violet gradient."
+    },
+    "stat_cards": {
+      "structure": "Label (text-xs uppercase), Number (JetBrains Mono text-3xl), Trend Arrow + Percentage (text-sm green/red), Inline Sparkline at the bottom (Recharts TinyLineChart). Height is fully utilized."
+    },
+    "funnel_chart": {
+      "structure": "Horizontal stacked bar chart. Labels: New, Contacted, Interested, Admission. Use Recharts BarChart with layout='vertical' or custom HTML div segments for conversion visualization."
+    },
+    "activity_feed": {
+      "structure": "Right rail vertical timeline. Custom relative positioned dots with left border. Actor + Verb + Timestamp."
+    },
+    "today_followups": {
+      "structure": "Compact list. Name, time, status. Quick actions on hover: WhatsApp icon button (green), Call icon button (violet)."
+    },
+    "empty_state": {
+      "structure": "Centered flex container. Custom 3D illustration, title 'No data yet', subtitle 'Start adding leads to see your dashboard come alive', CTA Button 'Add your first lead'."
     }
   },
-  "components": {
-    "marketing": {
-      "hero": {
-        "style": "Center-aligned, massive H1 text (text-5xl to text-7xl), Framer Motion rotating words ('sales teams', 'marketing teams', 'admission teams'). Rich deep purple/indigo background blobs or gradients. Trust logos positioned right below.",
-        "bg_image": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/12c8d7afe338dc0e9393d63367d98f953c43fc9b4e5ff254c956f14201662e88.png"
-      },
-      "features": {
-        "style": "Apple-style Bento Grid. Cards with subtle 1px borders, off-white or white backgrounds, and a high-contrast deep purple icon. Hover lift and shadow effect."
-      },
-      "testimonials": {
-        "style": "Horizontal carousel or bento-style layout. High-quality avatar photos. Real names and institutions."
-      },
-      "industry_tabs": {
-        "style": "Horizontal pills or underlined tabs to switch between 'Schools', 'Universities', 'Coaching'. The active tab shows a specific image and features."
-      }
-    },
-    "dashboard": {
-      "layout": {
-        "style": "Dark sidebar (#0F172A) with white text/icons. Main content area is Light (#F8FAFC) with White cards (#FFFFFF). Top header has a white background and subtle bottom border."
-      },
-      "cards": {
-        "style": "Crisp, flat white cards with subtle border (#E2E8F0) and very soft shadow (shadow-sm). Use tight padding (p-4 to p-6) for density."
-      },
-      "tables": {
-        "style": "Dense, highly scannable. Small text (text-sm). Right-aligned numbers. Badge components for statuses (e.g., Lead Status). Clickable rows that open a right-side Shadcn Sheet for details."
-      },
-      "charts": {
-        "style": "Recharts with primary color (#5B3CC4) and distinct secondary colors. Avoid default colors. Maintain clean tooltips."
-      }
-    }
+  "motion_and_interactions": {
+    "numbers": "Use framer-motion to animate number count-up on initial load for the stat cards.",
+    "cards": "Subtle hover lift `-translate-y-0.5` and `shadow-md` for interactive widgets/rows.",
+    "buttons": "Active state scaling `active:scale-95`, hover background transitions.",
+    "dropdowns": "Shadcn defaults with standard enter/exit opacity and scale animations."
+  },
+  "accessibility": {
+    "testing_attributes": "All buttons, links, dropdowns, form inputs, and key numeric outputs MUST have a `data-testid` attribute (e.g. `data-testid='new-lead-button'`).",
+    "contrast": "Ensure white text on violet background passes APCA guidelines. Ensure slate-500 labels on white background are legible.",
+    "screen_readers": "Add `aria-hidden='true'` to decorative icons. Ensure Sparklines have an `aria-label` describing the trend."
   },
   "media_urls": {
-    "hero_background": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/12c8d7afe338dc0e9393d63367d98f953c43fc9b4e5ff254c956f14201662e88.png",
-    "dashboard_mockup": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/ba6d23cca0a64e8ddf69ac304c53309e0961ad72ca5e0d124f053016840b3900.png",
-    "security_badges": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/d00bf82017ebc50a041ccae4d11803c806f0ebdd715e43fe2909aa3b75a2d91b.png",
-    "industry_images": {
-      "university": "https://images.pexels.com/photos/13440917/pexels-photo-13440917.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "school": "https://images.unsplash.com/photo-1632988663082-4bac2c1847a0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwyfHx1bml2ZXJzaXR5JTIwY2FtcHVzJTIwYnVpbGRpbmd8ZW58MHx8fHwxNzgwMjE0MDcyfDA&ixlib=rb-4.1.0&q=85"
+    "empty_state": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/e6eff6bbe53ec3c5c5380c96406726591f54685f9cd4e55e56f103f0668c0e4e.png",
+      "description": "Friendly, minimalist 3D illustration for dashboard empty states",
+      "usage": "Use in widgets when there is no data to show, or as the main page empty state."
     },
-    "testimonial_avatars": [
-      "https://images.unsplash.com/photo-1590650213165-c1fef80648c4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2ODl8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjB0ZWFjaGVyJTIwZWR1Y2F0b3IlMjBzbWlsaW5nfGVufDB8fHx8MTc4MDIxNDA3Mnww&ixlib=rb-4.1.0&q=85",
-      "https://images.unsplash.com/photo-1526080652727-5b77f74eacd2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2ODl8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjB0ZWFjaGVyJTIwZWR1Y2F0b3IlMjBzbWlsaW5nfGVufDB8fHx8MTc4MDIxNDA3Mnww&ixlib=rb-4.1.0&q=85",
-      "https://images.unsplash.com/photo-1573496799652-408c2ac9fe98?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2ODl8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjB0ZWFjaGVyJTIwZWR1Y2F0b3IlMjBzbWlsaW5nfGVufDB8fHx8MTc4MDIxNDA3Mnww&ixlib=rb-4.1.0&q=85"
+    "leaderboard_icon": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/f95e835b71855c45986f483d376f30ba1bc1e4074bbe4cb0454e16b736db1c83.png",
+      "description": "3D trophy with arrow icon",
+      "usage": "Use as a header icon or decorative element in the Counselor Leaderboard widget."
+    },
+    "avatars": [
+      {
+        "url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MHx8fHwxNzgwMjE2NDgzfDA&ixlib=rb-4.1.0&q=85",
+        "usage": "Female avatar for leaderboard or topbar user profile"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1560250097-0b93528c311a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MHx8fHwxNzgwMjE2NDgzfDA&ixlib=rb-4.1.0&q=85",
+        "usage": "Male avatar for leaderboard"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1652471943570-f3590a4e52ed?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MHx8fHwxNzgwMjE2NDgzfDA&ixlib=rb-4.1.0&q=85",
+        "usage": "Male avatar for activity feed"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1685760259914-ee8d2c92d2e0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHw0fHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MHx8fHwxNzgwMjE2NDgzfDA&ixlib=rb-4.1.0&q=85",
+        "usage": "Female avatar for activity feed"
+      }
     ]
   },
   "instructions_to_main_agent": {
-    "testing": "All interactive and key informational elements MUST include a data-testid attribute in kebab-case (e.g., data-testid=\"login-submit-button\").",
-    "font_setup": "Update index.css and tailwind.config.js to import and use 'Sora' for headings and 'Plus Jakarta Sans' for sans/body.",
-    "icons": "Use 'lucide-react' for all dashboard icons.",
-    "animations": "Use 'framer-motion' for the marketing page hero text rotation, card hovers, and tab transitions.",
-    "sidebar": "Ensure the DashboardLayout.jsx component uses a dark slate background for the Sidebar with white/gray text for links, and white background for the main topbar."
+    "1": "Update /app/frontend/src/pages/DashboardPage.jsx (or similar entry file) to implement the 'control_room_grid' (12-column grid) defined in grids_and_layouts.",
+    "2": "Retain the existing deep violet brand (#7C3AED) but apply it purposefully for primary CTAs, active states, and charts. Maintain the dark sidebar.",
+    "3": "Use Shadcn components for Select (date filter), DropdownMenu (notifications/org switcher), and Buttons. Heavily customize their styling to match the rounded-xl aesthetic and minimal 1px slate-200 border look.",
+    "4": "Integrate Recharts. Add TinyLineChart for stat card sparklines, BarChart for the Lead Funnel, PieChart for Source distribution, and LineChart for the main monthly trends block.",
+    "5": "Do NOT use placeholder text or dummy image services. Use the exact Unsplash avatar URLs for the Leaderboard and Activity Feed, and the generated 3D illustrations for the empty state.",
+    "6": "Add `data-testid` to EVERY interactive element (buttons, filters, tabs) and key data points (stat numbers) to support robust automated E2E tests.",
+    "7": "Integrate framer-motion for micro-interactions: animate number count-ups in the stat cards and use a subtle stagger-children animation on the initial dashboard render."
   }
 }
