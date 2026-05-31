@@ -16,8 +16,10 @@ export default function AdmissionsPage() {
   const [admissions, setAdmissions] = useState([]);
   const [revenue, setRevenue] = useState(0);
   const [services, setServices] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const emptyForm = {
+    lead_id: '',
     student_name: '', mobile: '',
     service_id: '',
     discount_amount: '0',
@@ -26,6 +28,10 @@ export default function AdmissionsPage() {
   };
   const [form, setForm] = useState(emptyForm);
 
+  const selectedLead = useMemo(
+    () => leads.find((l) => l._id === form.lead_id),
+    [leads, form.lead_id]
+  );
   const selectedService = useMemo(
     () => services.find((s) => s._id === form.service_id),
     [services, form.service_id]
@@ -40,22 +46,47 @@ export default function AdmissionsPage() {
     fetchData();
   }, []);
 
+  // When lead picked, auto-fill name/mobile + try to pre-select matching service
+  useEffect(() => {
+    if (selectedLead) {
+      const matchedService = services.find(
+        (s) => s.name.toLowerCase() === (selectedLead.course_interested || '').toLowerCase()
+      );
+      setForm((f) => ({
+        ...f,
+        student_name: selectedLead.name || '',
+        mobile: selectedLead.mobile || '',
+        service_id: matchedService ? matchedService._id : f.service_id,
+      }));
+    }
+  }, [selectedLead, services]);
+
   const fetchData = async () => {
     try {
-      const [admRes, revRes, srvRes] = await Promise.all([
+      const [admRes, revRes, srvRes, leadsRes] = await Promise.all([
         axios.get(`${API}/admissions`),
         axios.get(`${API}/reports/revenue`),
         axios.get(`${API}/services`),
+        axios.get(`${API}/leads`),
       ]);
       setAdmissions(admRes.data);
       setRevenue(revRes.data.total_revenue);
       setServices(srvRes.data);
+      // Filter to non-converted leads only (status != Admission Done / Lost)
+      const eligible = (leadsRes.data || []).filter(
+        (l) => !['Admission Done', 'Lost'].includes(l.status)
+      );
+      setLeads(eligible);
     } catch (e) {
       toast.error('Failed to load admissions');
     }
   };
 
   const handleAdd = async () => {
+    if (!form.lead_id) {
+      toast.error(`Please select an existing ${t.lead.toLowerCase()} from the list`);
+      return;
+    }
     if (!form.service_id) {
       toast.error(`Please select a ${t.offering.toLowerCase()}`);
       return;
@@ -69,6 +100,7 @@ export default function AdmissionsPage() {
         student_name: form.student_name,
         mobile: form.mobile,
         course: selectedService?.name || '',
+        lead_id: form.lead_id,
         service_id: form.service_id,
         base_price: basePrice,
         discount_amount: discount,
@@ -106,15 +138,34 @@ export default function AdmissionsPage() {
               <DialogDescription>Add a new {t.contact.toLowerCase()} {t.conversion.toLowerCase()}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>{t.contact} Name *</Label>
-                  <Input value={form.student_name} onChange={(e) => setForm({...form, student_name: e.target.value})} data-testid="adm-student-input" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Mobile *</Label>
-                  <Input value={form.mobile} onChange={(e) => setForm({...form, mobile: e.target.value})} data-testid="adm-mobile-input" />
-                </div>
+              <div className="space-y-2">
+                <Label>Select {t.lead} from your pipeline *</Label>
+                <Select value={form.lead_id} onValueChange={(v) => setForm({...form, lead_id: v})}>
+                  <SelectTrigger data-testid="adm-lead-select">
+                    <SelectValue placeholder={`Pick a ${t.lead.toLowerCase()} that is converting`} />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {leads.map((l) => (
+                      <SelectItem key={l._id} value={l._id} data-testid={`adm-lead-option-${l._id}`}>
+                        <div className="flex flex-col py-0.5">
+                          <span className="font-medium text-sm">{l.name} <span className="text-slate-400 font-mono">· {l.lead_id}</span></span>
+                          <span className="text-[11px] text-slate-500">{l.mobile} · {l.course_interested || '—'} · {l.status}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                    {leads.length === 0 && (
+                      <SelectItem value="__none__" disabled>
+                        No eligible {t.leads.toLowerCase()}. Convert one from your pipeline first.
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                {selectedLead && (
+                  <div className="text-xs text-slate-500 px-3 py-2 bg-slate-50 rounded-md border border-slate-200">
+                    <span className="font-medium text-slate-700">{selectedLead.name}</span> · {selectedLead.mobile}
+                    {selectedLead.email && <> · {selectedLead.email}</>}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">

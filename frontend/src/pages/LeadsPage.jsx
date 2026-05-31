@@ -52,6 +52,7 @@ export default function LeadsPage() {
   const { user } = useAuth();
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
+  const [services, setServices] = useState([]);
   const [filterStatus, setFilterStatus] = useState('all');
   const [search, setSearch] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -80,6 +81,7 @@ export default function LeadsPage() {
   useEffect(() => {
     fetchLeads();
     fetchUsers();
+    fetchServices();
   }, [filterStatus, search]);
 
   const fetchLeads = async () => {
@@ -100,6 +102,15 @@ export default function LeadsPage() {
       setUsers(data);
     } catch (e) {
       // ignore if user doesn't have permission
+    }
+  };
+
+  const fetchServices = async () => {
+    try {
+      const { data } = await axios.get(`${API}/services`);
+      setServices(data);
+    } catch (e) {
+      // services optional — silent
     }
   };
 
@@ -233,12 +244,36 @@ export default function LeadsPage() {
       const { data } = await axios.post(`${API}/leads/import-csv`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      toast.success(`Imported ${data.imported} leads. ${data.total_errors} errors.`);
+      const skipped = data.skipped_duplicates || 0;
+      const errCount = data.total_errors || 0;
+      const distCount = Object.keys(data.distribution || {}).length;
+      toast.success(
+        `Imported ${data.imported} ${t.leads.toLowerCase()}` +
+        (skipped ? ` · ${skipped} duplicates skipped` : '') +
+        (distCount ? ` · distributed to ${distCount} callers` : '') +
+        (errCount ? ` · ${errCount} errors` : '')
+      );
       fetchLeads();
     } catch (err) {
       toast.error('Import failed');
     }
     e.target.value = '';
+  };
+
+  const handleDownloadSample = async () => {
+    try {
+      const res = await axios.get(`${API}/leads/csv-sample`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'leadtrak_sample_leads.csv');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Sample CSV downloaded');
+    } catch (err) {
+      toast.error('Failed to download sample');
+    }
   };
 
   const handleExcelExport = async () => {
@@ -267,6 +302,10 @@ export default function LeadsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleDownloadSample} data-testid="download-csv-sample-btn">
+            <Download className="w-3.5 h-3.5 mr-1.5" />
+            Sample CSV
+          </Button>
           <label htmlFor="csv-upload" className="cursor-pointer">
             <div className="inline-flex items-center gap-1.5 h-10 px-3 border border-slate-300 hover:bg-slate-50 rounded-md text-sm font-medium text-slate-700">
               <Upload className="w-4 h-4" />
@@ -331,7 +370,26 @@ export default function LeadsPage() {
               )}
               <div className="space-y-2 col-span-2">
                 <Label>{t.offering} Interested In *</Label>
-                <Input value={newLead.course_interested} onChange={(e) => setNewLead({...newLead, course_interested: e.target.value})} data-testid="lead-course-input" />
+                <Select
+                  value={newLead.course_interested}
+                  onValueChange={(v) => setNewLead({...newLead, course_interested: v})}
+                >
+                  <SelectTrigger data-testid="lead-course-select">
+                    <SelectValue placeholder={`Select ${t.offering.toLowerCase()}`} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {services.map((s) => (
+                      <SelectItem key={s._id} value={s.name} data-testid={`lead-course-option-${s._id}`}>
+                        {s.name} {s.category && <span className="text-slate-400">· {s.category}</span>}
+                      </SelectItem>
+                    ))}
+                    {services.length === 0 && (
+                      <SelectItem value="General" disabled>
+                        No {t.offerings.toLowerCase()} configured — ask admin to add under Services & Pricing
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label>State</Label>

@@ -145,6 +145,40 @@ def safe_object_id(value: str, field: str = "id") -> ObjectId:
     except Exception:
         raise HTTPException(status_code=400, detail=f"Invalid {field}")
 
+
+# ==================== Round-robin Auto-Assign ====================
+async def pick_round_robin_assignee(org_id) -> Optional[str]:
+    """Round-robin allocator across active counselors + telecallers in the org.
+
+    Uses `organizations.last_assigned_user_id` to remember the last winner so that
+    100 leads ÷ 5 callers = 20 each over time.
+    Respects `organizations.auto_assign_enabled` (default True).
+    Returns the user_id string of the next assignee, or None if disabled / no callers.
+    """
+    org = await db.organizations.find_one(
+        {"_id": org_id}, {"last_assigned_user_id": 1, "auto_assign_enabled": 1}
+    )
+    if (org or {}).get("auto_assign_enabled") is False:
+        return None
+    callers = await db.users.find(
+        {"organization_id": org_id, "role": {"$in": ["counselor", "telecaller"]}},
+        {"_id": 1, "name": 1, "created_at": 1},
+    ).sort("created_at", 1).to_list(500)
+    if not callers:
+        return None
+    last = (org or {}).get("last_assigned_user_id")
+    ids = [str(c["_id"]) for c in callers]
+    if last in ids:
+        next_idx = (ids.index(last) + 1) % len(ids)
+    else:
+        next_idx = 0
+    chosen = ids[next_idx]
+    await db.organizations.update_one(
+        {"_id": org_id},
+        {"$set": {"last_assigned_user_id": chosen}},
+    )
+    return chosen
+
 # ==================== Lead Timeline Helper ====================
 async def log_lead_event(
     lead_id, event_type: str, payload: dict, user: dict, organization_id
@@ -473,6 +507,103 @@ async def seed_services_for_existing_orgs():
                 logger.info(f"Seeded {len(services_seed)} default services for org {org['_id']}")
 
 
+async def seed_demo_timeline_lead():
+    """Create a fully-progressed demo lead inside the Bright Future Coaching org so users
+    can see what a rich timeline looks like (created → contacted → interested →
+    followup with voice → transferred → converted)."""
+    demo_org = await db.organizations.find_one({"name": "Bright Future Coaching (Demo)"})
+    if not demo_org:
+        return
+    org_id = demo_org["_id"]
+    if await db.leads.find_one({"organization_id": org_id, "mobile": "9988123456"}):
+        return  # already seeded
+    counselor = await db.users.find_one({"organization_id": org_id, "role": "counselor"})
+    manager = await db.users.find_one({"organization_id": org_id, "role": "manager"})
+    telecaller = await db.users.find_one({"organization_id": org_id, "role": "telecaller"})
+    org_admin = await db.users.find_one({"organization_id": org_id, "role": "org_admin"})
+    if not (counselor and manager and telecaller and org_admin):
+        return
+    lead_count = await db.leads.count_documents({"organization_id": org_id})
+    lead_id_str = f"LEAD{lead_count + 1:05d}"
+    base_time = datetime.now(timezone.utc) - timedelta(days=7)
+    lead_doc = {
+        "lead_id": lead_id_str,
+        "name": "Demo — Ananya Banerjee",
+        "mobile": "9988123456",
+        "email": "ananya.demo@example.com",
+        "course_interested": "MBA Full-time",
+        "state": "West Bengal",
+        "city": "Kolkata",
+        "lead_source": "Facebook Ad",
+        "assigned_to": str(counselor["_id"]),
+        "status": "Admission Done",
+        "organization_id": org_id,
+        "created_by": str(org_admin["_id"]),
+        "created_at": base_time,
+    }
+    lead_result = await db.leads.insert_one(lead_doc)
+    lead_oid = lead_result.inserted_id
+
+    # Walk it through the journey
+    events = [
+        (0, "lead_created", {
+            "name": "Demo — Ananya Banerjee", "source": "Facebook Ad",
+            "status": "New", "assigned_to": str(counselor["_id"]),
+        }, telecaller, "telecaller"),
+        (1, "status_changed", {"from": "New", "to": "Contacted"}, counselor, "counselor"),
+        (1, "followup_added", {
+            "remarks": "First call — student interested in MBA Full-time. Asked about placement stats and fee structure. Sounded positive.",
+            "followup_date": (base_time + timedelta(days=2)).strftime("%Y-%m-%d"),
+            "followup_time": "11:00",
+            "next_followup": (base_time + timedelta(days=3)).strftime("%Y-%m-%d"),
+        }, counselor, "counselor"),
+        (2, "status_changed", {"from": "Contacted", "to": "Interested"}, counselor, "counselor"),
+        (3, "followup_added", {
+            "remarks": "Second call — discussed fees (₹2,40,000), parents want a sibling discount. Booked campus visit Saturday 11 AM.",
+            "followup_date": (base_time + timedelta(days=4)).strftime("%Y-%m-%d"),
+            "followup_time": "16:30",
+            "next_followup": (base_time + timedelta(days=5)).strftime("%Y-%m-%d"),
+        }, counselor, "counselor"),
+        (4, "transferred", {
+            "from_user_id": str(counselor["_id"]),
+            "from_user_name": counselor["name"],
+            "to_user_id": str(manager["_id"]),
+            "to_user_name": manager["name"],
+            "reason": "Escalated for discount approval beyond counselor authority",
+        }, manager, "manager"),
+        (5, "status_changed", {"from": "Interested", "to": "Follow-up"}, manager, "manager"),
+        (5, "followup_added", {
+            "remarks": "Manager call — approved ₹15,000 sibling discount. Family confirmed payment within 48 hours.",
+            "followup_date": (base_time + timedelta(days=6)).strftime("%Y-%m-%d"),
+            "followup_time": "10:00",
+        }, manager, "manager"),
+        (6, "admission_recorded", {
+            "offering": "MBA Full-time",
+            "amount": 225000,
+            "base_price": 240000,
+            "discount_amount": 15000,
+            "discount_reason": "Sibling discount approved by manager",
+            "date": (base_time + timedelta(days=6)).strftime("%Y-%m-%d"),
+        }, manager, "manager"),
+        (6, "status_changed", {"from": "Follow-up", "to": "Admission Done"}, manager, "manager"),
+    ]
+    timeline_docs = []
+    for day_offset, etype, payload, actor, role in events:
+        timeline_docs.append({
+            "lead_id": lead_oid,
+            "organization_id": org_id,
+            "event_type": etype,
+            "payload": payload,
+            "actor_id": str(actor["_id"]),
+            "actor_name": actor["name"],
+            "actor_role": role,
+            "created_at": base_time + timedelta(days=day_offset, minutes=len(timeline_docs) * 17),
+        })
+    if timeline_docs:
+        await db.lead_timeline.insert_many(timeline_docs)
+    logger.info(f"Seeded demo timeline lead {lead_id_str} with {len(events)} events")
+
+
 @app.on_event("startup")
 async def startup_db():
     await db.users.create_index("email", unique=True)
@@ -489,6 +620,7 @@ async def startup_db():
     await seed_subscription_plans()
     await migrate_industry_field()
     await seed_services_for_existing_orgs()
+    await seed_demo_timeline_lead()
     logger.info("Database initialized and indexes created")
 
 # ==================== Auth Routes ====================
@@ -928,7 +1060,12 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
     # Generate lead_id
     lead_count = await db.leads.count_documents({"organization_id": org_id})
     lead_id = f"LEAD{lead_count + 1:05d}"
-    
+
+    # Auto round-robin if no assignee specified
+    assignee = data.assigned_to
+    if not assignee:
+        assignee = await pick_round_robin_assignee(org_id)
+
     lead_doc = {
         "lead_id": lead_id,
         "name": data.name,
@@ -938,7 +1075,7 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
         "state": data.state,
         "city": data.city,
         "lead_source": data.lead_source,
-        "assigned_to": data.assigned_to,
+        "assigned_to": assignee,
         "status": data.status,
         "organization_id": org_id,
         "created_by": current_user["id"],
@@ -956,7 +1093,7 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
             "name": data.name,
             "source": data.lead_source,
             "status": data.status,
-            "assigned_to": data.assigned_to,
+            "assigned_to": assignee,
         },
         current_user,
         org_id,
@@ -965,9 +1102,9 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
     lead_doc["organization_id"] = str(org_id)
     
     # Create notification for assigned user
-    if data.assigned_to:
+    if assignee:
         await db.notifications.insert_one({
-            "user_id": data.assigned_to,
+            "user_id": assignee,
             "message": f"New lead '{data.name}' has been assigned to you",
             "type": "lead_assigned",
             "read": False,
@@ -987,13 +1124,17 @@ async def get_leads(
 ):
     org_id = ObjectId(current_user["organization_id"])
     query = {"organization_id": org_id}
-    
+
+    # Strict caller-level visibility: counselor/telecaller see ONLY their own leads
+    if current_user["role"] in ("counselor", "telecaller"):
+        query["assigned_to"] = current_user["id"]
+    elif assigned_to:
+        query["assigned_to"] = assigned_to
+
     if status:
         query["status"] = status
     if source:
         query["lead_source"] = source
-    if assigned_to:
-        query["assigned_to"] = assigned_to
     if search:
         query["$or"] = [
             {"name": {"$regex": search, "$options": "i"}},
@@ -1014,7 +1155,11 @@ async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user))
     
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
+    # Strict caller-level visibility
+    if current_user["role"] in ("counselor", "telecaller") and lead.get("assigned_to") != current_user["id"]:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
     lead["_id"] = str(lead["_id"])
     return lead
 
@@ -1159,10 +1304,15 @@ async def transfer_lead(lead_id: str, data: LeadTransfer, current_user: dict = D
 
 @api_router.get("/leads/{lead_id}/timeline")
 async def get_lead_timeline(lead_id: str, current_user: dict = Depends(get_current_user)):
-    """Return the full chronological timeline for a lead. Tenant isolated."""
+    """Return the full chronological timeline for a lead. Tenant isolated.
+
+    Counselor/telecaller may only view timeline for leads assigned to them.
+    """
     org_id = ObjectId(current_user["organization_id"])
     lead = await db.leads.find_one({"_id": ObjectId(lead_id), "organization_id": org_id})
     if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if current_user["role"] in ("counselor", "telecaller") and lead.get("assigned_to") != current_user["id"]:
         raise HTTPException(status_code=404, detail="Lead not found")
     events = await db.lead_timeline.find(
         {"lead_id": ObjectId(lead_id), "organization_id": org_id}
@@ -1802,14 +1952,21 @@ async def get_activity_feed(current_user: dict = Depends(get_current_user)):
 async def get_today_followups(current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    followups = await db.followups.find({"organization_id": org_id, "followup_date": today}).limit(5).to_list(5)
+    query = {"organization_id": org_id, "followup_date": today}
+    # Strict caller visibility: counselor/telecaller see only their own followups
+    if current_user["role"] in ("counselor", "telecaller"):
+        query["created_by"] = current_user["id"]
+    followups = await db.followups.find(query).limit(20).to_list(20)
     for fu in followups:
         fu["_id"] = str(fu["_id"])
         fu.pop("organization_id", None)
-        lead = await db.leads.find_one({"_id": ObjectId(fu["lead_id"])}, {"name": 1, "mobile": 1})
-        if lead:
-            fu["lead_name"] = lead["name"]
-            fu["lead_mobile"] = lead["mobile"]
+        try:
+            lead = await db.leads.find_one({"_id": ObjectId(fu["lead_id"])}, {"name": 1, "mobile": 1})
+            if lead:
+                fu["lead_name"] = lead["name"]
+                fu["lead_mobile"] = lead["mobile"]
+        except Exception:
+            pass
     return followups
 
 # ==================== Activity Logs ====================
@@ -1836,6 +1993,22 @@ async def log_activity(org_id, user_id, user_name, action, target_type, target_i
     })
 
 # ==================== CSV Lead Import ====================
+@api_router.get("/leads/csv-sample")
+async def download_csv_sample(current_user: dict = Depends(get_current_user)):
+    """Download a sample CSV file with headers + 3 example rows."""
+    csv_text = (
+        "name,mobile,email,course,source,state,city\n"
+        "Aisha Khan,9876500101,aisha@example.com,MBA Full-time,Facebook Ad,Maharashtra,Mumbai\n"
+        "Rohit Sharma,9876500102,rohit@example.com,BBA,Website,Karnataka,Bengaluru\n"
+        "Sneha Patel,9876500103,sneha@example.com,PGDM,Walk-in,Gujarat,Ahmedabad\n"
+    )
+    return StreamingResponse(
+        io.BytesIO(csv_text.encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=leadtrak_sample_leads.csv"},
+    )
+
+
 @api_router.post("/leads/import-csv")
 async def import_leads_csv(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ["super_admin", "org_admin", "manager"]:
@@ -1850,39 +2023,68 @@ async def import_leads_csv(file: UploadFile = File(...), current_user: dict = De
         rows = list(reader)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid CSV file: {str(e)}")
-    
+
     imported = 0
+    skipped_duplicates = 0
     errors = []
+    distribution = {}  # caller_id -> count
     for idx, row in enumerate(rows, start=2):
         try:
             name = (row.get("name") or row.get("Name") or "").strip()
             mobile = (row.get("mobile") or row.get("Mobile") or "").strip()
+            email = (row.get("email") or row.get("Email") or "").strip()
             if not name or not mobile:
                 errors.append(f"Row {idx}: missing name or mobile")
                 continue
+            # Skip duplicates by mobile OR email
+            or_clauses = [{"mobile": mobile}]
+            if email:
+                or_clauses.append({"email": email})
+            if await db.leads.find_one({"organization_id": org_id, "$or": or_clauses}, {"_id": 1}):
+                skipped_duplicates += 1
+                continue
             lead_count = await db.leads.count_documents({"organization_id": org_id})
             lead_id = f"LEAD{lead_count + 1:05d}"
-            await db.leads.insert_one({
+            # Round-robin distribute among counselor/telecaller
+            assignee = await pick_round_robin_assignee(org_id)
+            inserted = await db.leads.insert_one({
                 "lead_id": lead_id,
                 "name": name,
                 "mobile": mobile,
-                "email": row.get("email") or row.get("Email") or "",
+                "email": email,
                 "course_interested": row.get("course") or row.get("Course") or "General",
                 "state": row.get("state") or row.get("State") or "",
                 "city": row.get("city") or row.get("City") or "",
                 "lead_source": row.get("source") or row.get("Source") or "CSV Import",
-                "assigned_to": None,
+                "assigned_to": assignee,
                 "status": "New",
                 "organization_id": org_id,
                 "created_by": current_user["id"],
                 "created_at": datetime.now(timezone.utc),
             })
+            await log_lead_event(
+                inserted.inserted_id,
+                "lead_created",
+                {"name": name, "source": row.get("source") or "CSV Import", "status": "New", "assigned_to": assignee},
+                current_user,
+                org_id,
+            )
+            if assignee:
+                distribution[assignee] = distribution.get(assignee, 0) + 1
+                await db.notifications.insert_one({
+                    "user_id": assignee,
+                    "message": f"New lead '{name}' has been assigned to you (CSV import)",
+                    "type": "lead_assigned",
+                    "read": False,
+                    "organization_id": org_id,
+                    "created_at": datetime.now(timezone.utc),
+                })
             imported += 1
         except Exception as e:
             errors.append(f"Row {idx}: {str(e)}")
     
-    await log_activity(org_id, current_user["id"], current_user["name"], "imported_csv", "leads", None, f"{imported} leads imported")
-    return {"imported": imported, "errors": errors[:10], "total_errors": len(errors)}
+    await log_activity(org_id, current_user["id"], current_user["name"], "imported_csv", "leads", None, f"{imported} leads imported, {skipped_duplicates} duplicates skipped")
+    return {"imported": imported, "skipped_duplicates": skipped_duplicates, "errors": errors[:10], "total_errors": len(errors), "distribution": distribution}
 
 # ==================== Excel Export ====================
 @api_router.get("/reports/export-leads-excel")
@@ -1986,9 +2188,17 @@ async def public_widget_lead(widget_token: str, data: PublicLeadCreate):
     if not org:
         raise HTTPException(status_code=404, detail="Invalid widget token")
     org_id = org["_id"]
+    # Skip duplicate (mobile or email)
+    or_clauses = [{"mobile": data.mobile}]
+    if data.email:
+        or_clauses.append({"email": data.email})
+    if await db.leads.find_one({"organization_id": org_id, "$or": or_clauses}, {"_id": 1}):
+        return {"status": "success", "message": "Thanks! We'll be in touch shortly."}
     lead_count = await db.leads.count_documents({"organization_id": org_id})
     lead_id = f"LEAD{lead_count + 1:05d}"
-    await db.leads.insert_one({
+    # Round-robin auto-assign to active counselor/telecaller
+    assignee = await pick_round_robin_assignee(org_id)
+    inserted = await db.leads.insert_one({
         "lead_id": lead_id,
         "name": data.name,
         "mobile": data.mobile,
@@ -1997,14 +2207,123 @@ async def public_widget_lead(widget_token: str, data: PublicLeadCreate):
         "state": "",
         "city": "",
         "lead_source": "Website Widget",
-        "assigned_to": None,
+        "assigned_to": assignee,
         "status": "New",
         "remarks": data.message or "",
         "organization_id": org_id,
         "created_by": None,
         "created_at": datetime.now(timezone.utc),
     })
+    # Synthetic actor for timeline (no current_user in public endpoint)
+    await db.lead_timeline.insert_one({
+        "lead_id": inserted.inserted_id,
+        "organization_id": org_id,
+        "event_type": "lead_created",
+        "payload": {"name": data.name, "source": "Website Widget", "status": "New", "assigned_to": assignee},
+        "actor_id": None,
+        "actor_name": "Website Widget",
+        "actor_role": "system",
+        "created_at": datetime.now(timezone.utc),
+    })
+    if assignee:
+        await db.notifications.insert_one({
+            "user_id": assignee,
+            "message": f"New web lead '{data.name}' has been assigned to you",
+            "type": "lead_assigned",
+            "read": False,
+            "organization_id": org_id,
+            "created_at": datetime.now(timezone.utc),
+        })
     return {"status": "success", "message": "Thanks! We'll be in touch shortly."}
+
+# ==================== Integrations (Tenant-level keys) ====================
+class IntegrationsUpdate(BaseModel):
+    razorpay: Optional[Dict[str, Any]] = None
+    twilio_whatsapp: Optional[Dict[str, Any]] = None
+    facebook_lead_ads: Optional[Dict[str, Any]] = None
+    google_ads: Optional[Dict[str, Any]] = None
+    auto_assign_enabled: Optional[bool] = None
+
+
+def _mask_secret(val):
+    if not val or not isinstance(val, str):
+        return ""
+    if len(val) <= 6:
+        return "•" * len(val)
+    return val[:4] + "•" * (len(val) - 8) + val[-4:]
+
+
+def _redact_integrations(integrations: dict) -> dict:
+    """Return integrations with sensitive secrets masked for safe GET responses."""
+    SECRET_KEYS = {"key_secret", "auth_token", "page_access_token", "webhook_secret"}
+    redacted = {}
+    for provider, cfg in (integrations or {}).items():
+        if not isinstance(cfg, dict):
+            redacted[provider] = cfg
+            continue
+        out = {}
+        for k, v in cfg.items():
+            if k in SECRET_KEYS and v:
+                out[k] = _mask_secret(v)
+                out[f"{k}_set"] = True
+            else:
+                out[k] = v
+        redacted[provider] = out
+    return redacted
+
+
+@api_router.get("/organization/integrations")
+async def get_integrations(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ("super_admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    org = await db.organizations.find_one(
+        {"_id": ObjectId(current_user["organization_id"])},
+        {"integrations": 1, "auto_assign_enabled": 1},
+    )
+    integrations = (org or {}).get("integrations") or {}
+    return {
+        "integrations": _redact_integrations(integrations),
+        "auto_assign_enabled": (org or {}).get("auto_assign_enabled", True),
+    }
+
+
+@api_router.put("/organization/integrations")
+async def update_integrations(data: IntegrationsUpdate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ("super_admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    org_id = ObjectId(current_user["organization_id"])
+    payload = data.model_dump(exclude_none=True)
+    update_set = {}
+    if "auto_assign_enabled" in payload:
+        update_set["auto_assign_enabled"] = payload.pop("auto_assign_enabled")
+    # Merge each provider into the existing dict (partial update)
+    if payload:
+        org = await db.organizations.find_one({"_id": org_id}, {"integrations": 1})
+        existing = (org or {}).get("integrations") or {}
+        for provider, cfg in payload.items():
+            if cfg is None:
+                continue
+            # Don't overwrite a saved secret with a masked echo from the client
+            current = existing.get(provider) or {}
+            merged = {**current}
+            for k, v in (cfg or {}).items():
+                if v is None:
+                    continue
+                # If client sends a masked value (•••), keep the existing
+                if isinstance(v, str) and "•" in v:
+                    continue
+                merged[k] = v
+            existing[provider] = merged
+        update_set["integrations"] = existing
+    if update_set:
+        await db.organizations.update_one({"_id": org_id}, {"$set": update_set})
+    # Return redacted view
+    org = await db.organizations.find_one({"_id": org_id}, {"integrations": 1, "auto_assign_enabled": 1})
+    return {
+        "integrations": _redact_integrations((org or {}).get("integrations") or {}),
+        "auto_assign_enabled": (org or {}).get("auto_assign_enabled", True),
+    }
+
 
 # ==================== Drip Campaigns (P2) ====================
 class CampaignCreate(BaseModel):

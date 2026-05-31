@@ -1,0 +1,61 @@
+{
+  "summary": "Phase 7 Lead Distribution + Visibility + Integrations backend testing: 18/19 new tests PASS, 79/79 prior regression PASS (Phase 6 services + Phase 5 timeline + Phase 4 + Phase 3). Found ONE real backend defect: GET /api/leads/csv-sample returns 500 due to route ordering — it is shadowed by the earlier-declared GET /api/leads/{lead_id} route (line 1151) which tries ObjectId('csv-sample') and raises bson.InvalidId → 500. Verified by reading /var/log/supervisor/backend.err.log. Everything else is GREEN: strict caller visibility (counselor/telecaller see only own leads on list + detail + timeline; org_admin/manager see all), round-robin distribution balanced 3/3 across 2 callers, explicit assigned_to wins, CSV import skips duplicates by mobile and round-robin distributes, public widget endpoint round-robins + dedupes + writes synthetic 'Website Widget' timeline event, integrations PUT/GET masks key_secret with • + key_secret_set=true while keeping key_id plain, partial updates preserve other providers, masked-echo (••••) is silently dropped server-side so the real secret is not overwritten, auto_assign_enabled=false correctly leaves assigned_to=null, demo lead 'Demo — Ananya Banerjee' (mobile 9988123456) seeded with 10 chronological events covering lead_created/status_changed/followup_added/transferred/admission_recorded.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/leads/csv-sample",
+        "issue": "Returns 500 (bson.errors.InvalidId: 'csv-sample' is not a valid ObjectId). Root cause: in server.py the route @api_router.get('/leads/{lead_id}') is declared at line 1151, BEFORE @api_router.get('/leads/csv-sample') at line 1996. FastAPI matches by declaration order, so /leads/csv-sample is captured as lead_id='csv-sample' and ObjectId('csv-sample') raises InvalidId, surfacing as 500. Fix: move the csv-sample route ABOVE /leads/{lead_id}, OR change the static path to /leads-csv-sample, OR add lead_id format validation in get_lead/get_lead_timeline (use safe_object_id which already exists in the file).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/auth/login (brute-force lockout)",
+        "issue": "test_lockout_after_5_failures in backend_test.py expects 429 after 5 failed attempts but gets 500. Pre-existing — not part of Phase 7 scope. Likely the lockout collection write/read races or the lockout middleware throws. Worth a follow-up but not blocking Phase 7."
+      },
+      {
+        "endpoint": "GET /api/leads/{lead_id} & GET /api/leads/{lead_id}/timeline",
+        "issue": "Both call ObjectId(lead_id) directly (lines 1154 and 1312) without safe_object_id wrapper. A malformed lead_id from a client returns 500 instead of 400/404 — same root cause that surfaced the csv-sample bug. Apply safe_object_id consistently."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_lead_distribution_phase7.py",
+    "/app/test_reports/pytest/iteration_6_phase7.xml",
+    "/app/test_reports/pytest/iteration_6_regression.xml"
+  ],
+  "action_items": [
+    "Fix /api/leads/csv-sample 500: re-order routes so csv-sample is declared BEFORE /leads/{lead_id}, OR wrap ObjectId(lead_id) in safe_object_id() in get_lead + get_lead_timeline + update_lead + delete_lead + transfer/assign endpoints (which already exists in the file at line 141). The latter is the more defensive fix and addresses minor issue #2 simultaneously.",
+    "Investigate brute-force lockout 500 in /api/auth/login (pre-existing, not Phase 7 regression).",
+    "Consider splitting server.py (now ~2787 lines) into routers as noted in iteration_5 review."
+  ],
+  "critical_code_review_comments": [
+    "Route ordering bug in server.py: any new static path under /leads/ must be declared before /leads/{lead_id}. csv-sample is the first victim — preempt this by extracting a router for leads with explicit path ordering, OR validate lead_id format inside the handler (safe_object_id helper already exists, just wire it in).",
+    "GET /api/leads/{lead_id}, GET /api/leads/{lead_id}/timeline, PUT /api/leads/{lead_id}, DELETE /api/leads/{lead_id}, /assign, /transfer all use raw ObjectId(lead_id) without try/except — every one is a latent 500 for a malformed path param.",
+    "PublicLeadCreate.mobile has no length/format validation — public widget endpoint accepts any string as mobile and uses it as the dedupe key. Add a regex (^[0-9]{10}$ for India) so junk submissions don't fragment the dedupe index.",
+    "POST /api/widget/lead/{token} does NOT rate-limit. A bot can flood the endpoint and exhaust the lead_id counter / DB. Add basic per-IP throttle (slowapi or fastapi-limiter).",
+    "_mask_secret returns '' for empty/non-str input but _redact_integrations only redacts when v is truthy — booleans/ints in cfg flow through unmasked. Currently only string secrets exist so safe, but document the contract.",
+    "pick_round_robin_assignee performs a count-after-write on organizations.last_assigned_user_id but does NOT use a transaction or findAndModify — under concurrent POST /api/leads, two requests can read the same `last` and both choose the same `next_idx`, breaking the strict round-robin guarantee. Use db.organizations.find_one_and_update with $set and an aggregation pipeline OR a server-side counter to make it atomic.",
+    "POST /api/leads/import-csv: lead_id is generated via count_documents inside a loop — under concurrent imports two rows can get the same LEAD0001x id. Use an atomic counter (db.counters.findOneAndUpdate $inc) per org. Same issue exists in POST /api/leads and POST /api/widget/lead/{token}.",
+    "CSV import: lead_source defaults to row.get('source') if missing — but the column header used in /api/leads/csv-sample is 'source'. The dedupe check happens BEFORE round-robin call but pick_round_robin_assignee still updates last_assigned_user_id even for the duplicate-skip path? No, dedupe `continue`s before the call — verified OK.",
+    "/api/dashboard/today-followups filters callers by created_by — but counselor may be created_by on a followup they did NOT create (e.g., manager booked it on their lead). Visibility model should likely be 'followup belongs to a lead assigned to me' rather than 'created_by me'. Confirm intent with product."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_lead_distribution_phase7.py (new — 19 tests, 18 pass + 1 fail exposing the csv-sample route bug)"
+  ],
+  "success_rate": {
+    "backend": "98.97% (97/98 — 18/19 Phase 7 + 79/79 Phase 6/5/4/3 regression; 1 failure = real backend route-ordering bug, not a test issue)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "test_credentials": "Used /app/memory/test_credentials.md: orgadmin@demo.com / manager@demo.com / counselor@demo.com / telecaller@demo.com (Demo@123). All logins green.",
+  "seed_data_creation": "TEST_Lead_<uuid> entries created via POST /api/leads (~15-20 per run), TEST_DUP_*/TEST_NEW_* via CSV import (4 rows), TEST_Widget_* via public widget endpoint (~3 per run). Round-robin test deliberately creates 6 leads. NOT cleaned up (no DELETE /api/leads in non-super_admin scope; matches prior phases). auto_assign_enabled is reset to True in a session-scoped autouse fixture teardown AND in the test_auto_assign_disabled finally block, so demo flow is intact post-run. Demo timeline lead (mobile 9988123456) is idempotent — seed_demo_timeline_lead() checks existence before re-inserting.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 7 is 18/19 green. The lone failure is a real defect (csv-sample shadowed by /leads/{lead_id} route ordering) — once main agent fixes (recommended fix: wrap ObjectId calls in safe_object_id in get_lead + get_lead_timeline + update_lead + delete_lead + transfer/assign, AND/OR reorder routes), re-run only test_lead_distribution_phase7.py::TestCsvFlows::test_csv_sample_download to verify. test_lead_distribution_phase7.py is the canonical Phase 7 regression. Two important gotchas observed while authoring: (1) /api/users returns user identifier under key '_id' (stringified), NOT 'id'; fixture uses .get('id') or .get('_id') for robustness. (2) Round-robin assertion uses abs(c_count - t_count) <= 1 instead of strict 3/3 because last_assigned_user_id persists across runs/tests — exact 3/3 only holds when starting from a clean slate. (3) Widget public endpoint does NOT use Session cookies — use bare requests.post. (4) Brute-force lockout test in backend_test.py is flaky (returns 500 instead of 429) — pre-existing, unrelated to Phase 7.",
+  "rca of the issue": "**Bug**: GET /api/leads/csv-sample → HTTP 500. **Reproduction**: curl -b <auth_cookie> '$BACKEND/api/leads/csv-sample' → 500 Internal Server Error. **Root Cause**: server.py declares `@api_router.get('/leads/{lead_id}')` at line 1151 BEFORE `@api_router.get('/leads/csv-sample')` at line 1996. FastAPI matches routes in declaration order, so the dynamic `{lead_id}` route swallows the static `/csv-sample` path and binds lead_id='csv-sample'. The handler then calls `ObjectId('csv-sample')` (line 1154, raw — not wrapped in safe_object_id) which raises `bson.errors.InvalidId`. FastAPI has no handler for that exception → uvicorn returns 500. **Confirmed in logs**: /var/log/supervisor/backend.err.log shows `bson.errors.InvalidId: 'csv-sample' is not a valid ObjectId`. **Mitigation (recommended)**: In server.py replace `ObjectId(lead_id)` with `safe_object_id(lead_id, 'lead_id')` in get_lead (1154), get_lead_timeline (1312), update_lead, delete_lead, assign, transfer, followups. The helper safe_object_id at line 141 already raises HTTP 400. Once that is in, /leads/csv-sample will fall through to its dedicated handler (because 400 from /leads/{lead_id} is still wrong — better to also REORDER: move the csv-sample route declaration above /leads/{lead_id}, then no shadow at all). The cleanest fix is BOTH: reorder + safe_object_id."
+}

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { toast } from 'sonner';
 import { useAuth, API } from '@/context/AuthContext';
 import {
   LayoutDashboard,
@@ -50,6 +51,7 @@ const navItems = [
 const adminNavItems = [
   { path: '/users', label: 'Team Members', icon: Users, testId: 'nav-users' },
   { path: '/services', label: 'Services & Pricing', icon: Tag, testId: 'nav-services' },
+  { path: '/integrations', label: 'Integrations', icon: Layers, testId: 'nav-integrations' },
   { path: '/lead-widget', label: 'Lead Widget', icon: Globe, testId: 'nav-widget' },
   { path: '/activity-logs', label: 'Activity Logs', icon: History, testId: 'nav-activity' },
   { path: '/subscription', label: 'Subscription', icon: CreditCard, testId: 'nav-subscription' },
@@ -70,14 +72,33 @@ export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const knownNotifIdsRef = useRef(new Set());
+  const isFirstLoadRef = useRef(true);
 
   useEffect(() => {
     if (!user) return;
-    const fetchNotifs = () => {
-      axios.get(`${API}/notifications`).then(({ data }) => setNotifications(data)).catch(() => {});
+    const fetchNotifs = async () => {
+      try {
+        const { data } = await axios.get(`${API}/notifications`);
+        // Detect newly arrived notifications since last poll → toast popup
+        if (!isFirstLoadRef.current) {
+          const fresh = data.filter((n) => !knownNotifIdsRef.current.has(n._id) && !n.read);
+          fresh.slice(0, 3).forEach((n) => {
+            toast(n.message, {
+              description: n.type === 'lead_assigned' ? 'New lead assigned' : 'New notification',
+              icon: '🔔',
+            });
+          });
+        }
+        knownNotifIdsRef.current = new Set(data.map((n) => n._id));
+        isFirstLoadRef.current = false;
+        setNotifications(data);
+      } catch (e) {
+        // silent
+      }
     };
     fetchNotifs();
-    const interval = setInterval(fetchNotifs, 30000);
+    const interval = setInterval(fetchNotifs, 15000); // 15-sec near-real-time polling
     return () => clearInterval(interval);
   }, [user]);
 
