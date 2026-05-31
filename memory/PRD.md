@@ -70,7 +70,7 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Frontend `SupportTicketsPage.jsx` — full UI with file uploader, attachment previews, status dropdown, role-based controls
 - ✅ Backend testing: 19/19 pytest tests passed (iteration_2.json)
 
-### Phase 4 — Multi-Industry Foundation (2026-05-31) ✅ COMPLETE
+### Phase 4 — Multi-Industry Foundation + Rebrand (2026-05-31) ✅ COMPLETE
 - ✅ 9 industry templates: Education, IT/Software, Real Estate, Healthcare, Insurance, Travel, Retail, Fitness, Generic
 - ✅ `industry_config.py` central registry (terms, default sources/statuses/pipeline stages, icons, taglines)
 - ✅ Organization schema extended with `industry` field; backfill migration runs on startup
@@ -82,10 +82,14 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Frontend `useTerminology` hook (in `/app/frontend/src/lib/terminology.js`)
 - ✅ Industry dropdown on Register page with tagline per option
 - ✅ Sidebar nav (DashboardLayout) renders dynamic labels (Admissions → Deals/Bookings/Appointments)
-- ✅ Dashboard, Leads, Admissions pages use dynamic terminology (page titles, table columns, form labels, button text, empty states)
+- ✅ Dashboard, Leads, Admissions pages use dynamic terminology
 - ✅ Topbar shows real organization name
+- ✅ **Brand rename**: `EduCRM` → `LeadTrak` (Zap lightning icon, positioned as multi-industry CRM)
+- ✅ **Landing page** fully rewritten: hero rotates through 6 industry personas (sales teams / admission counselors / real-estate brokers / clinic managers / gym owners / travel agents), 9-industry tabs section with icons, multi-industry testimonials, generic pricing tiers
+- ✅ **Login page** repositioned: "Multi-Industry CRM Platform" pill, "Convert leads into customers" hero, 1,200+ teams stat
+- ✅ **Register / Book-demo page**: "Hello revenue growth", multi-industry trust logos, multi-industry testimonial
 - ✅ Backend testing: 36/36 pytest tests passed (17 new + 19 regression, iteration_3.json)
-- ⏳ NOT YET DONE in Phase 4: Settings, FollowupsPage, TasksPage, Reports, LandingPage, WhatsAppTemplatesPage label updates; brand text "EduCRM" still in sidebar/marketing pages
+- ⏳ NOT YET DONE in Phase 4: Settings, FollowupsPage, TasksPage, Reports, WhatsAppTemplatesPage internal label updates
 
 ---
 

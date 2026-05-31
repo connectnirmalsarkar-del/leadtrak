@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  GraduationCap,
+  Zap,
   Users,
   BarChart3,
   Calendar,
@@ -10,7 +10,6 @@ import {
   ArrowRight,
   TrendingUp,
   Target,
-  Zap,
   Shield,
   MessageSquare,
   Sparkles,
@@ -19,21 +18,35 @@ import {
   Globe,
   Star,
   ChevronRight,
+  GraduationCap,
+  Home,
+  Code2,
+  Stethoscope,
+  ShieldCheck,
+  Plane,
+  ShoppingBag,
+  Dumbbell,
+  Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const ROTATING_WORDS = ['admission teams', 'coaching institutes', 'university counselors', 'admission consultants'];
+const ROTATING_WORDS = ['sales teams', 'admission counselors', 'real-estate brokers', 'clinic managers', 'gym owners', 'travel agents'];
+
 const INDUSTRIES = [
-  { id: 'schools', label: 'Schools & K-12', desc: 'Capture parent inquiries, schedule campus visits, and run admission cycles end-to-end.', stats: ['3x faster admissions', '60% less manual work', '24/7 lead capture'] },
-  { id: 'coaching', label: 'Coaching Institutes', desc: 'Convert walk-ins and ad inquiries into batch enrollments with smart follow-ups.', stats: ['40% higher batch fill', '2x counselor productivity', 'Multi-batch tracking'] },
-  { id: 'universities', label: 'Universities & Colleges', desc: 'Manage multi-campus, multi-program admissions with department-level visibility.', stats: ['Multi-campus support', 'Program-wise pipelines', 'Compliance ready'] },
-  { id: 'consultancies', label: 'Education Consultancies', desc: 'Track student leads from inquiry to enrollment across multiple partner institutions.', stats: ['Partner management', 'Commission tracking', 'Visa workflow'] },
+  { id: 'education', icon: GraduationCap, label: 'Education', desc: 'Capture inquiries, schedule counseling, and convert prospects into enrolled students.', stats: ['3× faster admissions', 'Counselor leaderboards', 'Fee tracking & batches'] },
+  { id: 'it_software', icon: Code2, label: 'IT / Software', desc: 'Manage SaaS pipelines from demo-request to closed-won with proposal tracking.', stats: ['Deal velocity insights', 'Quote & proposal stages', 'Demo scheduling'] },
+  { id: 'real_estate', icon: Home, label: 'Real Estate', desc: 'Track buyers from inquiry to booking with site-visit calendars and property pipelines.', stats: ['Site-visit follow-ups', 'Property-wise pipelines', 'Token & booking tracking'] },
+  { id: 'healthcare', icon: Stethoscope, label: 'Healthcare', desc: 'Convert patient inquiries to appointments and treatments with care coordination.', stats: ['Appointment funnel', 'Treatment plan tracker', 'Insurance network leads'] },
+  { id: 'insurance', icon: ShieldCheck, label: 'Insurance', desc: 'From quote to policy issuance, manage every renewal and KYC step in one place.', stats: ['Quote-to-issue pipeline', 'Renewal reminders', 'Agent network'] },
+  { id: 'travel', icon: Plane, label: 'Travel & Tour', desc: 'Manage itinerary quotes, negotiations, and bookings across packages and DMCs.', stats: ['Quote-to-travel funnel', 'Multi-package tracker', 'Trip value reports'] },
+  { id: 'retail', icon: ShoppingBag, label: 'Retail / D2C', desc: 'Capture online & walk-in leads, convert to orders, and re-engage repeat customers.', stats: ['Order pipeline', 'Customer segments', 'Marketplace leads'] },
+  { id: 'fitness', icon: Dumbbell, label: 'Fitness & Wellness', desc: 'Track trials, memberships, and renewals for gyms, yoga, and wellness studios.', stats: ['Trial-to-member funnel', 'Membership renewals', 'Class enrollment'] },
 ];
 
 export default function LandingPage() {
   const navigate = useNavigate();
   const [wordIndex, setWordIndex] = useState(0);
-  const [activeIndustry, setActiveIndustry] = useState('schools');
+  const [activeIndustry, setActiveIndustry] = useState('education');
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -43,6 +56,7 @@ export default function LandingPage() {
   }, []);
 
   const currentIndustry = INDUSTRIES.find((i) => i.id === activeIndustry);
+  const CurrentIcon = currentIndustry.icon;
 
   return (
     <div className="min-h-screen bg-white overflow-x-hidden">
@@ -51,10 +65,10 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center shadow-lg shadow-violet-200">
-              <GraduationCap className="w-5 h-5 text-white" />
+              <Zap className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>
-              EduCRM
+              LeadTrak
             </span>
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
@@ -81,7 +95,6 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="relative pt-24 pb-32 overflow-hidden">
-        {/* Background blobs */}
         <div className="absolute inset-0 -z-10">
           <div className="absolute top-20 left-1/4 w-96 h-96 bg-violet-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
           <div className="absolute top-40 right-1/4 w-96 h-96 bg-indigo-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" style={{ animationDelay: '2s' }}></div>
@@ -97,7 +110,7 @@ export default function LandingPage() {
           >
             <Sparkles className="w-3.5 h-3.5 text-violet-600" />
             <span className="text-xs font-semibold tracking-wide text-violet-700">
-              AI-POWERED EDUCATION CRM
+              ONE CRM FOR EVERY INDUSTRY
             </span>
           </motion.div>
 
@@ -136,7 +149,7 @@ export default function LandingPage() {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="text-lg sm:text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto mt-8"
           >
-            Capture every inquiry, automate follow-ups, and convert prospects into admissions — all from one intelligent platform built for education.
+            Capture every lead, automate follow-ups, and convert prospects into customers — across Education, IT, Real Estate, Healthcare, Insurance, Travel, Retail, Fitness, and beyond.
           </motion.p>
 
           <motion.div
@@ -197,15 +210,17 @@ export default function LandingPage() {
                 <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
                 <div className="w-2.5 h-2.5 rounded-full bg-yellow-400"></div>
                 <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
-                <span className="text-xs text-slate-400 ml-2 font-mono">educrm.app/dashboard</span>
+                <span className="text-xs text-slate-400 ml-2 font-mono">leadtrak.app/dashboard</span>
               </div>
               <div className="bg-slate-50 rounded-lg p-6 grid grid-cols-12 gap-4">
                 <div className="col-span-3 bg-slate-900 rounded-lg p-4 space-y-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-violet-600 rounded-md"></div>
-                    <span className="text-xs text-white font-medium">EduCRM</span>
+                    <div className="w-6 h-6 bg-violet-600 rounded-md flex items-center justify-center">
+                      <Zap className="w-3.5 h-3.5 text-white" />
+                    </div>
+                    <span className="text-xs text-white font-medium">LeadTrak</span>
                   </div>
-                  {['Dashboard', 'Leads', 'Follow-ups', 'Admissions', 'Reports'].map((item, i) => (
+                  {['Dashboard', 'Leads', 'Follow-ups', 'Conversions', 'Reports'].map((item, i) => (
                     <div key={item} className={`text-xs px-2 py-1.5 rounded-md ${i === 0 ? 'bg-violet-600 text-white' : 'text-slate-400'}`}>
                       {item}
                     </div>
@@ -217,7 +232,7 @@ export default function LandingPage() {
                       { l: 'Total Leads', v: '2,847', t: '+18%' },
                       { l: 'Today', v: '142', t: '+24%' },
                       { l: 'Follow-ups', v: '38', t: '-5%' },
-                      { l: 'Admissions', v: '973', t: '+22%' },
+                      { l: 'Conversions', v: '973', t: '+22%' },
                     ].map((s) => (
                       <div key={s.l} className="bg-white rounded-md p-2.5 border border-slate-200">
                         <p className="text-[9px] text-slate-500 uppercase">{s.l}</p>
@@ -251,7 +266,7 @@ export default function LandingPage() {
                 <TrendingUp className="w-4 h-4 text-emerald-600" />
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-900">New Admission</p>
+                <p className="text-xs font-semibold text-slate-900">New Conversion</p>
                 <p className="text-[10px] text-slate-500">+₹45,000</p>
               </div>
             </motion.div>
@@ -276,10 +291,10 @@ export default function LandingPage() {
       <section className="border-y border-slate-100 bg-slate-50/50 py-16">
         <div className="max-w-7xl mx-auto px-6">
           <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-10">
-            Trusted by 500+ educational institutions across India
+            Trusted by 1,200+ teams across 9 industries
           </p>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8 items-center justify-items-center">
-            {['Apex Coaching', 'Bright Future', 'EduPath', 'SkillForge', 'Aakash Inst.', 'PrepHub'].map((logo) => (
+            {['Apex Sales', 'Bright Future', 'TechFlow', 'Skyline Realty', 'PulseClinic', 'GoFit'].map((logo) => (
               <div
                 key={logo}
                 className="text-base lg:text-lg font-semibold tracking-tight text-slate-400 hover:text-slate-700 transition-colors"
@@ -302,9 +317,9 @@ export default function LandingPage() {
         </div>
         <div className="grid md:grid-cols-3 gap-6">
           {[
-            { num: '3x', label: 'Faster admission cycles', sub: 'Top coaching institute, Delhi NCR' },
-            { num: '60%', label: 'Lift in counselor productivity', sub: 'Leading university, Bangalore' },
-            { num: '₹2.4Cr', label: 'Additional revenue tracked', sub: 'Mid-size consultancy network' },
+            { num: '3×', label: 'Faster sales cycles', sub: 'Reported across 9 industries on LeadTrak' },
+            { num: '60%', label: 'Lift in rep productivity', sub: 'Time freed from manual data entry' },
+            { num: '₹2.4Cr', label: 'Additional revenue tracked', sub: 'In the first 6 months of going live' },
           ].map((stat, i) => (
             <motion.div
               key={i}
@@ -329,10 +344,10 @@ export default function LandingPage() {
         <div className="text-center max-w-2xl mx-auto mb-16">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Platform</p>
           <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
-            Everything your admissions team needs
+            Everything your sales team needs
           </h2>
           <p className="text-lg text-slate-600">
-            From first inquiry to enrollment, one platform that ties your entire team together.
+            From first inquiry to closed deal, one platform that ties your entire team together — no matter your industry.
           </p>
         </div>
 
@@ -342,7 +357,7 @@ export default function LandingPage() {
             { icon: Sparkles, title: 'AI Lead Scoring', desc: 'Identify high-intent prospects automatically using behavioral signals.' },
             { icon: Calendar, title: 'Follow-up Automation', desc: 'Schedule, remind, and track every touchpoint.' },
             { icon: MessageSquare, title: 'WhatsApp Integration', desc: 'Click-to-WhatsApp with templates and bulk messaging.' },
-            { icon: BarChart3, title: 'Real-time Reports', desc: 'Lead source ROI, counselor performance, revenue analytics.', big: true },
+            { icon: BarChart3, title: 'Real-time Reports', desc: 'Lead source ROI, rep performance, revenue analytics.', big: true },
             { icon: Shield, title: 'Role-based Access', desc: 'Granular permissions for every team member.' },
           ].map((feature, i) => {
             const Icon = feature.icon;
@@ -376,28 +391,32 @@ export default function LandingPage() {
           <div className="text-center max-w-2xl mx-auto mb-12">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Industries</p>
             <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
-              Built for every education segment
+              Pre-built for 9 industries
             </h2>
             <p className="text-lg text-slate-600">
-              Pre-configured workflows that fit your business model.
+              Pick your industry at signup — labels, pipelines, and lead sources are tuned for your business.
             </p>
           </div>
 
           <div className="flex flex-wrap justify-center gap-2 mb-10">
-            {INDUSTRIES.map((ind) => (
-              <button
-                key={ind.id}
-                onClick={() => setActiveIndustry(ind.id)}
-                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
-                  activeIndustry === ind.id
-                    ? 'bg-violet-700 text-white shadow-lg shadow-violet-200'
-                    : 'bg-white text-slate-700 hover:bg-violet-50 border border-slate-200'
-                }`}
-                data-testid={`industry-tab-${ind.id}`}
-              >
-                {ind.label}
-              </button>
-            ))}
+            {INDUSTRIES.map((ind) => {
+              const Icon = ind.icon;
+              return (
+                <button
+                  key={ind.id}
+                  onClick={() => setActiveIndustry(ind.id)}
+                  className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium transition-all ${
+                    activeIndustry === ind.id
+                      ? 'bg-violet-700 text-white shadow-lg shadow-violet-200'
+                      : 'bg-white text-slate-700 hover:bg-violet-50 border border-slate-200'
+                  }`}
+                  data-testid={`industry-tab-${ind.id}`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {ind.label}
+                </button>
+              );
+            })}
           </div>
 
           <motion.div
@@ -408,9 +427,14 @@ export default function LandingPage() {
             className="grid md:grid-cols-2 gap-8 bg-white rounded-3xl p-8 lg:p-12 border border-slate-200 shadow-sm"
           >
             <div>
-              <h3 className="text-3xl font-bold text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
-                {currentIndustry.label}
-              </h3>
+              <div className="inline-flex items-center gap-2 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-violet-100 border border-violet-200 flex items-center justify-center">
+                  <CurrentIcon className="w-5 h-5 text-violet-700" />
+                </div>
+                <h3 className="text-3xl font-bold text-slate-900" style={{ fontFamily: 'Sora' }}>
+                  {currentIndustry.label}
+                </h3>
+              </div>
               <p className="text-base text-slate-600 leading-relaxed mb-8">
                 {currentIndustry.desc}
               </p>
@@ -465,9 +489,9 @@ export default function LandingPage() {
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
           {[
             { icon: Sparkles, title: 'Smart Lead Scoring', desc: 'AI ranks every lead by conversion probability in real-time.' },
-            { icon: Zap, title: 'Next Best Action', desc: 'Tells counselors exactly what to do next on every lead.' },
+            { icon: Zap, title: 'Next Best Action', desc: 'Tells reps exactly what to do next on every lead.' },
             { icon: MessageSquare, title: 'Conversational AI', desc: 'Chatbots that qualify leads 24/7 on WhatsApp and web.' },
-            { icon: TrendingUp, title: 'Predictive Forecasting', desc: 'Know your admissions pipeline 30 days in advance.' },
+            { icon: TrendingUp, title: 'Predictive Forecasting', desc: 'Know your pipeline 30 days in advance.' },
           ].map((ai, i) => {
             const Icon = ai.icon;
             return (
@@ -496,14 +520,14 @@ export default function LandingPage() {
           <div className="text-center max-w-2xl mx-auto mb-16">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Customers</p>
             <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>
-              Loved by admission teams
+              Loved by teams everywhere
             </h2>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { quote: 'Cut our manual data entry by 70%. Counselors now spend time on conversations, not spreadsheets.', name: 'Priya Sharma', role: 'Director, Apex Coaching' },
-              { quote: 'Doubled our batch fill rate within 3 months. The AI lead scoring is a game-changer.', name: 'Rahul Mehta', role: 'COO, Bright Future Inst.' },
-              { quote: 'Finally a CRM built for education, not retrofitted from sales. Our team adopted it in a week.', name: 'Dr. Anjali Verma', role: 'Dean, EduPath University' },
+              { quote: 'We cut manual data entry by 70%. Our counselors now spend time on conversations, not spreadsheets.', name: 'Priya Sharma', role: 'Director, Bright Future Coaching (Education)' },
+              { quote: 'Doubled our site-visit conversion rate in 3 months. The follow-up automations alone paid for the tool.', name: 'Rahul Mehta', role: 'COO, Skyline Realty (Real Estate)' },
+              { quote: 'Finally a CRM that doesn\'t feel like it was built for someone else\'s business. We were live in a week.', name: 'Dr. Anjali Verma', role: 'Founder, PulseClinic (Healthcare)' },
             ].map((t, i) => (
               <motion.div
                 key={i}
@@ -547,7 +571,7 @@ export default function LandingPage() {
                 Enterprise-grade security
               </h2>
               <p className="text-violet-200 leading-relaxed">
-                Your data is protected with AES-256 encryption, role-based access controls, and full audit trails. Compliant with global education data standards.
+                Your data is protected with AES-256 encryption, role-based access controls, and full audit trails. Compliant with global data privacy standards.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -583,9 +607,9 @@ export default function LandingPage() {
 
         <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {[
-            { name: 'Starter', price: '₹999', desc: 'Small coaching institutes', features: ['5 Users', '1,000 Leads', 'Basic Reports', 'Email Support'], popular: false },
-            { name: 'Growth', price: '₹2,999', desc: 'Growing colleges', features: ['20 Users', '5,000 Leads', 'Advanced Reports', 'WhatsApp', 'Priority Support'], popular: true },
-            { name: 'Enterprise', price: '₹9,999', desc: 'Universities & networks', features: ['Unlimited Users', 'Unlimited Leads', 'Custom Reports', 'All Integrations', '24/7 Support'], popular: false },
+            { name: 'Starter', price: '₹999', desc: 'Small teams getting started', features: ['5 Users', '1,000 Leads', 'Basic Reports', 'Email Support'], popular: false },
+            { name: 'Growth', price: '₹2,999', desc: 'Growing companies & SMBs', features: ['20 Users', '5,000 Leads', 'Advanced Reports', 'WhatsApp', 'Priority Support'], popular: true },
+            { name: 'Enterprise', price: '₹9,999', desc: 'Large orgs & multi-branch', features: ['Unlimited Users', 'Unlimited Leads', 'Custom Reports', 'All Integrations', '24/7 Support'], popular: false },
           ].map((plan, i) => (
             <motion.div
               key={i}
@@ -643,10 +667,10 @@ export default function LandingPage() {
           </div>
           <div className="relative z-10 max-w-2xl mx-auto">
             <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-white mb-4" style={{ fontFamily: 'Sora' }}>
-              Ready to transform your admissions?
+              Ready to convert more leads?
             </h2>
             <p className="text-lg text-slate-300 mb-8">
-              Join 500+ educational institutions converting more leads with EduCRM.
+              Join 1,200+ teams across 9 industries using LeadTrak to grow faster.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button
@@ -676,11 +700,11 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center">
-              <GraduationCap className="w-4 h-4 text-white" />
+              <Zap className="w-4 h-4 text-white" />
             </div>
-            <span className="text-lg font-bold text-white" style={{ fontFamily: 'Sora' }}>EduCRM</span>
+            <span className="text-lg font-bold text-white" style={{ fontFamily: 'Sora' }}>LeadTrak</span>
           </div>
-          <p className="text-sm">© 2026 EduCRM. All rights reserved.</p>
+          <p className="text-sm">© 2026 LeadTrak. The CRM for every industry.</p>
         </div>
       </footer>
     </div>

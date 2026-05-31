@@ -4,12 +4,11 @@ import { motion } from 'framer-motion';
 import axios from 'axios';
 import { useAuth, formatApiErrorDetail, API } from '@/context/AuthContext';
 import {
-  GraduationCap,
+  Zap,
   ArrowRight,
   CheckCircle2,
   Sparkles,
   TrendingUp,
-  Zap,
   Star,
   Shield,
 } from 'lucide-react';
@@ -26,7 +25,7 @@ const BENEFITS = [
   { icon: Shield, title: 'Enterprise-grade security', desc: 'ISO 27001, SOC 2 Type II, DPDP Ready. Your data, fully protected.' },
 ];
 
-const CUSTOMER_LOGOS = ['APEX', 'BRIGHT', 'EDUPATH', 'SKILLFORGE', 'AAKASH', 'PREPHUB'];
+const CUSTOMER_LOGOS = ['APEX', 'BRIGHT', 'TECHFLOW', 'SKYLINE', 'PULSE', 'GOFIT'];
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -79,10 +78,10 @@ export default function RegisterPage() {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
             <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center shadow-lg shadow-violet-200">
-              <GraduationCap className="w-5 h-5 text-white" />
+              <Zap className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-bold text-slate-900 tracking-tight" style={{ fontFamily: 'Sora' }}>
-              EduCRM
+              LeadTrak
             </span>
           </Link>
           <div className="flex items-center gap-3 text-sm">
@@ -107,11 +106,11 @@ export default function RegisterPage() {
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 leading-[1.1]" style={{ fontFamily: 'Sora' }}>
             Goodbye spreadsheets.<br />
             <span className="bg-gradient-to-r from-violet-600 to-fuchsia-500 bg-clip-text text-transparent">
-              Hello admissions growth.
+              Hello revenue growth.
             </span>
           </h1>
           <p className="text-sm text-slate-600 mt-3 max-w-md mx-auto">
-            Join 500+ institutions converting more inquiries into admissions.
+            Join 1,200+ teams across 9 industries converting more leads with LeadTrak.
           </p>
         </div>
 
@@ -134,11 +133,11 @@ export default function RegisterPage() {
               <h1 className="text-4xl sm:text-5xl xl:text-6xl font-bold tracking-tight text-slate-900 leading-[1.05]" style={{ fontFamily: 'Sora' }}>
                 Goodbye spreadsheets.<br />
                 <span className="bg-gradient-to-r from-violet-600 via-fuchsia-500 to-violet-700 bg-clip-text text-transparent">
-                  Hello admissions growth.
+                  Hello revenue growth.
                 </span>
               </h1>
               <p className="text-lg text-slate-600 leading-relaxed mt-5 max-w-xl">
-                See how 500+ educational institutions use EduCRM to capture every inquiry, automate follow-ups, and turn prospects into enrolled students.
+                See how 1,200+ teams across Education, IT, Real Estate, Healthcare, Insurance, Travel, Retail, and Fitness use LeadTrak to capture every lead, automate follow-ups, and convert prospects into customers.
               </p>
             </motion.div>
 
@@ -173,7 +172,7 @@ export default function RegisterPage() {
               className="grid grid-cols-3 gap-4 p-6 bg-white rounded-2xl border border-slate-200 shadow-sm"
             >
               {[
-                { v: '3×', l: 'Faster admissions' },
+                { v: '3×', l: 'Faster sales cycles' },
                 { v: '60%', l: 'More productivity' },
                 { v: '70%', l: 'Less manual work' },
               ].map((s, i) => (
@@ -193,7 +192,7 @@ export default function RegisterPage() {
               transition={{ duration: 0.6, delay: 0.3 }}
             >
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 mb-4">
-                Trusted by leading institutions
+                Trusted across 9 industries
               </p>
               <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
                 {CUSTOMER_LOGOS.map((logo) => (
@@ -223,7 +222,7 @@ export default function RegisterPage() {
                   ))}
                 </div>
                 <p className="text-base leading-relaxed mb-5">
-                  "EduCRM brought structure and efficiency to our admissions process. Teams across our 6 campuses adapted within a week — and our conversion rate jumped 40% in the first quarter."
+                  "LeadTrak brought structure and efficiency to our sales process. Teams across our 6 branches adapted within a week — and our conversion rate jumped 40% in the first quarter."
                 </p>
                 <div className="flex items-center gap-3 pt-4 border-t border-white/10">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-400 to-fuchsia-400 flex items-center justify-center text-white font-bold text-sm">
@@ -231,7 +230,7 @@ export default function RegisterPage() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold">Sarthak Garg</p>
-                    <p className="text-xs text-slate-300">Co-Founder, EduPath University</p>
+                    <p className="text-xs text-slate-300">Co-Founder, Skyline Realty</p>
                   </div>
                 </div>
               </div>
@@ -315,7 +314,7 @@ export default function RegisterPage() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="you@institution.com"
+                    placeholder="you@company.com"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                     required

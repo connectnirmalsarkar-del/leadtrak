@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth, formatApiErrorDetail } from '@/context/AuthContext';
-import { GraduationCap, ArrowRight, Shield, Lock, Award, Star } from 'lucide-react';
+import { Zap, ArrowRight, Shield, Lock, Award, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,22 +10,22 @@ import { toast } from 'sonner';
 
 const TESTIMONIALS = [
   {
-    quote: 'Achieved 3x faster admission cycles. Our counselors now spend time on conversations, not spreadsheets.',
+    quote: 'We cut manual data entry by 70%. Our counselors now spend time on conversations, not spreadsheets.',
     name: 'Priya Sharma',
-    role: 'Director, Apex Coaching',
-    logo: 'APEX',
-  },
-  {
-    quote: 'Doubled our batch fill rate within 3 months. The AI lead scoring is a game-changer for coaching.',
-    name: 'Rahul Mehta',
-    role: 'COO, Bright Future Institute',
+    role: 'Director, Bright Future Coaching (Education)',
     logo: 'BRIGHT',
   },
   {
-    quote: 'Finally a CRM built for education, not retrofitted from sales. Our team adopted it in a week.',
+    quote: 'Doubled our site-visit conversion rate in 3 months. Follow-up automations alone paid for the tool.',
+    name: 'Rahul Mehta',
+    role: 'COO, Skyline Realty (Real Estate)',
+    logo: 'SKYLINE',
+  },
+  {
+    quote: 'Finally a CRM that doesn\'t feel like it was built for someone else\'s business. We were live in a week.',
     name: 'Dr. Anjali Verma',
-    role: 'Dean, EduPath University',
-    logo: 'EDUPATH',
+    role: 'Founder, PulseClinic (Healthcare)',
+    logo: 'PULSE',
   },
 ];
 
@@ -85,10 +85,10 @@ export default function LoginPage() {
           {/* Top brand */}
           <Link to="/" className="flex items-center gap-2.5">
             <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-violet-700 rounded-lg flex items-center justify-center shadow-xl shadow-violet-900/50">
-              <GraduationCap className="w-5 h-5 text-white" />
+              <Zap className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-bold text-white tracking-tight" style={{ fontFamily: 'Sora' }}>
-              EduCRM
+              LeadTrak
             </span>
           </Link>
 
@@ -97,24 +97,24 @@ export default function LoginPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-500/10 border border-violet-400/20 rounded-full mb-6 backdrop-blur-sm w-fit">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse"></span>
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-200">
-                Education CRM Platform
+                Multi-Industry CRM Platform
               </span>
             </div>
 
             <h2 className="text-4xl xl:text-5xl font-bold text-white tracking-tight leading-[1.1] mb-6" style={{ fontFamily: 'Sora' }}>
-              Convert more inquiries into <span className="bg-gradient-to-r from-violet-300 to-fuchsia-300 bg-clip-text text-transparent">admissions</span>.
+              Convert more leads into <span className="bg-gradient-to-r from-violet-300 to-fuchsia-300 bg-clip-text text-transparent">customers</span>.
             </h2>
 
             <p className="text-base text-slate-300 leading-relaxed mb-12">
-              The all-in-one platform that captures every lead, automates follow-ups, and tells you exactly what to do next.
+              The all-in-one platform for Education, IT, Real Estate, Healthcare, Insurance, Travel, Retail, and Fitness teams — capture every lead, automate follow-ups, and know what to do next.
             </p>
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-4 mb-12">
               {[
-                { v: '3x', l: 'Faster admissions' },
+                { v: '3×', l: 'Faster sales cycles' },
                 { v: '60%', l: 'Higher productivity' },
-                { v: '500+', l: 'Institutions' },
+                { v: '1,200+', l: 'Teams worldwide' },
               ].map((s, i) => (
                 <div key={i}>
                   <p className="text-3xl xl:text-4xl font-bold bg-gradient-to-br from-violet-300 to-violet-100 bg-clip-text text-transparent" style={{ fontFamily: 'Sora' }}>
@@ -189,9 +189,9 @@ export default function LoginPage() {
         {/* Mobile-only brand */}
         <Link to="/" className="lg:hidden absolute top-6 left-6 flex items-center gap-2">
           <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center">
-            <GraduationCap className="w-5 h-5 text-white" />
+            <Zap className="w-5 h-5 text-white" />
           </div>
-          <span className="text-lg font-bold text-slate-900" style={{ fontFamily: 'Sora' }}>EduCRM</span>
+          <span className="text-lg font-bold text-slate-900" style={{ fontFamily: 'Sora' }}>LeadTrak</span>
         </Link>
 
         <div className="w-full max-w-sm space-y-8">
@@ -254,7 +254,7 @@ export default function LoginPage() {
               disabled={loading}
               data-testid="login-submit-btn"
             >
-              {loading ? 'Signing in...' : 'Sign in to EduCRM'}
+              {loading ? 'Signing in...' : 'Sign in to LeadTrak'}
               {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
             </Button>
           </form>

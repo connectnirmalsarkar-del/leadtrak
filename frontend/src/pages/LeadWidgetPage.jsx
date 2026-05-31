@@ -14,8 +14,8 @@ export default function LeadWidgetPage() {
   }, []);
 
   const apiBase = process.env.REACT_APP_BACKEND_URL;
-  const embedCode = `<!-- EduCRM Lead Capture Widget -->
-<div id="educrm-lead-form"></div>
+  const embedCode = `<!-- LeadTrak Lead Capture Widget -->
+<div id="leadtrak-lead-form"></div>
 <script>
 (function(){
   var d=document,s=d.createElement('div');
@@ -29,7 +29,7 @@ export default function LeadWidgetPage() {
     '<button type="submit" style="width:100%;padding:12px;background:#7C3AED;color:#fff;border:0;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">Request Callback</button>'+
     '<p id="ecm" style="margin:10px 0 0;font-size:12px;color:#10B981;display:none"></p>'+
   '</form>';
-  d.getElementById('educrm-lead-form').appendChild(s);
+  d.getElementById('leadtrak-lead-form').appendChild(s);
   d.getElementById('ecf').addEventListener('submit',function(e){
     e.preventDefault();
     var f=e.target,m=d.getElementById('ecm');
@@ -55,7 +55,7 @@ export default function LeadWidgetPage() {
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-700 mb-1.5">Lead Capture</p>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>Lead Capture Widget</h1>
-        <p className="text-sm text-slate-500 mt-1">Embed a lead form on your website. Inquiries flow directly into EduCRM.</p>
+        <p className="text-sm text-slate-500 mt-1">Embed a lead form on your website. Inquiries flow directly into LeadTrak.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -97,7 +97,7 @@ export default function LeadWidgetPage() {
 
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
         <p className="text-sm text-blue-900">
-          <strong>How it works:</strong> Submitted inquiries are auto-imported as new Leads with source "Website Widget". You'll receive a notification in EduCRM and can follow up immediately.
+          <strong>How it works:</strong> Submitted inquiries are auto-imported as new Leads with source "Website Widget". You'll receive a notification in LeadTrak and can follow up immediately.
         </p>
       </div>
     </div>

@@ -7,7 +7,6 @@ import {
   Users,
   UserPlus,
   Calendar,
-  GraduationCap,
   CheckSquare,
   BarChart3,
   Settings,
@@ -23,6 +22,7 @@ import {
   LifeBuoy,
   Layers,
   Trophy,
+  Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -134,9 +134,9 @@ export default function DashboardLayout({ children }) {
         <div className="flex h-16 items-center justify-between px-6 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center shadow-lg shadow-violet-900/50">
-              <GraduationCap className="w-5 h-5 text-white" />
+              <Zap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold tracking-tight" style={{fontFamily: 'Sora'}}>EduCRM</span>
+            <span className="text-lg font-bold tracking-tight" style={{fontFamily: 'Sora'}}>LeadTrak</span>
           </div>
           <button
             className="lg:hidden text-slate-400 hover:text-white"
