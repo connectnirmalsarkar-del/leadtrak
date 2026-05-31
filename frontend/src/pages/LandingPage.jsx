@@ -64,7 +64,7 @@ export default function LandingPage() {
       <header className="border-b border-slate-100 sticky top-0 bg-white/90 backdrop-blur-xl z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src="/logo-light.png" alt="Leadtrak" className="h-9 w-auto" data-testid="landing-header-logo" />
+            <img src="/logo-light.png?v=2" alt="Leadtrak" className="h-12 w-auto" data-testid="landing-header-logo" />
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
             <a href="#features" className="hover:text-violet-700 transition-colors">Features</a>
@@ -693,7 +693,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="bg-slate-900 text-slate-400 py-12">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <img src="/logo-dark.png" alt="Leadtrak" className="h-9 w-auto" data-testid="footer-logo" />
+          <img src="/logo-dark.png?v=2" alt="Leadtrak" className="h-12 w-auto" data-testid="footer-logo" />
           <p className="text-sm">© 2026 Leadtrak. The CRM for every industry.</p>
         </div>
       </footer>

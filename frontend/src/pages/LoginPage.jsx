@@ -84,7 +84,7 @@ export default function LoginPage() {
         <div className="relative z-10 flex flex-col h-screen p-12 xl:p-16">
           {/* Top brand */}
           <Link to="/" className="flex items-center gap-2.5">
-            <img src="/logo-dark.png" alt="Leadtrak" className="h-10 w-auto" data-testid="login-logo" />
+            <img src="/logo-dark.png?v=2" alt="Leadtrak" className="h-14 w-auto" data-testid="login-logo" />
           </Link>
 
           {/* Middle content */}
@@ -183,7 +183,7 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative">
         {/* Mobile-only brand */}
         <Link to="/" className="lg:hidden absolute top-6 left-6 flex items-center gap-2">
-          <img src="/logo-light.png" alt="Leadtrak" className="h-9 w-auto" />
+          <img src="/logo-light.png?v=2" alt="Leadtrak" className="h-12 w-auto" />
         </Link>
 
         <div className="w-full max-w-sm space-y-8">
