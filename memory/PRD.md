@@ -229,6 +229,11 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Lead Add form: **State** and **City** are now cascading Select dropdowns (city options re-populate when state changes)
 - ✅ New page **/platform/locations** for Super Admin — search, state filter, toggle active/inactive, edit, delete, custom vs default badges
 
+### Completed 2026-05-31 — Final QA Pass + 3 LOW-priority polish
+- ✅ **Iteration 9 final QA — 100% pass:** 83/83 backend tests (25 new + 58 regression) + 14/14 frontend flows + RBAC + tenant isolation + mobile responsiveness
+- ✅ Verified end-to-end: Auth (3 roles), Dashboard, Leads CRUD with cascading State/City + industry extras, Follow-ups, Demos, Admissions, Tasks, Reports, Services, Users, Integrations, Webhook Health (NEW), Lead Widget (services-connected dropdown + state/city + Powered by Leadtrak), Subscription, Support, Activity Logs, Platform Orgs (4 tabs), Platform Locations (36 states / 386 cities incl. WB 186)
+- ✅ Polish fixes: Suppressed 403 toast flash on Webhook Health for counselor; Recharts ResponsiveContainer min-width/min-height to silence console warnings; Google Ads integration card "Connected" badge now reads `webhook_secret` presence + added webhook_secret config field
+
 ### Completed 2026-05-31 — Webhook Health Dashboard (Org Admin, tenant-isolated)
 - ✅ New `webhook_logs` collection — every FB / Google Ads inbound event logged with status, leads_imported, duplicates, error, payload, response, ip
 - ✅ Instrumented endpoints: FB verify, FB leadgen (signature pass/fail, Graph API error captured), Google Ads (auth pass/fail, validation errors, duplicates)

@@ -69,13 +69,14 @@ const PROVIDERS = [
   {
     key: 'google_ads',
     name: 'Google Ads',
-    desc: 'Track conversions in Google Ads to optimize your campaigns.',
+    desc: 'Track conversions + receive lead-form submissions via webhook.',
     icon: Globe2,
     color: 'amber',
     docs: 'https://support.google.com/google-ads/answer/6095821',
     fields: [
       { name: 'conversion_id', label: 'Conversion ID', placeholder: 'AW-1234567890', secret: false },
       { name: 'conversion_label', label: 'Conversion Label', placeholder: 'AbC-D_efG-h12_34-567', secret: false },
+      { name: 'webhook_secret', label: 'Lead Form Webhook Secret', placeholder: 'A random shared secret', secret: true, hint: 'Used to authenticate inbound Google Ads Lead Form submissions.' },
     ],
   },
 ];
@@ -118,7 +119,7 @@ export default function IntegrationsPage() {
     if (key === 'razorpay') return !!cfg.key_id;
     if (key === 'twilio_whatsapp') return !!cfg.account_sid;
     if (key === 'facebook_lead_ads') return !!cfg.page_id;
-    if (key === 'google_ads') return !!cfg.conversion_id;
+    if (key === 'google_ads') return !!cfg.conversion_id || !!cfg.webhook_secret;
     return false;
   };
 

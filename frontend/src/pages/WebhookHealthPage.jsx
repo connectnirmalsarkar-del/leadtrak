@@ -74,6 +74,7 @@ export default function WebhookHealthPage() {
   }, [user, navigate]);
 
   const loadAll = async () => {
+    if (user && !['org_admin', 'super_admin'].includes(user.role)) return;
     try {
       const params = {};
       if (sourceFilter !== 'all') params.source = sourceFilter;
@@ -85,7 +86,9 @@ export default function WebhookHealthPage() {
       setStats(s.data);
       setRows(r.data);
     } catch (e) {
-      toast.error('Failed to load webhook logs');
+      if (e?.response?.status !== 403) {
+        toast.error('Failed to load webhook logs');
+      }
     }
   };
 

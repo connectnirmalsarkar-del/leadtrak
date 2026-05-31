@@ -104,8 +104,8 @@ const StatCard = ({ icon: Icon, label, value, trend, sparkData, color, testId, s
         {displayVal}{suffix}
       </p>
       {sparkData && sparkData.length > 0 && (
-        <div className="mt-3 h-8 -mx-1">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="mt-3 h-8 -mx-1" style={{ minWidth: 1, minHeight: 1 }}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
             <AreaChart data={sparkData}>
               <defs>
                 <linearGradient id={`grad-${color}`} x1="0" y1="0" x2="0" y2="1">
