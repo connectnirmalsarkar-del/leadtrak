@@ -259,6 +259,62 @@ async def seed_admin():
         f.write("- POST /api/auth/logout\n")
         f.write("- GET /api/auth/me\n")
 
+async def seed_demo_org_and_users():
+    """Seed a demo organization with one user per role for testing."""
+    demo_org_name = "Bright Future Coaching (Demo)"
+    existing_org = await db.organizations.find_one({"name": demo_org_name})
+    if existing_org:
+        demo_org_id = existing_org["_id"]
+    else:
+        result = await db.organizations.insert_one({
+            "name": demo_org_name,
+            "subscription_plan": "growth",
+            "settings": {},
+            "created_at": datetime.now(timezone.utc),
+        })
+        demo_org_id = result.inserted_id
+        logger.info(f"Demo org created: {demo_org_name}")
+
+    demo_users = [
+        {"email": "orgadmin@demo.com", "password": "Demo@123", "name": "Riya Kapoor", "role": "org_admin"},
+        {"email": "manager@demo.com", "password": "Demo@123", "name": "Arjun Mehta", "role": "manager"},
+        {"email": "counselor@demo.com", "password": "Demo@123", "name": "Priya Sharma", "role": "counselor"},
+        {"email": "telecaller@demo.com", "password": "Demo@123", "name": "Rohan Verma", "role": "telecaller"},
+    ]
+    for u in demo_users:
+        existing = await db.users.find_one({"email": u["email"]})
+        if existing is None:
+            await db.users.insert_one({
+                "email": u["email"],
+                "password_hash": hash_password(u["password"]),
+                "name": u["name"],
+                "role": u["role"],
+                "organization_id": demo_org_id,
+                "created_at": datetime.now(timezone.utc),
+            })
+            logger.info(f"Demo user created: {u['email']} / {u['role']}")
+        elif not verify_password(u["password"], existing["password_hash"]):
+            await db.users.update_one(
+                {"email": u["email"]},
+                {"$set": {"password_hash": hash_password(u["password"])}},
+            )
+
+    # Update test_credentials.md with all roles
+    base_url = os.environ.get("FRONTEND_URL", "https://institute-crm-pro.preview.emergentagent.com")
+    with open("/app/memory/test_credentials.md", "w") as f:
+        f.write("# Test Credentials\n\n")
+        f.write(f"## Login URL\n{base_url}/login\n\n")
+        f.write("## Super Admin (own org)\n")
+        f.write(f"- Email: {os.environ.get('ADMIN_EMAIL', 'admin@educationcrm.com')}\n")
+        f.write(f"- Password: {os.environ.get('ADMIN_PASSWORD', 'Admin@123')}\n")
+        f.write("- Role: super_admin\n\n")
+        f.write(f"## Demo Organization: {demo_org_name}\n\n")
+        for u in demo_users:
+            f.write(f"### {u['role'].replace('_', ' ').title()}\n")
+            f.write(f"- Email: {u['email']}\n")
+            f.write(f"- Password: {u['password']}\n")
+            f.write(f"- Name: {u['name']}\n\n")
+
 async def seed_subscription_plans():
     existing = await db.subscription_plans.count_documents({})
     if existing == 0:
@@ -300,6 +356,7 @@ async def startup_db():
     await db.leads.create_index([("organization_id", 1), ("created_at", -1)])
     await db.followups.create_index([("organization_id", 1), ("followup_date", 1)])
     await seed_admin()
+    await seed_demo_org_and_users()
     await seed_subscription_plans()
     logger.info("Database initialized and indexes created")
 
