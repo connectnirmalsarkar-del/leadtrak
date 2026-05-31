@@ -169,7 +169,7 @@ export default function DashboardLayout({ children }) {
           </button>
         </div>
 
-        <nav className="px-4 py-6 space-y-1">
+        <nav className="px-4 py-6 space-y-1 overflow-y-auto h-[calc(100vh-4rem)] custom-scrollbar">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 px-4 mb-2">Main</p>
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -260,13 +260,13 @@ export default function DashboardLayout({ children }) {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2 text-sm text-slate-600">
+            <div className="flex items-center gap-2.5 text-base text-slate-700">
               {user?.logo_url ? (
-                <img src={user.logo_url} alt="" className="w-6 h-6 rounded object-contain bg-white border border-slate-200" data-testid="topbar-org-logo" />
+                <img src={user.logo_url} alt="" className="w-8 h-8 rounded object-contain bg-white border border-slate-200" data-testid="topbar-org-logo" />
               ) : (
-                <Building2 className="w-4 h-4" />
+                <Building2 className="w-5 h-5" />
               )}
-              <span data-testid="org-name">{user?.organization_name || 'Organization'}</span>
+              <span className="font-medium" data-testid="org-name">{user?.organization_name || 'Organization'}</span>
             </div>
           </div>
 
