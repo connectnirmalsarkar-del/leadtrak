@@ -290,7 +290,7 @@ export default function DashboardLayout({ children }) {
 
           <div className="flex items-center gap-3">
             {/* Subscription badge — visible to org users (not super admin own-org) */}
-            {subscription && user?.role !== 'super_admin' && (() => {
+            {subscription && user?.role !== 'super_admin' && subscription.days_remaining !== null && subscription.days_remaining !== undefined && (() => {
               const status = subscription.status;
               const days = subscription.days_remaining;
               const isTrial = status === 'trial';

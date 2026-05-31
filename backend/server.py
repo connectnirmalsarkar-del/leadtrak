@@ -2221,8 +2221,8 @@ async def get_subscription_plans():
     plans_cursor = db.subscription_plans.find({})
     plans = []
     async for p in plans_cursor:
-        p["_id"] = str(p["_id"])
-        p["id"] = p["_id"]
+        p["id"] = str(p["_id"])
+        p.pop("_id", None)
         plans.append(p)
     return plans
 
@@ -2535,9 +2535,12 @@ async def extend_trial(org_id: str, days: int = 7, current_user: dict = Depends(
         raise HTTPException(status_code=403, detail="Super admin only")
     if days <= 0 or days > 365:
         raise HTTPException(status_code=400, detail="days must be 1-365")
-    org = await db.organizations.find_one({"_id": ObjectId(org_id)})
+    org_oid = safe_object_id(org_id, "org_id")
+    org = await db.organizations.find_one({"_id": org_oid})
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+    if org.get("subscription_status") == "active":
+        raise HTTPException(status_code=400, detail="Org is on a paid subscription — record a payment instead of extending trial")
     now = datetime.now(timezone.utc)
     current_end = org.get("trial_end_date") or org.get("subscription_end_date") or now
     if current_end.tzinfo is None:
@@ -2545,7 +2548,7 @@ async def extend_trial(org_id: str, days: int = 7, current_user: dict = Depends(
     base = current_end if current_end > now else now
     new_end = base + timedelta(days=days)
     await db.organizations.update_one(
-        {"_id": ObjectId(org_id)},
+        {"_id": org_oid},
         {"$set": {
             "trial_end_date": new_end,
             "subscription_end_date": new_end,

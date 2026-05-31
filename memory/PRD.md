@@ -207,6 +207,20 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ⏳ WhatsApp message templates
 - ⏳ Super Admin "Impersonate Tenant Admin" feature
 
+### Completed 2026-05-31 — SaaS Billing & Subscription Management
+- ✅ 14-day trial auto-activated on every org signup (register + platform-create)
+- ✅ `subscription_orders` collection tracks every order (pending/paid/abandoned) with payment_method, receipt_no, recorded_by
+- ✅ `GET /api/subscription/status` — tenant's plan, status, days_remaining for header badge
+- ✅ Super Admin **Trial Report** — orgs in trial + days left + admin contact (`GET /api/platform/trial-report`)
+- ✅ Super Admin **Abandoned Carts** — pending/abandoned orders with contact details (`GET /api/platform/abandoned-carts`)
+- ✅ Super Admin **Manual Offline Payment** — cash/cheque/bank/UPI/other, extends subscription, generates receipt (`POST /api/platform/manual-payment`)
+- ✅ Super Admin **Extend Trial** — grants additional trial days (`POST /api/platform/organizations/{id}/extend-trial`)
+- ✅ PlatformOrgsPage rewritten with 4 tabs (Organizations / Trials / Abandoned / Orders) + dialogs
+- ✅ Header **Subscription Badge** (days remaining, color-coded: violet=trial / amber=≤7d / red=expired)
+- ✅ Dashboard Subscription Banner (top of page for trial/expiring/expired)
+- ✅ Industry-specific Lead Status dropdowns (e.g. "Counseling Done", "Application Sent" for Education; "Proposal Sent", "Negotiation" for IT) — dynamic via `user.lead_statuses` from `/api/auth/me`
+- ✅ 24/24 backend pytest pass (`/app/backend/tests/test_saas_billing.py`)
+
 ### P2 — Future
 - ⏳ Workflow automation (drip campaigns)
 - ⏳ Custom report builder
@@ -218,12 +232,13 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 ---
 
 ## Next Tasks (in order)
-1. Multi-industry Phase A — industry selector at signup + terminology mapping + per-industry defaults
-2. Multi-industry Phase B — custom fields & pipeline builder
-3. Multi-industry Phase C — module toggle
-4. Multi-industry Phase D — industry-specific dashboards
-5. Real Razorpay / Twilio / Facebook / Email keys integration
-6. Pagination & profile/logo uploads
+1. **Razorpay live integration** — keys are collected in DB but the verify flow still uses test client. Plug in user-provided keys.
+2. **Email service (Resend or SendGrid)** — demo invites, password reset, team invites, trial-expiry reminders.
+3. **Enforce read-only mode on expiry** — backend middleware that blocks writes when `subscription_status=='expired'`.
+4. **Twilio WhatsApp** — lead reply, demo reminders.
+5. **Facebook Lead Ads + Google Ads** — auto lead capture.
+6. Pagination & profile/logo uploads.
+7. Refactor `server.py` (now ~3650 lines) into routers.
 
 ## Areas Needing Refactor
 - `/app/backend/server.py` (1888 lines) — split into routers (auth, tickets, leads, etc.) when bandwidth permits.
