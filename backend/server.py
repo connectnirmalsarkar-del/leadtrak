@@ -4386,6 +4386,7 @@ async def get_cohort_analysis(current_user: dict = Depends(get_current_user)):
 # ==================== Super Admin: Platform / Tenant Management ====================
 class PlatformOrgCreate(BaseModel):
     organization_name: str
+    industry: Optional[str] = "education"
     admin_name: str
     admin_email: EmailStr
     admin_password: str
@@ -4453,9 +4454,12 @@ async def create_organization(data: PlatformOrgCreate, current_user: dict = Depe
     existing = await db.users.find_one({"email": email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already exists")
+    industry = (data.industry or "education").lower()
+    if industry not in SUPPORTED_INDUSTRIES:
+        industry = "education"
     org_result = await db.organizations.insert_one({
         "name": data.organization_name,
-        "industry": "generic",
+        "industry": industry,
         "subscription_plan": data.subscription_plan,
         "subscription_status": "trial",
         "trial_start_date": datetime.now(timezone.utc),
@@ -4472,9 +4476,28 @@ async def create_organization(data: PlatformOrgCreate, current_user: dict = Depe
         "name": data.admin_name,
         "role": "org_admin",
         "organization_id": org_id,
+        "active": True,
         "created_at": datetime.now(timezone.utc),
     })
-    return {"id": str(org_id), "name": data.organization_name, "admin_email": email}
+    # Seed default services for the chosen industry
+    try:
+        defaults = get_default_services(industry)
+        if defaults:
+            await db.services.insert_many([
+                {
+                    "name": s["name"],
+                    "category": s.get("category", "General"),
+                    "base_price": s.get("base_price", 0),
+                    "min_price": s.get("min_price", s.get("base_price", 0)),
+                    "active": True,
+                    "organization_id": org_id,
+                    "created_at": datetime.now(timezone.utc),
+                }
+                for s in defaults
+            ])
+    except Exception as e:
+        logger.warning(f"Failed to seed default services for org {org_id}: {e}")
+    return {"id": str(org_id), "name": data.organization_name, "industry": industry, "admin_email": email}
 
 @api_router.put("/platform/organizations/{org_id}/toggle")
 async def toggle_organization_status(org_id: str, current_user: dict = Depends(get_current_user)):

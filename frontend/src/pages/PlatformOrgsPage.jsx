@@ -45,7 +45,8 @@ export default function PlatformOrgsPage() {
   const [stats, setStats] = useState({ total_organizations: 0, active_organizations: 0, total_users: 0, platform_revenue: 0 });
   const [showDialog, setShowDialog] = useState(false);
   const [created, setCreated] = useState(null);
-  const [form, setForm] = useState({ organization_name: '', admin_name: '', admin_email: '', admin_password: '', subscription_plan: 'starter' });
+  const [form, setForm] = useState({ organization_name: '', industry: 'education', admin_name: '', admin_email: '', admin_password: '', subscription_plan: 'starter' });
+  const [industries, setIndustries] = useState([]);
 
   // Manual payment dialog state
   const [paymentDialog, setPaymentDialog] = useState(false);
@@ -83,14 +84,16 @@ export default function PlatformOrgsPage() {
 
   const load = async () => {
     try {
-      const [o, s, pl] = await Promise.all([
+      const [o, s, pl, ind] = await Promise.all([
         axios.get(`${API}/platform/organizations`),
         axios.get(`${API}/platform/stats`),
         axios.get(`${API}/subscription-plans`),
+        axios.get(`${API}/industries`),
       ]);
       setOrgs(o.data);
       setStats(s.data);
       setPlans(pl.data);
+      setIndustries(ind.data || []);
     } catch (e) {
       toast.error('Failed to load platform data');
     }
@@ -148,7 +151,7 @@ export default function PlatformOrgsPage() {
   const closeDialog = () => {
     setShowDialog(false);
     setCreated(null);
-    setForm({ organization_name: '', admin_name: '', admin_email: '', admin_password: '', subscription_plan: 'starter' });
+    setForm({ organization_name: '', industry: 'education', admin_name: '', admin_email: '', admin_password: '', subscription_plan: 'starter' });
   };
 
   const openManualPayment = (org) => {
@@ -247,6 +250,20 @@ export default function PlatformOrgsPage() {
                   <div className="space-y-1.5">
                     <Label>Organization Name *</Label>
                     <Input value={form.organization_name} onChange={(e) => setForm({ ...form, organization_name: e.target.value })} placeholder="Apex Coaching Institute" data-testid="org-name-field" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>What industry are you in? *</Label>
+                    <Select value={form.industry} onValueChange={(v) => setForm({ ...form, industry: v })}>
+                      <SelectTrigger data-testid="industry-field"><SelectValue placeholder="Select industry" /></SelectTrigger>
+                      <SelectContent>
+                        {industries.length === 0 ? (
+                          <SelectItem value="education">Education</SelectItem>
+                        ) : industries.map((i) => (
+                          <SelectItem key={i.key} value={i.key}>{i.label || i.name || i.key}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-slate-500">This pre-configures default services, lead statuses, and terminology for the tenant.</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
