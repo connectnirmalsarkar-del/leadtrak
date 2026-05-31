@@ -1,0 +1,95 @@
+{
+  "project_name": "Education CRM SaaS",
+  "domain": "Enterprise SaaS / Education",
+  "theme": "LIGHT",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "rationale": "For an educational CRM designed to handle dense data, leads, and multi-tenant management, the interface needs to project authority, clarity, and precision. Archetype 4 (Swiss & High-Contrast) provides a highly functional, legible, and objective aesthetic that prioritizes progressive disclosure, information hierarchy, and data visualization without unnecessary decorative distractions.",
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "IBM Plex Sans",
+    "installation_instructions": "Import both fonts via next/font/google in Next.js. Avoid using 'Inter' or 'Space Grotesk'.",
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-semibold tracking-tight text-slate-900",
+      "h2": "text-2xl sm:text-3xl font-medium tracking-tight text-slate-900",
+      "h3": "text-xl font-medium text-slate-800",
+      "h4": "text-lg font-medium text-slate-800",
+      "body": "text-sm text-slate-600 leading-relaxed",
+      "labels": "text-xs font-semibold uppercase tracking-[0.2em] text-slate-500",
+      "data_numbers": "text-base font-mono font-medium text-slate-900"
+    }
+  },
+  "colors": {
+    "background": {
+      "app": "#F8FAFC",
+      "surface": "#FFFFFF",
+      "sidebar": "#0F172A"
+    },
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#475569",
+      "muted": "#94A3B8",
+      "inverse": "#FFFFFF"
+    },
+    "brand": {
+      "primary": "#2563EB",
+      "primary_hover": "#1D4ED8",
+      "accent": "#002FA7"
+    },
+    "status": {
+      "success_admitted": "#10B981",
+      "warning_followup": "#F59E0B",
+      "danger_lost": "#EF4444",
+      "info_new": "#3B82F6"
+    },
+    "borders": {
+      "default": "#E2E8F0",
+      "focus": "#93C5FD"
+    }
+  },
+  "spacing_and_layout": {
+    "dashboard_grid": "The 'Control Room' grid layout. grid-cols-1 md:grid-cols-3 lg:grid-cols-4 or 12-column grid. Tight gaps (gap-4 or gap-6). Ensure all widget containers use h-full.",
+    "container_padding": "p-6 or p-8 inside cards/sections to prevent text collision. Mobile-first padding.",
+    "alignment": "Left-align dense content, tables, and forms. Use optical alignment for buttons with icons.",
+    "radius": "Minimal. max 6px (rounded-md) across all cards, inputs, and buttons to reinforce the functional/Swiss aesthetic. Avoid pill shapes."
+  },
+  "components": {
+    "cards": "Cardless flat design or 1px subtle borders (border-slate-200), pure white backgrounds. No heavy drop shadows. Hover states get slight lift (-translate-y-1) and shadow-sm.",
+    "tables": "Progressive disclosure structure. Show top metrics above table. Use Shadcn Table. Essential columns only (Name, Stage, Source, Next Step, Status). Use a right-side drawer (Sheet) for full Lead details to avoid leaving the page.",
+    "buttons": "Flat solid primary color for main CTA. Outline or Ghost for secondary. Always explicitly define hover text color. Example: hover:bg-blue-700 hover:text-white.",
+    "forms": "Use Shadcn Form, Input, Select. Labels must be bold and concise. Inputs should have subtle 1px borders, active state needs ring-2 ring-blue-300 ring-offset-1.",
+    "navigation": "Sidebar for dashboard navigation with dark theme (bg-slate-900, text-slate-300). Active states use bright blue indicator and white text.",
+    "icons": "Use lucide-react (default). Dense, clean, functional."
+  },
+  "motion": {
+    "hover_states": "Quick, functional transitions. transition-colors duration-150 ease-in-out.",
+    "entrance": "Staggered fade-up for table rows or dashboard cards. Minimal, non-distracting.",
+    "interactive": "Buttons get subtle scale down (active:scale-[0.98])."
+  },
+  "images": {
+    "auth_background": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/1b9ac9ad28e4873ab57e3c73b45e719c3783326392e95f2c112eb4883d67f77c.png",
+      "description": "Abstract geometric composition representing data flow and education.",
+      "usage": "Use as the split-screen image or background on the Login/Registration/Auth pages."
+    },
+    "landing_hero_campus": {
+      "url": "https://images.unsplash.com/photo-1774600787713-bc405e935202?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjB1bml2ZXJzaXR5JTIwY2FtcHVzfGVufDB8fHx8MTc4MDIxMjYzN3ww&ixlib=rb-4.1.0&q=85",
+      "description": "Modern university glass building.",
+      "usage": "Use in the marketing/landing page hero section or About section."
+    },
+    "team_advisor_meeting": {
+      "url": "https://images.unsplash.com/photo-1551836022-d5d88e9218df?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHwzfHxzdHVkZW50JTIwYWR2aXNvciUyMG1lZXRpbmd8ZW58MHx8fHwxNzgwMjEyNjM3fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Student advisor meeting.",
+      "usage": "Use in the 'Features' or 'Target Audience' section of the landing page to illustrate counselors working."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the color hex codes provided. Do NOT use default Tailwind colors blindly unless mapped to the palette.",
+    "Build the dashboard using a layout with a fixed sidebar (dark mode sidebar) and a light content area.",
+    "Implement multi-tenant logic abstractly in the UI (e.g., Organization switcher dropdown in the header/sidebar).",
+    "For the Lead Management table, implement progressive disclosure: a main table with key columns, and clicking a row opens a Shadcn Sheet (Right Drawer) with full lead details, follow-up notes, and activity timeline.",
+    "Add 'data-testid' to ALL interactive elements (buttons, inputs, menu items, table rows) using kebab-case and role-based naming (e.g., data-testid=\"lead-table-row\", data-testid=\"add-lead-submit\").",
+    "Use pure HTML/Tailwind for marketing/landing pages for creative freedom, but use Shadcn UI strictly for the dashboard, CRM tables, and settings forms.",
+    "Do not use generic font Inter for headings; stick to Outfit for headings and IBM Plex Sans for body.",
+    "Use Next.js 15 App router. Make the components client/server aware appropriately."
+  ]
+}
