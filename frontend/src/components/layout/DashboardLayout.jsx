@@ -25,6 +25,7 @@ import {
   Trophy,
   Zap,
   Tag,
+  Video,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -42,6 +43,7 @@ const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testId: 'nav-dashboard' },
   { path: '/leads', labelKey: 'leads', fallback: 'Leads', icon: UserPlus, testId: 'nav-leads' },
   { path: '/followups', label: 'Follow-ups', icon: Calendar, testId: 'nav-followups' },
+  { path: '/demos', label: 'Demos', icon: Video, testId: 'nav-demos' },
   { path: '/admissions', labelKey: 'conversions', fallback: 'Conversions', icon: Trophy, testId: 'nav-admissions' },
   { path: '/tasks', label: 'Tasks', icon: CheckSquare, testId: 'nav-tasks' },
   { path: '/whatsapp-templates', label: 'WhatsApp', icon: MessageSquare, testId: 'nav-whatsapp' },

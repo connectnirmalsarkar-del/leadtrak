@@ -22,6 +22,7 @@ import PlatformOrgsPage from '@/pages/PlatformOrgsPage';
 import SupportTicketsPage from '@/pages/SupportTicketsPage';
 import ServicesPage from '@/pages/ServicesPage';
 import IntegrationsPage from '@/pages/IntegrationsPage';
+import DemosPage from '@/pages/DemosPage';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 
 const ProtectedRoute = ({ children }) => {
@@ -85,6 +86,7 @@ function App() {
           <Route path="/support" element={<ProtectedRoute><SupportTicketsPage /></ProtectedRoute>} />
           <Route path="/services" element={<ProtectedRoute><ServicesPage /></ProtectedRoute>} />
           <Route path="/integrations" element={<ProtectedRoute><IntegrationsPage /></ProtectedRoute>} />
+          <Route path="/demos" element={<ProtectedRoute><DemosPage /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

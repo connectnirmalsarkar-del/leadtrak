@@ -70,6 +70,29 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Frontend `SupportTicketsPage.jsx` — full UI with file uploader, attachment previews, status dropdown, role-based controls
 - ✅ Backend testing: 19/19 pytest tests passed (iteration_2.json)
 
+### Phase 8 — Demo Management + Rich Follow-up Completion (2026-05-31) ✅ COMPLETE
+
+**Use case:** Enterprise sales (IT, agencies, real estate, healthcare) show **DEMOS** before closing. Caller and demo presenter are usually different people. Now fully supported.
+
+**Backend additions:**
+- ✅ `demos` collection + models (`DemoCreate`, `DemoComplete`)
+- ✅ `POST /api/demos` — schedule with demo_owner_id, scheduled_date/time, demo_mode (Online/Onsite), demo_link, agenda. Logs `demo_scheduled` event. Notifies demo owner. **Returns `share` object with pre-built `whatsapp` (wa.me) + `mailto` URLs** so caller clicks once to send the pre-filled invite — no Twilio/SendGrid creds needed.
+- ✅ `GET /api/demos?scope=mine|upcoming|completed|all` — caller visibility enforced (counselor/telecaller see only demos they own or scheduled)
+- ✅ `GET /api/demos/{id}` — single demo + share links
+- ✅ `POST /api/demos/{id}/complete` — demo presenter (or manager+) marks done with outcome (interested/not_interested/reschedule/no_show), feedback, recording URL. Logs `demo_completed` event. Auto-updates lead status: "interested" → Interested, "not_interested" → Lost.
+- ✅ `POST /api/followups/{id}/complete` — **rich follow-up completion** capturing summary, voice recording, status change, AND next action (next_followup / book_demo / convert / lost / none) in ONE call. Generates all timeline events.
+- ✅ `safe_object_id()` defensive wrapping continued in transfer / demo / followup endpoints.
+
+**Frontend additions:**
+- ✅ `BookDemoDialog` reusable component — 2-step UX: (1) form with demo presenter dropdown / date / time / mode / link / agenda → (2) **post-book share screen** with pre-filled invite + "Send WhatsApp" / "Send Email" buttons opening native apps with the message already typed
+- ✅ "Book Demo" button on Lead Detail Sheet (next to WhatsApp & Follow-up)
+- ✅ New `/demos` page with tabs (My Demos / Upcoming / Completed / All), card list showing lead, schedule, mode, demo presenter, scheduler, outcome
+- ✅ "Mark Done" dialog: outcome dropdown, feedback notes, optional recording URL
+- ✅ Sidebar "Demos" nav item between Follow-ups and Admissions
+- ✅ `LeadTimeline` extended with `demo_scheduled` (fuchsia icon, shows presenter + link) + `demo_completed` (teal icon, shows outcome badge + feedback)
+
+**Smoke-tested end-to-end:** Demo booked → pre-filled WhatsApp message generated ("Hi Demo — Ananya Banerjee, your demo is scheduled on 2026-05-31 at 11:00 (Online). Join here: https://meet.google.com/abc-defg-hij. Looking forward!") with one-click Send WhatsApp / Send Email buttons. Demos page shows the scheduled demo with Open + Mark Done actions.
+
 ### Phase 7 — Lead Distribution, Strict Visibility, Integrations Setup, Demo Timeline (2026-05-31) ✅ COMPLETE
 
 **Bug fixes:**

@@ -268,6 +268,32 @@ class LeadTransfer(BaseModel):
     new_assignee_id: str
     reason: Optional[str] = ""
 
+class DemoCreate(BaseModel):
+    lead_id: str
+    demo_owner_id: str
+    scheduled_date: str          # YYYY-MM-DD
+    scheduled_time: str          # HH:MM
+    demo_mode: str = "Online"    # Online | Onsite
+    demo_link: Optional[str] = ""
+    agenda: Optional[str] = ""
+
+class DemoComplete(BaseModel):
+    outcome: str                 # interested | not_interested | reschedule | no_show
+    feedback: Optional[str] = ""
+    recording_url: Optional[str] = ""
+
+class FollowupComplete(BaseModel):
+    summary: str
+    voice_recording_url: Optional[str] = None
+    voice_recording_public_id: Optional[str] = None
+    voice_recording_duration: Optional[float] = None
+    new_status: Optional[str] = None
+    next_action: Optional[str] = None    # next_followup | book_demo | convert | lost | none
+    next_followup_date: Optional[str] = None
+    next_followup_time: Optional[str] = None
+    # Optional demo booking nested in completion
+    demo: Optional[DemoCreate] = None
+
 class AdmissionCreate(BaseModel):
     student_name: str
     mobile: str
@@ -1355,6 +1381,316 @@ async def get_lead_timeline(lead_id: str, current_user: dict = Depends(get_curre
             e["created_at"] = e["created_at"].isoformat()
     return events
 
+    return events
+
+
+# ==================== Demos (Phase 8) ====================
+def _build_demo_share_links(lead: dict, demo_doc: dict) -> dict:
+    """Build prefilled WhatsApp and mailto links for the demo invite.
+
+    The actual delivery is done by the caller clicking the link in the UI —
+    we do NOT call any external API here (works without Twilio / SendGrid creds).
+    """
+    when = f"{demo_doc.get('scheduled_date', '')} at {demo_doc.get('scheduled_time', '')}"
+    mode = demo_doc.get("demo_mode", "Online")
+    link = demo_doc.get("demo_link") or "(link will be shared shortly)"
+    name = lead.get("name", "there")
+    msg = (
+        f"Hi {name}, "
+        f"your demo is scheduled on {when} ({mode}). "
+        f"Join here: {link}. "
+        f"Looking forward!"
+    )
+    from urllib.parse import quote
+    encoded_msg = quote(msg)
+    mobile = (lead.get("mobile") or "").lstrip("+").replace(" ", "").replace("-", "")
+    whatsapp = f"https://wa.me/{mobile}?text={encoded_msg}" if mobile else ""
+    email = lead.get("email") or ""
+    subject = quote(f"Your demo on {when}")
+    body = encoded_msg
+    mailto = f"mailto:{email}?subject={subject}&body={body}" if email else ""
+    return {"whatsapp": whatsapp, "mailto": mailto, "message": msg}
+
+
+def _serialize_demo(d: dict) -> dict:
+    d["_id"] = str(d["_id"])
+    d.pop("organization_id", None)
+    for k in ("created_at", "completed_at"):
+        if isinstance(d.get(k), datetime):
+            d[k] = d[k].isoformat()
+    return d
+
+
+@api_router.post("/demos")
+async def create_demo(data: DemoCreate, current_user: dict = Depends(get_current_user)):
+    org_id = ObjectId(current_user["organization_id"])
+    lid = safe_object_id(data.lead_id, "lead_id")
+    lead = await db.leads.find_one({"_id": lid, "organization_id": org_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    owner_oid = safe_object_id(data.demo_owner_id, "demo_owner_id")
+    owner = await db.users.find_one({"_id": owner_oid, "organization_id": org_id}, {"name": 1, "role": 1})
+    if not owner:
+        raise HTTPException(status_code=400, detail="Demo owner not found in your organization")
+
+    demo_doc = {
+        "lead_id": str(lid),
+        "lead_name": lead.get("name"),
+        "lead_mobile": lead.get("mobile"),
+        "lead_email": lead.get("email"),
+        "demo_owner_id": data.demo_owner_id,
+        "demo_owner_name": owner.get("name"),
+        "scheduled_date": data.scheduled_date,
+        "scheduled_time": data.scheduled_time,
+        "demo_mode": data.demo_mode,
+        "demo_link": data.demo_link or "",
+        "agenda": data.agenda or "",
+        "status": "Scheduled",
+        "outcome": None,
+        "feedback": None,
+        "recording_url": None,
+        "scheduled_by_id": current_user["id"],
+        "scheduled_by_name": current_user["name"],
+        "organization_id": org_id,
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = await db.demos.insert_one(demo_doc)
+    demo_doc["_id"] = result.inserted_id
+
+    # Log to lead timeline
+    await log_lead_event(
+        lid, "demo_scheduled",
+        {
+            "demo_id": str(result.inserted_id),
+            "demo_owner_id": data.demo_owner_id,
+            "demo_owner_name": owner.get("name"),
+            "scheduled_date": data.scheduled_date,
+            "scheduled_time": data.scheduled_time,
+            "demo_mode": data.demo_mode,
+            "demo_link": data.demo_link,
+            "agenda": data.agenda,
+        },
+        current_user, org_id,
+    )
+
+    # Notify demo owner
+    if str(owner_oid) != current_user["id"]:
+        await db.notifications.insert_one({
+            "user_id": str(owner_oid),
+            "message": f"Demo scheduled with {lead.get('name')} on {data.scheduled_date} at {data.scheduled_time}",
+            "type": "demo_assigned",
+            "read": False,
+            "organization_id": org_id,
+            "created_at": datetime.now(timezone.utc),
+        })
+
+    share = _build_demo_share_links(lead, demo_doc)
+    out = _serialize_demo(demo_doc)
+    out["share"] = share
+    return out
+
+
+@api_router.get("/demos")
+async def list_demos(
+    current_user: dict = Depends(get_current_user),
+    scope: Optional[str] = "all",     # all | mine | upcoming | completed
+):
+    org_id = ObjectId(current_user["organization_id"])
+    query = {"organization_id": org_id}
+    # Caller visibility: counselor/telecaller see ONLY demos they scheduled or are owner of
+    if current_user["role"] in ("counselor", "telecaller"):
+        query["$or"] = [
+            {"demo_owner_id": current_user["id"]},
+            {"scheduled_by_id": current_user["id"]},
+        ]
+    if scope == "mine":
+        # Explicit "mine" filter takes precedence
+        query = {"organization_id": org_id, "demo_owner_id": current_user["id"]}
+    if scope == "upcoming":
+        query["status"] = "Scheduled"
+    elif scope == "completed":
+        query["status"] = "Completed"
+    demos = await db.demos.find(query).sort("scheduled_date", -1).to_list(500)
+    return [_serialize_demo(d) for d in demos]
+
+
+@api_router.get("/demos/{demo_id}")
+async def get_demo(demo_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = ObjectId(current_user["organization_id"])
+    did = safe_object_id(demo_id, "demo_id")
+    demo = await db.demos.find_one({"_id": did, "organization_id": org_id})
+    if not demo:
+        raise HTTPException(status_code=404, detail="Demo not found")
+    if current_user["role"] in ("counselor", "telecaller"):
+        if demo.get("demo_owner_id") != current_user["id"] and demo.get("scheduled_by_id") != current_user["id"]:
+            raise HTTPException(status_code=404, detail="Demo not found")
+    lead = await db.leads.find_one({"_id": ObjectId(demo["lead_id"])}, {"name": 1, "mobile": 1, "email": 1})
+    out = _serialize_demo(demo)
+    out["share"] = _build_demo_share_links(lead or {}, demo)
+    return out
+
+
+@api_router.post("/demos/{demo_id}/complete")
+async def complete_demo(demo_id: str, data: DemoComplete, current_user: dict = Depends(get_current_user)):
+    """Demo presenter marks the demo complete with outcome + feedback."""
+    org_id = ObjectId(current_user["organization_id"])
+    did = safe_object_id(demo_id, "demo_id")
+    demo = await db.demos.find_one({"_id": did, "organization_id": org_id})
+    if not demo:
+        raise HTTPException(status_code=404, detail="Demo not found")
+    if demo.get("demo_owner_id") != current_user["id"] and current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only the demo owner or a manager can complete this demo")
+
+    status_map = {"interested": "Completed", "not_interested": "Completed", "reschedule": "Rescheduled", "no_show": "No Show"}
+    new_status = status_map.get(data.outcome, "Completed")
+
+    await db.demos.update_one(
+        {"_id": did, "organization_id": org_id},
+        {"$set": {
+            "status": new_status,
+            "outcome": data.outcome,
+            "feedback": data.feedback or "",
+            "recording_url": data.recording_url or "",
+            "completed_by_id": current_user["id"],
+            "completed_by_name": current_user["name"],
+            "completed_at": datetime.now(timezone.utc),
+        }},
+    )
+
+    # Log timeline
+    lid = ObjectId(demo["lead_id"])
+    await log_lead_event(
+        lid, "demo_completed",
+        {
+            "demo_id": demo_id,
+            "demo_owner_name": demo.get("demo_owner_name"),
+            "outcome": data.outcome,
+            "feedback": data.feedback or "",
+            "status": new_status,
+        },
+        current_user, org_id,
+    )
+
+    # Auto-update lead status based on demo outcome
+    if data.outcome == "interested":
+        await db.leads.update_one({"_id": lid}, {"$set": {"status": "Interested"}})
+        await log_lead_event(lid, "status_changed", {"from": demo.get("lead_status", "—"), "to": "Interested"}, current_user, org_id)
+    elif data.outcome == "not_interested":
+        await db.leads.update_one({"_id": lid}, {"$set": {"status": "Lost"}})
+        await log_lead_event(lid, "lead_lost", {"from": "—", "to": "Lost", "reason": "Demo: not interested"}, current_user, org_id)
+
+    return {"message": "Demo completed", "status": new_status}
+
+
+@api_router.post("/followups/{followup_id}/complete")
+async def complete_followup(followup_id: str, data: FollowupComplete, current_user: dict = Depends(get_current_user)):
+    """Rich follow-up completion: captures summary, voice, status change, next action all in one call."""
+    org_id = ObjectId(current_user["organization_id"])
+    fid = safe_object_id(followup_id, "followup_id")
+    fu = await db.followups.find_one({"_id": fid, "organization_id": org_id})
+    if not fu:
+        raise HTTPException(status_code=404, detail="Follow-up not found")
+
+    lid = safe_object_id(fu["lead_id"], "lead_id")
+    lead = await db.leads.find_one({"_id": lid, "organization_id": org_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Update the follow-up itself with summary + voice + completion flag
+    update_doc = {
+        "completed": True,
+        "completed_at": datetime.now(timezone.utc),
+        "completed_by_id": current_user["id"],
+        "completed_by_name": current_user["name"],
+        "completion_summary": data.summary,
+    }
+    if data.voice_recording_url:
+        update_doc["voice_recording_url"] = data.voice_recording_url
+        update_doc["voice_recording_public_id"] = data.voice_recording_public_id
+        update_doc["voice_recording_duration"] = data.voice_recording_duration
+    await db.followups.update_one({"_id": fid}, {"$set": update_doc})
+
+    # Log the completion as a follow-up event in the timeline
+    await log_lead_event(
+        lid, "followup_added",
+        {
+            "remarks": data.summary,
+            "completed": True,
+            "followup_date": fu.get("followup_date"),
+            "followup_time": fu.get("followup_time"),
+            "voice_recording_url": data.voice_recording_url,
+            "voice_recording_duration": data.voice_recording_duration,
+        },
+        current_user, org_id,
+    )
+
+    # Status change
+    if data.new_status and data.new_status != lead.get("status"):
+        old_status = lead.get("status")
+        await db.leads.update_one({"_id": lid}, {"$set": {"status": data.new_status}})
+        event_type = "lead_lost" if data.new_status == "Lost" else "status_changed"
+        await log_lead_event(lid, event_type, {"from": old_status, "to": data.new_status}, current_user, org_id)
+
+    out = {"message": "Follow-up completed"}
+
+    # Branch: next action
+    if data.next_action == "next_followup" and data.next_followup_date:
+        new_fu = await db.followups.insert_one({
+            "lead_id": str(lid),
+            "followup_date": data.next_followup_date,
+            "followup_time": data.next_followup_time or "10:00",
+            "remarks": f"Scheduled from previous follow-up. Prior summary: {data.summary[:80]}",
+            "completed": False,
+            "organization_id": org_id,
+            "created_by": current_user["id"],
+            "created_by_name": current_user.get("name"),
+            "created_at": datetime.now(timezone.utc),
+        })
+        out["next_followup_id"] = str(new_fu.inserted_id)
+    elif data.next_action == "book_demo" and data.demo:
+        # Reuse create_demo logic inline
+        owner_oid = safe_object_id(data.demo.demo_owner_id, "demo_owner_id")
+        owner = await db.users.find_one({"_id": owner_oid, "organization_id": org_id}, {"name": 1})
+        if owner:
+            demo_doc = {
+                "lead_id": str(lid),
+                "lead_name": lead.get("name"),
+                "lead_mobile": lead.get("mobile"),
+                "lead_email": lead.get("email"),
+                "demo_owner_id": data.demo.demo_owner_id,
+                "demo_owner_name": owner.get("name"),
+                "scheduled_date": data.demo.scheduled_date,
+                "scheduled_time": data.demo.scheduled_time,
+                "demo_mode": data.demo.demo_mode,
+                "demo_link": data.demo.demo_link or "",
+                "agenda": data.demo.agenda or "",
+                "status": "Scheduled",
+                "scheduled_by_id": current_user["id"],
+                "scheduled_by_name": current_user["name"],
+                "organization_id": org_id,
+                "created_at": datetime.now(timezone.utc),
+            }
+            demo_res = await db.demos.insert_one(demo_doc)
+            await log_lead_event(
+                lid, "demo_scheduled",
+                {
+                    "demo_id": str(demo_res.inserted_id),
+                    "demo_owner_name": owner.get("name"),
+                    "scheduled_date": data.demo.scheduled_date,
+                    "scheduled_time": data.demo.scheduled_time,
+                    "demo_mode": data.demo.demo_mode,
+                    "demo_link": data.demo.demo_link,
+                },
+                current_user, org_id,
+            )
+            demo_doc["_id"] = demo_res.inserted_id
+            out["demo"] = _serialize_demo(demo_doc)
+            out["demo"]["share"] = _build_demo_share_links(lead, demo_doc)
+
+    return out
+
+
 # ==================== Followup Routes ====================
 @api_router.post("/followups")
 async def create_followup(data: FollowupCreate, current_user: dict = Depends(get_current_user)):
@@ -1430,11 +1766,12 @@ async def get_followups(
     return followups
 
 @api_router.put("/followups/{followup_id}/complete")
-async def complete_followup(followup_id: str, current_user: dict = Depends(get_current_user)):
+async def complete_followup_simple(followup_id: str, current_user: dict = Depends(get_current_user)):
+    """Lightweight 'mark as done' (no summary/voice). For rich completion use POST /followups/{id}/complete."""
     org_id = ObjectId(current_user["organization_id"])
-    
+    fid = safe_object_id(followup_id, "followup_id")
     result = await db.followups.update_one(
-        {"_id": ObjectId(followup_id), "organization_id": org_id},
+        {"_id": fid, "organization_id": org_id},
         {"$set": {"completed": True}}
     )
     

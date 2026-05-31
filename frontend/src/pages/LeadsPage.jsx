@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API, useAuth } from '@/context/AuthContext';
 import { useTerminology } from '@/lib/terminology';
-import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare, Upload, Download, ArrowRightLeft, AlertCircle, Clock, Activity } from 'lucide-react';
+import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare, Upload, Download, ArrowRightLeft, AlertCircle, Clock, Activity, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import VoiceRecorder from '@/components/VoiceRecorder';
 import LeadTimeline from '@/components/LeadTimeline';
+import BookDemoDialog from '@/components/BookDemoDialog';
 import {
   Dialog,
   DialogContent,
@@ -59,6 +60,7 @@ export default function LeadsPage() {
   const [selectedLead, setSelectedLead] = useState(null);
   const [showFollowupDialog, setShowFollowupDialog] = useState(false);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [showDemoDialog, setShowDemoDialog] = useState(false);
   const [transferTo, setTransferTo] = useState('');
   const [transferReason, setTransferReason] = useState('');
   const [duplicate, setDuplicate] = useState(null);
@@ -557,18 +559,22 @@ export default function LeadsPage() {
                   </div>
 
                   {/* Quick Actions */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Button
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      className="flex-1 min-w-[120px] bg-emerald-600 hover:bg-emerald-700 text-white"
                       onClick={() => window.open(`https://wa.me/${selectedLead.mobile.replace(/\D/g, '')}`, '_blank')}
                       data-testid="whatsapp-lead-btn"
                     >
                       <MessageSquare className="w-4 h-4 mr-2" />
                       WhatsApp
                     </Button>
-                    <Button variant="outline" className="flex-1" onClick={() => setShowFollowupDialog(true)} data-testid="add-followup-btn">
+                    <Button variant="outline" className="flex-1 min-w-[120px]" onClick={() => setShowFollowupDialog(true)} data-testid="add-followup-btn">
                       <Clock className="w-4 h-4 mr-2" />
                       Follow-up
+                    </Button>
+                    <Button variant="outline" className="flex-1 min-w-[120px] border-violet-200 text-violet-700 hover:bg-violet-50" onClick={() => setShowDemoDialog(true)} data-testid="book-demo-btn">
+                      <Video className="w-4 h-4 mr-2" />
+                      Book Demo
                     </Button>
                   </div>
 
@@ -718,6 +724,17 @@ export default function LeadsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Book Demo Dialog */}
+      <BookDemoDialog
+        open={showDemoDialog}
+        onOpenChange={setShowDemoDialog}
+        lead={selectedLead}
+        users={users}
+        onBooked={() => {
+          setTimelineRefresh((r) => r + 1);
+        }}
+      />
     </div>
   );
 }

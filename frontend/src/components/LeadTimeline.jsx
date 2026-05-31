@@ -11,6 +11,8 @@ import {
   StickyNote,
   CircleDot,
   Mic,
+  Video,
+  CheckCircle2,
 } from 'lucide-react';
 
 const formatDate = (iso) => {
@@ -25,6 +27,8 @@ const EVENT_META = {
   transferred: { icon: ArrowRightLeft, color: 'amber', title: 'Transferred' },
   followup_added: { icon: Phone, color: 'sky', title: 'Follow-up logged' },
   note_added: { icon: StickyNote, color: 'slate', title: 'Note added' },
+  demo_scheduled: { icon: Video, color: 'fuchsia', title: 'Demo scheduled' },
+  demo_completed: { icon: CheckCircle2, color: 'teal', title: 'Demo completed' },
   admission_recorded: { icon: Trophy, color: 'emerald', title: 'Converted' },
   lead_lost: { icon: XCircle, color: 'red', title: 'Marked as lost' },
 };
@@ -36,6 +40,8 @@ const COLOR_CLASS = {
   amber: 'bg-amber-100 text-amber-700 border-amber-200',
   sky: 'bg-sky-100 text-sky-700 border-sky-200',
   slate: 'bg-slate-100 text-slate-700 border-slate-200',
+  fuchsia: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200',
+  teal: 'bg-teal-100 text-teal-700 border-teal-200',
   emerald: 'bg-emerald-100 text-emerald-700 border-emerald-200',
   red: 'bg-red-100 text-red-700 border-red-200',
 };
@@ -92,6 +98,45 @@ const EventBody = ({ event }) => {
               )}
             </div>
           )}
+        </div>
+      );
+    case 'demo_scheduled':
+      return (
+        <div className="text-sm text-slate-700 space-y-1">
+          <p>
+            With <span className="font-medium text-slate-900">{p.demo_owner_name || '—'}</span>
+            {p.scheduled_date && p.scheduled_time && (
+              <> · {p.scheduled_date} at {p.scheduled_time}</>
+            )}
+            {p.demo_mode && (
+              <span className="ml-1 text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">{p.demo_mode}</span>
+            )}
+          </p>
+          {p.demo_link && (
+            <p className="text-xs">
+              <a href={p.demo_link} target="_blank" rel="noopener noreferrer" className="text-violet-700 hover:underline break-all">
+                {p.demo_link}
+              </a>
+            </p>
+          )}
+          {p.agenda && <p className="text-xs italic text-slate-500">"{p.agenda}"</p>}
+        </div>
+      );
+    case 'demo_completed':
+      return (
+        <div className="text-sm text-slate-700 space-y-1">
+          <p>
+            by <span className="font-medium text-slate-900">{p.demo_owner_name || '—'}</span>
+            <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${
+              p.outcome === 'interested' ? 'bg-emerald-100 text-emerald-700' :
+              p.outcome === 'not_interested' ? 'bg-red-100 text-red-700' :
+              p.outcome === 'reschedule' ? 'bg-amber-100 text-amber-700' :
+              'bg-slate-100 text-slate-600'
+            }`}>
+              {(p.outcome || '').replace('_', ' ')}
+            </span>
+          </p>
+          {p.feedback && <p className="text-xs text-slate-600">{p.feedback}</p>}
         </div>
       );
     case 'admission_recorded':
