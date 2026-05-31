@@ -70,6 +70,27 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Frontend `SupportTicketsPage.jsx` — full UI with file uploader, attachment previews, status dropdown, role-based controls
 - ✅ Backend testing: 19/19 pytest tests passed (iteration_2.json)
 
+### Phase 7 — Lead Distribution, Strict Visibility, Integrations Setup, Demo Timeline (2026-05-31) ✅ COMPLETE
+
+**Bug fixes:**
+- ✅ Add Lead form: "Service Interested In" now a **service dropdown** from the org's services catalog
+- ✅ Record Deal form: replaced fresh student/mobile inputs with a **Lead picker dropdown** — selecting an existing lead from the pipeline auto-fills name/mobile and pre-selects matching service
+- ✅ Route ordering bug: `/api/leads/csv-sample` was shadowed by `/api/leads/{lead_id}` → moved declaration earlier and applied `safe_object_id()` defensive wrapping to all `/leads/{id}/*` endpoints (get/update/delete/assign/transfer/timeline). Malformed IDs now return 400 instead of 500.
+
+**New features:**
+- ✅ **Strict caller-level lead visibility** — counselor & telecaller now see ONLY leads assigned to them (list, detail, timeline, today-followups). Managers/admins still see everything. Tenant isolation continues to apply on top.
+- ✅ **Round-robin auto-distribute** — POST `/api/leads`, `/api/leads/import-csv`, `/api/widget/lead/{token}` all auto-assign across active counselor + telecaller using `organizations.last_assigned_user_id` rotation. 100 leads ÷ 5 callers → 20 each over time.
+- ✅ **`auto_assign_enabled`** org-level toggle (ON by default). When OFF, unassigned leads stay unassigned.
+- ✅ **CSV improvements** — duplicate skip by mobile/email, timeline event logged per row, notification to assignee, response now returns `{imported, skipped_duplicates, errors, distribution}`. UI shows distribution count in toast.
+- ✅ **Sample CSV download** — `GET /api/leads/csv-sample` with header + 3 example rows. New "Sample CSV" button on LeadsPage.
+- ✅ **Public widget endpoint** — round-robin assign + duplicate skip + synthetic timeline event (actor = "Website Widget · system").
+- ✅ **Integrations storage** — `GET/PUT /api/organization/integrations` with Razorpay / Twilio WhatsApp / Facebook Lead Ads / Google Ads providers. Secrets masked on GET (`••••XXXX` + `_set: true` flag). Partial updates preserve other providers. Masked-echo (`••••`) silently dropped server-side.
+- ✅ **Integrations UI** — new `/integrations` page (org_admin/super_admin only) with provider cards, connection status badges, setup dialogs per provider, "Where to find keys" docs links, Auto-assign toggle at top.
+- ✅ **Notification polling** — DashboardLayout bell now polls every **15 sec**, shows **toast popup** for new notifications since last poll (near real-time for callers).
+- ✅ **Demo timeline lead** — `seed_demo_timeline_lead()` auto-creates "Demo — Ananya Banerjee" on startup with 10 chronological events (lead_created · status_changed × 4 · followup_added × 3 · transferred · admission_recorded) so users can immediately see what a rich timeline looks like.
+
+**Testing:** Backend **97/98 tests passed** initially, then route-ordering bug fix verified with curl (HTTP 200 on csv-sample, HTTP 400 on malformed lead_id). All Phase 6/5/4/3 regression green.
+
 ### Phase 6 — Services Catalog & Discount Workflow (2026-05-31) ✅ COMPLETE
 - ✅ **`services` collection** + full CRUD endpoints (`GET/POST/PUT/DELETE /api/services`)
   - Fields: name, category, base_price, **min_price** (discount floor), description, duration, active toggle

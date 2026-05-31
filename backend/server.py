@@ -1148,10 +1148,31 @@ async def get_leads(
     
     return leads
 
+
+@api_router.get("/leads/csv-sample")
+async def download_csv_sample(current_user: dict = Depends(get_current_user)):
+    """Download a sample CSV file with headers + 3 example rows.
+
+    NOTE: declared BEFORE /leads/{lead_id} so FastAPI matches the static path first.
+    """
+    csv_text = (
+        "name,mobile,email,course,source,state,city\n"
+        "Aisha Khan,9876500101,aisha@example.com,MBA Full-time,Facebook Ad,Maharashtra,Mumbai\n"
+        "Rohit Sharma,9876500102,rohit@example.com,BBA,Website,Karnataka,Bengaluru\n"
+        "Sneha Patel,9876500103,sneha@example.com,PGDM,Walk-in,Gujarat,Ahmedabad\n"
+    )
+    return StreamingResponse(
+        io.BytesIO(csv_text.encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=leadtrak_sample_leads.csv"},
+    )
+
+
 @api_router.get("/leads/{lead_id}")
 async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
-    lead = await db.leads.find_one({"_id": ObjectId(lead_id), "organization_id": org_id}, {"organization_id": 0})
+    lid = safe_object_id(lead_id, "lead_id")
+    lead = await db.leads.find_one({"_id": lid, "organization_id": org_id}, {"organization_id": 0})
     
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -1166,18 +1187,19 @@ async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user))
 @api_router.put("/leads/{lead_id}")
 async def update_lead(lead_id: str, data: LeadUpdate, current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
+    lid = safe_object_id(lead_id, "lead_id")
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     
     if not update_data:
         raise HTTPException(status_code=400, detail="No data to update")
 
     # Read current lead so we can log diffs
-    current = await db.leads.find_one({"_id": ObjectId(lead_id), "organization_id": org_id})
+    current = await db.leads.find_one({"_id": lid, "organization_id": org_id})
     if not current:
         raise HTTPException(status_code=404, detail="Lead not found")
 
     result = await db.leads.update_one(
-        {"_id": ObjectId(lead_id), "organization_id": org_id},
+        {"_id": lid, "organization_id": org_id},
         {"$set": update_data}
     )
     
@@ -1212,11 +1234,12 @@ async def update_lead(lead_id: str, data: LeadUpdate, current_user: dict = Depen
 @api_router.delete("/leads/{lead_id}")
 async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
+    lid = safe_object_id(lead_id, "lead_id")
     
     if current_user["role"] not in ["super_admin", "org_admin", "manager"]:
         raise HTTPException(status_code=403, detail="Not authorized to delete leads")
     
-    result = await db.leads.delete_one({"_id": ObjectId(lead_id), "organization_id": org_id})
+    result = await db.leads.delete_one({"_id": lid, "organization_id": org_id})
     
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -1226,9 +1249,10 @@ async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_use
 @api_router.post("/leads/{lead_id}/assign")
 async def assign_lead(lead_id: str, assigned_to: str, current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
+    lid = safe_object_id(lead_id, "lead_id")
     
     result = await db.leads.update_one(
-        {"_id": ObjectId(lead_id), "organization_id": org_id},
+        {"_id": lid, "organization_id": org_id},
         {"$set": {"assigned_to": assigned_to}}
     )
     
@@ -1236,7 +1260,7 @@ async def assign_lead(lead_id: str, assigned_to: str, current_user: dict = Depen
         raise HTTPException(status_code=404, detail="Lead not found")
     
     # Create notification
-    lead = await db.leads.find_one({"_id": ObjectId(lead_id)})
+    lead = await db.leads.find_one({"_id": lid})
     await db.notifications.insert_one({
         "user_id": assigned_to,
         "message": f"Lead '{lead['name']}' has been assigned to you",
@@ -1256,27 +1280,32 @@ async def transfer_lead(lead_id: str, data: LeadTransfer, current_user: dict = D
         raise HTTPException(status_code=403, detail="Only managers and admins can transfer leads")
 
     org_id = ObjectId(current_user["organization_id"])
-    lead = await db.leads.find_one({"_id": ObjectId(lead_id), "organization_id": org_id})
+    lid = safe_object_id(lead_id, "lead_id")
+    lead = await db.leads.find_one({"_id": lid, "organization_id": org_id})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
     # Validate new assignee belongs to same org
-    new_assignee = await db.users.find_one({"_id": ObjectId(data.new_assignee_id), "organization_id": org_id})
+    new_aid = safe_object_id(data.new_assignee_id, "new_assignee_id")
+    new_assignee = await db.users.find_one({"_id": new_aid, "organization_id": org_id})
     if not new_assignee:
         raise HTTPException(status_code=400, detail="New assignee not found in your organization")
 
     previous_assignee_id = lead.get("assigned_to")
     previous_assignee = None
     if previous_assignee_id:
-        previous_assignee = await db.users.find_one({"_id": ObjectId(previous_assignee_id)}, {"name": 1})
+        try:
+            previous_assignee = await db.users.find_one({"_id": ObjectId(previous_assignee_id)}, {"name": 1})
+        except Exception:
+            previous_assignee = None
 
     await db.leads.update_one(
-        {"_id": ObjectId(lead_id), "organization_id": org_id},
+        {"_id": lid, "organization_id": org_id},
         {"$set": {"assigned_to": data.new_assignee_id}},
     )
 
     await log_lead_event(
-        lead_id,
+        lid,
         "transferred",
         {
             "from_user_id": previous_assignee_id,
@@ -1309,13 +1338,14 @@ async def get_lead_timeline(lead_id: str, current_user: dict = Depends(get_curre
     Counselor/telecaller may only view timeline for leads assigned to them.
     """
     org_id = ObjectId(current_user["organization_id"])
-    lead = await db.leads.find_one({"_id": ObjectId(lead_id), "organization_id": org_id})
+    lid = safe_object_id(lead_id, "lead_id")
+    lead = await db.leads.find_one({"_id": lid, "organization_id": org_id})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     if current_user["role"] in ("counselor", "telecaller") and lead.get("assigned_to") != current_user["id"]:
         raise HTTPException(status_code=404, detail="Lead not found")
     events = await db.lead_timeline.find(
-        {"lead_id": ObjectId(lead_id), "organization_id": org_id}
+        {"lead_id": lid, "organization_id": org_id}
     ).sort("created_at", 1).to_list(1000)
     for e in events:
         e["_id"] = str(e["_id"])
@@ -1993,22 +2023,6 @@ async def log_activity(org_id, user_id, user_name, action, target_type, target_i
     })
 
 # ==================== CSV Lead Import ====================
-@api_router.get("/leads/csv-sample")
-async def download_csv_sample(current_user: dict = Depends(get_current_user)):
-    """Download a sample CSV file with headers + 3 example rows."""
-    csv_text = (
-        "name,mobile,email,course,source,state,city\n"
-        "Aisha Khan,9876500101,aisha@example.com,MBA Full-time,Facebook Ad,Maharashtra,Mumbai\n"
-        "Rohit Sharma,9876500102,rohit@example.com,BBA,Website,Karnataka,Bengaluru\n"
-        "Sneha Patel,9876500103,sneha@example.com,PGDM,Walk-in,Gujarat,Ahmedabad\n"
-    )
-    return StreamingResponse(
-        io.BytesIO(csv_text.encode("utf-8")),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=leadtrak_sample_leads.csv"},
-    )
-
-
 @api_router.post("/leads/import-csv")
 async def import_leads_csv(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ["super_admin", "org_admin", "manager"]:
