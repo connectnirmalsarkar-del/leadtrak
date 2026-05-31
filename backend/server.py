@@ -13,6 +13,10 @@ import logging
 import io
 import csv
 import re
+import json
+import hmac
+import hashlib
+import requests
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
@@ -247,6 +251,12 @@ class LeadCreate(BaseModel):
     assigned_to: Optional[str] = None
     status: str = "New"
     temperature: Optional[str] = "warm"  # hot | warm | cold
+    # Industry-specific extras (parity with widget capture)
+    company_name: Optional[str] = None
+    budget_range: Optional[str] = None
+    preferred_date: Optional[str] = None
+    travellers: Optional[str] = None
+    remarks: Optional[str] = None
 
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
@@ -259,6 +269,11 @@ class LeadUpdate(BaseModel):
     assigned_to: Optional[str] = None
     status: Optional[str] = None
     temperature: Optional[str] = None  # hot | warm | cold
+    company_name: Optional[str] = None
+    budget_range: Optional[str] = None
+    preferred_date: Optional[str] = None
+    travellers: Optional[str] = None
+    remarks: Optional[str] = None
 
 class FollowupCreate(BaseModel):
     lead_id: str
@@ -729,6 +744,12 @@ async def startup_db():
     # Locations
     await seed_locations()
     await db.locations.create_index([("state", 1), ("city", 1)], unique=True)
+    # Lead idempotency on inbound channels (FB Lead Ads, Google Ads)
+    await db.leads.create_index(
+        [("organization_id", 1), ("source_external_id", 1)],
+        unique=True,
+        partialFilterExpression={"source_external_id": {"$type": "string"}},
+    )
     logger.info("Database initialized and indexes created")
 
 # ==================== Auth Routes ====================
@@ -1194,6 +1215,11 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
         "assigned_to": assignee,
         "status": data.status,
         "temperature": (data.temperature or "warm").lower(),
+        "company_name": data.company_name,
+        "budget_range": data.budget_range,
+        "preferred_date": data.preferred_date,
+        "travellers": data.travellers,
+        "remarks": data.remarks or "",
         "organization_id": org_id,
         "created_by": current_user["id"],
         "created_at": datetime.now(timezone.utc)
@@ -1266,6 +1292,24 @@ async def get_leads(
     return leads
 
 
+@api_router.get("/leads/form-config")
+async def lead_form_config(current_user: dict = Depends(get_current_user)):
+    """Industry-specific extra fields + services list for the Manual Add-Lead form.
+
+    Mirrors the public widget config so every capture surface stays in sync.
+    NOTE: declared BEFORE /leads/{lead_id} so FastAPI matches the static path first.
+    """
+    org_id = ObjectId(current_user["organization_id"])
+    industry = current_user.get("industry") or "generic"
+    fields = get_widget_fields(industry)
+    services_cursor = db.services.find(
+        {"organization_id": org_id, "active": {"$ne": False}},
+        {"name": 1}
+    ).sort("name", 1)
+    services = [s["name"] async for s in services_cursor]
+    return {"industry": industry, "fields": fields, "services": services}
+
+
 @api_router.get("/leads/csv-sample")
 async def download_csv_sample(current_user: dict = Depends(get_current_user)):
     """Download a sample CSV file with headers + 3 example rows.
@@ -1273,10 +1317,10 @@ async def download_csv_sample(current_user: dict = Depends(get_current_user)):
     NOTE: declared BEFORE /leads/{lead_id} so FastAPI matches the static path first.
     """
     csv_text = (
-        "name,mobile,email,course,source,state,city\n"
-        "Aisha Khan,9876500101,aisha@example.com,MBA Full-time,Facebook Ad,Maharashtra,Mumbai\n"
-        "Rohit Sharma,9876500102,rohit@example.com,BBA,Website,Karnataka,Bengaluru\n"
-        "Sneha Patel,9876500103,sneha@example.com,PGDM,Walk-in,Gujarat,Ahmedabad\n"
+        "name,mobile,email,course,source,state,city,company_name,budget_range,preferred_date,travellers,temperature\n"
+        "Aisha Khan,9876500101,aisha@example.com,MBA Full-time,Facebook Ad,Maharashtra,Mumbai,,,,,hot\n"
+        "Rohit Sharma,9876500102,rohit@example.com,2 BHK,Website,Karnataka,Bengaluru,,₹50L - ₹1Cr,,,warm\n"
+        "Sneha Patel,9876500103,sneha@example.com,Goa Package,Google Ad,Gujarat,Ahmedabad,,,2026-06-15,3,warm\n"
     )
     return StreamingResponse(
         io.BytesIO(csv_text.encode("utf-8")),
@@ -2866,17 +2910,331 @@ async def report_by_demo_owner(current_user: dict = Depends(get_current_user)):
     return rows
 
 # ==================== Integration Routes ====================
+async def _ingest_external_lead(
+    org: dict,
+    *,
+    source: str,
+    external_id: str,
+    name: str,
+    mobile: str,
+    email: Optional[str] = None,
+    course_interested: Optional[str] = None,
+    state: Optional[str] = None,
+    city: Optional[str] = None,
+    extras: Optional[dict] = None,
+    raw: Optional[dict] = None,
+) -> Optional[str]:
+    """Idempotently insert a lead coming from an external channel (FB Lead Ads / Google Ads).
+
+    Uses (organization_id, source_external_id) as the dedupe key.
+    Returns the new lead_id, or None when a duplicate was skipped.
+    """
+    org_id = org["_id"]
+    if not name or not mobile:
+        return None
+    # Idempotency: skip if same external_id already imported
+    existing = await db.leads.find_one(
+        {"organization_id": org_id, "source_external_id": external_id},
+        {"_id": 1},
+    )
+    if existing:
+        return None
+    # Also skip if mobile/email already exists (cross-channel duplicates)
+    or_clauses = [{"mobile": mobile}]
+    if email:
+        or_clauses.append({"email": email})
+    if await db.leads.find_one({"organization_id": org_id, "$or": or_clauses}, {"_id": 1}):
+        return None
+
+    lead_count = await db.leads.count_documents({"organization_id": org_id})
+    lead_id_str = f"LEAD{lead_count + 1:05d}"
+    assignee = await pick_round_robin_assignee(org_id)
+    extras = extras or {}
+    doc = {
+        "lead_id": lead_id_str,
+        "name": name,
+        "mobile": mobile,
+        "email": email,
+        "course_interested": course_interested or "Inquiry",
+        "state": state or "",
+        "city": city or "",
+        "lead_source": source,
+        "source_external_id": external_id,
+        "company_name": extras.get("company_name"),
+        "budget_range": extras.get("budget_range"),
+        "preferred_date": extras.get("preferred_date"),
+        "travellers": extras.get("travellers"),
+        "assigned_to": assignee,
+        "status": "New",
+        "organization_id": org_id,
+        "created_by": None,
+        "raw_payload": raw,
+        "created_at": datetime.now(timezone.utc),
+    }
+    try:
+        result = await db.leads.insert_one(doc)
+    except Exception as e:
+        logger.warning(f"_ingest_external_lead duplicate-key for {source}/{external_id}: {e}")
+        return None
+    # Timeline
+    await db.lead_timeline.insert_one({
+        "lead_id": result.inserted_id,
+        "organization_id": org_id,
+        "event_type": "lead_created",
+        "payload": {"name": name, "source": source, "status": "New", "assigned_to": assignee},
+        "actor_id": None,
+        "actor_name": source,
+        "actor_role": "system",
+        "created_at": datetime.now(timezone.utc),
+    })
+    if assignee:
+        await db.notifications.insert_one({
+            "user_id": assignee,
+            "message": f"New lead '{name}' from {source} assigned to you",
+            "type": "lead_assigned",
+            "read": False,
+            "organization_id": org_id,
+            "created_at": datetime.now(timezone.utc),
+        })
+    return lead_id_str
+
+
+def _verify_fb_signature(app_secret: str, raw_body: bytes, header_sig: str) -> bool:
+    """Verify Meta's X-Hub-Signature-256 header using HMAC-SHA256 (constant-time compare)."""
+    if not header_sig or not app_secret:
+        return False
+    try:
+        scheme, received = header_sig.split("=", 1)
+    except ValueError:
+        return False
+    if scheme.lower() != "sha256":
+        return False
+    expected = hmac.new(app_secret.encode("utf-8"), msg=raw_body, digestmod=hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, received)
+
+
+def _fb_fields_to_dict(field_data: list) -> dict:
+    """Convert FB lead 'field_data': [{'name':'full_name','values':['Jane']}, …] → flat dict."""
+    out = {}
+    for item in field_data or []:
+        n = item.get("name")
+        v = item.get("values") or []
+        if n and v:
+            out[n] = v[0]
+    return out
+
+
+def _map_fb_lead(fb_fields: dict, field_mapping: Optional[dict] = None) -> dict:
+    """Apply per-tenant field mapping + sensible defaults for canonical CRM fields."""
+    field_mapping = field_mapping or {}
+    # Defaults — FB form's most common field names
+    defaults = {
+        "full_name": "name",
+        "name": "name",
+        "first_name": "name",
+        "phone_number": "mobile",
+        "phone": "mobile",
+        "mobile_number": "mobile",
+        "email": "email",
+        "email_address": "email",
+        "city": "city",
+        "state": "state",
+        "course_interested": "course_interested",
+        "service_required": "course_interested",
+        "property_type": "course_interested",
+        "company_name": "company_name",
+        "budget": "budget_range",
+        "budget_range": "budget_range",
+        "preferred_date": "preferred_date",
+        "travel_date": "preferred_date",
+        "number_of_travellers": "travellers",
+    }
+    merged = {**defaults, **field_mapping}
+    crm = {}
+    for fb_name, value in fb_fields.items():
+        canonical = merged.get(fb_name, fb_name)
+        if canonical not in crm or not crm[canonical]:
+            crm[canonical] = value
+    return crm
+
+
+@api_router.get("/integrations/facebook-leads")
+async def facebook_lead_verify(request: Request):
+    """Meta GET verification: returns hub.challenge if hub.verify_token matches any tenant's token."""
+    qp = request.query_params
+    if qp.get("hub.mode") != "subscribe":
+        raise HTTPException(status_code=400, detail="Invalid hub.mode")
+    token = qp.get("hub.verify_token") or ""
+    challenge = qp.get("hub.challenge") or ""
+    # Match against any organization's facebook_lead_ads.verify_token
+    match = await db.organizations.find_one(
+        {"integrations.facebook_lead_ads.verify_token": token},
+        {"_id": 1},
+    )
+    if not match:
+        # Fallback to a global env var if user prefers a single shared token
+        global_token = os.environ.get("FB_WEBHOOK_VERIFY_TOKEN")
+        if not global_token or token != global_token:
+            raise HTTPException(status_code=403, detail="Invalid verify token")
+    return Response(content=challenge, media_type="text/plain")
+
+
 @api_router.post("/integrations/facebook-leads")
 async def facebook_lead_webhook(request: Request):
-    # Structure for Facebook Lead Ads webhook
-    # User needs to configure this with their Facebook App
-    data = await request.json()
-    logger.info(f"Facebook lead received: {data}")
-    
-    # TODO: Validate webhook signature
-    # TODO: Parse lead data and create lead in database
-    
-    return {"status": "received"}
+    """Meta POST: verifies signature → resolves tenant by page_id → fetches lead → creates lead."""
+    raw_body = await request.body()
+    header_sig = request.headers.get("X-Hub-Signature-256", "")
+    try:
+        payload = json.loads(raw_body.decode("utf-8") or "{}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    entries = payload.get("entry") or []
+    if not entries:
+        return {"status": "ignored", "reason": "no entries"}
+
+    imported_ids = []
+    for entry in entries:
+        page_id = str(entry.get("id") or "")
+        if not page_id:
+            continue
+        org = await db.organizations.find_one(
+            {"integrations.facebook_lead_ads.page_id": page_id}
+        )
+        if not org:
+            logger.warning(f"FB webhook: unknown page_id={page_id}")
+            continue
+        fb_cfg = (org.get("integrations") or {}).get("facebook_lead_ads") or {}
+        app_secret = fb_cfg.get("app_secret") or ""
+        page_access_token = fb_cfg.get("page_access_token") or ""
+        if not _verify_fb_signature(app_secret, raw_body, header_sig):
+            logger.warning(f"FB webhook: signature verification failed for page_id={page_id}")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+        for change in entry.get("changes") or []:
+            if change.get("field") != "leadgen":
+                continue
+            value = change.get("value") or {}
+            leadgen_id = str(value.get("leadgen_id") or "")
+            if not leadgen_id:
+                continue
+            # Fetch full lead from Graph API
+            lead_data = {"field_data": []}
+            if page_access_token:
+                try:
+                    api_ver = fb_cfg.get("graph_api_version") or "v19.0"
+                    r = requests.get(
+                        f"https://graph.facebook.com/{api_ver}/{leadgen_id}",
+                        params={"access_token": page_access_token, "fields": "field_data,created_time,form_id,ad_id"},
+                        timeout=10,
+                    )
+                    if r.status_code == 200:
+                        lead_data = r.json()
+                    else:
+                        logger.warning(f"FB Graph API {r.status_code}: {r.text[:200]}")
+                except Exception as e:
+                    logger.error(f"FB Graph API error: {e}")
+            fb_fields = _fb_fields_to_dict(lead_data.get("field_data") or [])
+            crm = _map_fb_lead(fb_fields, fb_cfg.get("field_mapping") or {})
+            new_id = await _ingest_external_lead(
+                org,
+                source="Facebook Lead Ads",
+                external_id=leadgen_id,
+                name=crm.get("name") or "Unknown",
+                mobile=str(crm.get("mobile") or "").strip(),
+                email=crm.get("email"),
+                course_interested=crm.get("course_interested"),
+                state=crm.get("state"),
+                city=crm.get("city"),
+                extras={
+                    "company_name": crm.get("company_name"),
+                    "budget_range": crm.get("budget_range"),
+                    "preferred_date": crm.get("preferred_date"),
+                    "travellers": crm.get("travellers"),
+                },
+                raw={"webhook_value": value, "graph_api_lead": lead_data},
+            )
+            if new_id:
+                imported_ids.append(new_id)
+    return {"status": "ok", "imported": len(imported_ids), "lead_ids": imported_ids}
+
+
+class GoogleAdsLeadIn(BaseModel):
+    """Body of a Google Ads Lead Form (Webhook integration) POST."""
+    lead_id: Optional[str] = None
+    google_key: str  # the Webhook Key (shared secret) configured in Google Ads
+    user_column_data: Optional[list] = None  # Google's native format
+    # OR flat fields for simple posting from Zapier / custom integrations
+    name: Optional[str] = None
+    mobile: Optional[str] = None
+    email: Optional[str] = None
+    course_interested: Optional[str] = None
+    state: Optional[str] = None
+    city: Optional[str] = None
+    campaign_id: Optional[str] = None
+    form_id: Optional[str] = None
+
+
+@api_router.post("/integrations/google-ads/{tenant_id}")
+async def google_ads_lead_webhook(tenant_id: str, data: GoogleAdsLeadIn):
+    """Google Ads Lead Form webhook receiver.
+    URL pattern: /api/integrations/google-ads/{tenant_id}
+    Auth: caller must include `google_key` matching the tenant's stored webhook key.
+    Supports both native Google `user_column_data` array and flat JSON for Zapier-style posts.
+    """
+    try:
+        org_oid = ObjectId(tenant_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid tenant_id")
+    org = await db.organizations.find_one({"_id": org_oid})
+    if not org:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    g_cfg = (org.get("integrations") or {}).get("google_ads") or {}
+    stored_key = g_cfg.get("webhook_secret") or g_cfg.get("webhook_key") or ""
+    if not stored_key or not hmac.compare_digest(stored_key, data.google_key or ""):
+        raise HTTPException(status_code=401, detail="Invalid webhook key")
+
+    # Normalize fields — Google sends `user_column_data: [{column_id, column_name, string_value}, …]`
+    name = (data.name or "").strip()
+    mobile = (data.mobile or "").strip()
+    email = data.email
+    course = data.course_interested
+    state = data.state
+    city = data.city
+    if data.user_column_data:
+        for item in data.user_column_data:
+            col = (item.get("column_id") or item.get("column_name") or "").upper()
+            val = item.get("string_value") or ""
+            if not val:
+                continue
+            if col in ("FULL_NAME", "NAME", "FIRST_NAME"):
+                name = name or val
+            elif col in ("PHONE_NUMBER", "PHONE", "MOBILE"):
+                mobile = mobile or val
+            elif col in ("EMAIL", "EMAIL_ADDRESS"):
+                email = email or val
+            elif col in ("CITY",):
+                city = city or val
+            elif col in ("STATE",):
+                state = state or val
+            elif col in ("COURSE", "SERVICE", "PRODUCT", "INTEREST"):
+                course = course or val
+
+    if not name or not mobile:
+        raise HTTPException(status_code=400, detail="name and mobile are required")
+    ext_id = data.lead_id or f"google-{datetime.now(timezone.utc).timestamp():.0f}-{mobile}"
+    new_lead = await _ingest_external_lead(
+        org,
+        source="Google Ads",
+        external_id=ext_id,
+        name=name,
+        mobile=mobile,
+        email=email,
+        course_interested=course,
+        state=state,
+        city=city,
+        raw=data.model_dump(),
+    )
+    return {"status": "ok", "lead_id": new_lead, "duplicate": new_lead is None}
 
 @api_router.post("/integrations/whatsapp/send")
 async def send_whatsapp_message(data: WhatsAppMessage, current_user: dict = Depends(get_current_user)):
@@ -3063,15 +3421,26 @@ async def import_leads_csv(file: UploadFile = File(...), current_user: dict = De
             lead_id = f"LEAD{lead_count + 1:05d}"
             # Round-robin distribute among counselor/telecaller
             assignee = await pick_round_robin_assignee(org_id)
+            def _col(*keys):
+                for k in keys:
+                    v = row.get(k)
+                    if v not in (None, ""):
+                        return v.strip() if isinstance(v, str) else v
+                return None
             inserted = await db.leads.insert_one({
                 "lead_id": lead_id,
                 "name": name,
                 "mobile": mobile,
                 "email": email,
-                "course_interested": row.get("course") or row.get("Course") or "General",
-                "state": row.get("state") or row.get("State") or "",
-                "city": row.get("city") or row.get("City") or "",
-                "lead_source": row.get("source") or row.get("Source") or "CSV Import",
+                "course_interested": _col("course", "Course", "course_interested", "service", "product", "package") or "General",
+                "state": _col("state", "State") or "",
+                "city": _col("city", "City") or "",
+                "lead_source": _col("source", "Source", "lead_source") or "CSV Import",
+                "company_name": _col("company_name", "Company Name", "company"),
+                "budget_range": _col("budget_range", "Budget", "budget"),
+                "preferred_date": _col("preferred_date", "Preferred Date", "date"),
+                "travellers": _col("travellers", "Travellers"),
+                "temperature": (_col("temperature", "Temperature") or "warm").lower(),
                 "assigned_to": assignee,
                 "status": "New",
                 "organization_id": org_id,

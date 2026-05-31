@@ -115,8 +115,14 @@ export default function LeadsPage() {
 
   const [newLead, setNewLead] = useState({
     name: '', mobile: '', email: '', course_interested: '', state: '', city: '',
-    lead_source: 'Website', assigned_to: '', status: 'New', temperature: 'warm'
+    lead_source: 'Website', assigned_to: '', status: 'New', temperature: 'warm',
+    company_name: '', budget_range: '', preferred_date: '', travellers: '',
   });
+  const [formConfig, setFormConfig] = useState({ fields: [], services: [] });
+
+  useEffect(() => {
+    axios.get(`${API}/leads/form-config`).then(({ data }) => setFormConfig(data)).catch(() => {});
+  }, []);
 
   const [followup, setFollowup] = useState({
     followup_date: '', followup_time: '', remarks: '', next_followup: '',
@@ -191,7 +197,8 @@ export default function LeadsPage() {
       setDuplicate(null);
       setNewLead({
         name: '', mobile: '', email: '', course_interested: '', state: '', city: '',
-        lead_source: 'Website', assigned_to: '', status: 'New', temperature: 'warm'
+        lead_source: 'Website', assigned_to: '', status: 'New', temperature: 'warm',
+        company_name: '', budget_range: '', preferred_date: '', travellers: '',
       });
       setCitiesForState([]);
       fetchLeads();
@@ -510,6 +517,29 @@ export default function LeadsPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Industry-specific extras — same fields as Lead Capture Widget */}
+              {(formConfig.fields || []).filter((f) => f.name !== 'course_interested').map((f) => (
+                <div key={f.name} className="space-y-2">
+                  <Label>{f.label}</Label>
+                  {f.type === 'select' ? (
+                    <Select value={newLead[f.name] || ''} onValueChange={(v) => setNewLead({ ...newLead, [f.name]: v })}>
+                      <SelectTrigger data-testid={`lead-${f.name}-select`}><SelectValue placeholder={f.placeholder || 'Select…'} /></SelectTrigger>
+                      <SelectContent>
+                        {(f.options || []).map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      type={f.type === 'date' ? 'date' : 'text'}
+                      value={newLead[f.name] || ''}
+                      onChange={(e) => setNewLead({ ...newLead, [f.name]: e.target.value })}
+                      placeholder={f.placeholder || ''}
+                      data-testid={`lead-${f.name}-input`}
+                    />
+                  )}
+                </div>
+              ))}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => { setShowAddDialog(false); setDuplicate(null); }} data-testid="cancel-add-lead-btn">Cancel</Button>

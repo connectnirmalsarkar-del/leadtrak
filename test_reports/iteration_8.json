@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 8 — Comprehensive testing of unified lead capture across Manual Entry, CSV Upload, Facebook Lead Ads webhook (Meta verify + HMAC) and Google Ads webhook. 17/17 new backend tests pass, 41/41 regression tests (saas_billing + multi_industry) pass. Frontend Manual Add flow + CSV controls + Integrations page render correctly for the Education demo tenant.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "IntegrationsPage / Google Ads card",
+        "issue": "Card shows 'Not connected' even when integrations.google_ads.webhook_secret is set on the org. Backend webhook auth uses webhook_secret and is fully functional; the UI 'connected' badge appears to be keyed on a different field (e.g. customer_id / conversion_action_id) and is misleading. Either change the badge to read webhook_secret presence, or label the secret-only state as 'Webhook only'.",
+        "selector": "Integrations → Google Ads card status badge",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_lead_capture_sources.py",
+    "/app/test_reports/pytest/iteration_8_lead_capture.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Update Google Ads integration card 'Connected' badge logic to reflect webhook_secret presence (or rename status to 'Webhook configured').",
+    "OPTIONAL: Consider also testing a non-Education industry tenant (IT / Real Estate / Travel) end-to-end so the dynamic extras (company_name / budget_range / preferred_date / travellers) render on the Manual Add dialog. Current Education tenant correctly suppresses extras (course_interested is rendered as the main course select)."
+  ],
+  "critical_code_review_comments": [
+    "FB webhook payload signature is verified AFTER resolving tenant by page_id, which means an attacker hitting an unknown page_id receives a 200 OK with imported=0 without ever exposing the signature check. That is acceptable (avoids leaking which page_ids are configured) but worth a comment in code.",
+    "_ingest_external_lead uses partial unique index on (organization_id, source_external_id) — confirmed creates idempotent behaviour. Good. Duplicate response returns lead_id:null which the test correctly asserts.",
+    "FB Graph API call uses a real outbound HTTP request — failure is swallowed and lead is just not created (imported=0). For production, recommend recording the failure in an integration_errors log so admins can debug invalid page_access_token.",
+    "LeadsPage.jsx — formConfig fetch has a silent .catch(() => {}). If form-config endpoint ever fails, the dialog silently renders without industry extras with no user feedback. Consider a toast or warning.",
+    "server.py is 4245 lines — exceeds the 700-line guideline. Should be split (leads, integrations, billing modules).",
+    "Google Ads endpoint accepts both flat JSON and native user_column_data — both code paths tested and working."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_lead_capture_sources.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 new + 41/41 regression)",
+    "frontend": "100% (login, leads add, lead list, integrations page)"
+  },
+  "test_credentials": "Super Admin: admin@educationcrm.com / Admin@123 ; Org Admin: orgadmin@demo.com / Demo@123 (httpOnly cookie auth — Bearer not used; pytest uses requests.Session)",
+  "seed_data_creation": "Test created ~6 leads in demo org: TEST_CSV_A/B/C_*, TEST_MAN_*, TEST_GAds_Flat_*, TEST_GAds_Native_*, TEST_FE_* — all in demo org (orgadmin@demo.com). No cleanup performed (tags are uuid-suffixed, no collisions).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All five lead capture channels (Manual, CSV, Widget shared schema, Facebook webhook, Google Ads webhook) are working. Auth uses httpOnly cookies — use requests.Session() in pytest (NOT Authorization Bearer headers). Backend URL from /app/frontend/.env (REACT_APP_BACKEND_URL). FB page_access_token is FAKE so FB webhook returns imported=0 by design — do not assert FB lead creation. Google Ads + Manual + CSV all create real leads. Demo org subscription status uses key 'status' (values: trial/active), not 'subscription_status'. Idempotency works via partial unique index on (organization_id, source_external_id).",
+  "rca of the issue": "N/A — no production bugs found. One initial test failure was due to my test reusing static mobile numbers 9990000001-3 from a prior run that the backend's duplicate-detection correctly skipped — fixed by uuid+timestamp-suffixing the mobiles."
+}
