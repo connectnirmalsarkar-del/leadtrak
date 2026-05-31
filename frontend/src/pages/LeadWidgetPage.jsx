@@ -14,7 +14,7 @@ export default function LeadWidgetPage() {
   }, []);
 
   const apiBase = process.env.REACT_APP_BACKEND_URL;
-  const embedCode = `<!-- LeadTrak Lead Capture Widget -->
+  const embedCode = `<!-- Leadtrak Lead Capture Widget -->
 <div id="leadtrak-lead-form"></div>
 <script>
 (function(){
@@ -55,7 +55,7 @@ export default function LeadWidgetPage() {
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-700 mb-1.5">Lead Capture</p>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>Lead Capture Widget</h1>
-        <p className="text-sm text-slate-500 mt-1">Embed a lead form on your website. Inquiries flow directly into LeadTrak.</p>
+        <p className="text-sm text-slate-500 mt-1">Embed a lead form on your website. Inquiries flow directly into Leadtrak.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -97,7 +97,7 @@ export default function LeadWidgetPage() {
 
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
         <p className="text-sm text-blue-900">
-          <strong>How it works:</strong> Submitted inquiries are auto-imported as new Leads with source "Website Widget". You'll receive a notification in LeadTrak and can follow up immediately.
+          <strong>How it works:</strong> Submitted inquiries are auto-imported as new Leads with source "Website Widget". You'll receive a notification in Leadtrak and can follow up immediately.
         </p>
       </div>
     </div>

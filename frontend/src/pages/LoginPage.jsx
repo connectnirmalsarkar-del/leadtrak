@@ -84,12 +84,7 @@ export default function LoginPage() {
         <div className="relative z-10 flex flex-col h-screen p-12 xl:p-16">
           {/* Top brand */}
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-violet-700 rounded-lg flex items-center justify-center shadow-xl shadow-violet-900/50">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-white tracking-tight" style={{ fontFamily: 'Sora' }}>
-              LeadTrak
-            </span>
+            <img src="/logo-dark.png" alt="Leadtrak" className="h-10 w-auto" data-testid="login-logo" />
           </Link>
 
           {/* Middle content */}
@@ -188,10 +183,7 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative">
         {/* Mobile-only brand */}
         <Link to="/" className="lg:hidden absolute top-6 left-6 flex items-center gap-2">
-          <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center">
-            <Zap className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-lg font-bold text-slate-900" style={{ fontFamily: 'Sora' }}>LeadTrak</span>
+          <img src="/logo-light.png" alt="Leadtrak" className="h-9 w-auto" />
         </Link>
 
         <div className="w-full max-w-sm space-y-8">
@@ -254,7 +246,7 @@ export default function LoginPage() {
               disabled={loading}
               data-testid="login-submit-btn"
             >
-              {loading ? 'Signing in...' : 'Sign in to LeadTrak'}
+              {loading ? 'Signing in...' : 'Sign in to Leadtrak'}
               {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
             </Button>
           </form>

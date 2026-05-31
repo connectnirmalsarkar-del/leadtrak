@@ -1,7 +1,7 @@
 {
-  "name": "EduCRM — Education CRM",
-  "short_name": "EduCRM",
-  "description": "AI-powered CRM built for schools, coaching institutes, and universities.",
+  "name": "Leadtrak — Multi-Industry CRM",
+  "short_name": "Leadtrak",
+  "description": "Track leads. Close faster. The CRM for every industry.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

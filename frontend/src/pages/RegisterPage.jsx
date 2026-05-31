@@ -77,12 +77,7 @@ export default function RegisterPage() {
       <header className="relative z-10 border-b border-slate-200/60 bg-white/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center shadow-lg shadow-violet-200">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-slate-900 tracking-tight" style={{ fontFamily: 'Sora' }}>
-              LeadTrak
-            </span>
+            <img src="/logo-light.png" alt="Leadtrak" className="h-9 w-auto" data-testid="register-logo" />
           </Link>
           <div className="flex items-center gap-3 text-sm">
             <span className="hidden sm:inline text-slate-600">Already a customer?</span>
@@ -110,7 +105,7 @@ export default function RegisterPage() {
             </span>
           </h1>
           <p className="text-sm text-slate-600 mt-3 max-w-md mx-auto">
-            Join 1,200+ teams across 9 industries converting more leads with LeadTrak.
+            Join 1,200+ teams across 9 industries converting more leads with Leadtrak.
           </p>
         </div>
 
@@ -137,7 +132,7 @@ export default function RegisterPage() {
                 </span>
               </h1>
               <p className="text-lg text-slate-600 leading-relaxed mt-5 max-w-xl">
-                See how 1,200+ teams across Education, IT, Real Estate, Healthcare, Insurance, Travel, Retail, and Fitness use LeadTrak to capture every lead, automate follow-ups, and convert prospects into customers.
+                See how 1,200+ teams across Education, IT, Real Estate, Healthcare, Insurance, Travel, Retail, and Fitness use Leadtrak to capture every lead, automate follow-ups, and convert prospects into customers.
               </p>
             </motion.div>
 
@@ -222,7 +217,7 @@ export default function RegisterPage() {
                   ))}
                 </div>
                 <p className="text-base leading-relaxed mb-5">
-                  "LeadTrak brought structure and efficiency to our sales process. Teams across our 6 branches adapted within a week — and our conversion rate jumped 40% in the first quarter."
+                  "Leadtrak brought structure and efficiency to our sales process. Teams across our 6 branches adapted within a week — and our conversion rate jumped 40% in the first quarter."
                 </p>
                 <div className="flex items-center gap-3 pt-4 border-t border-white/10">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-400 to-fuchsia-400 flex items-center justify-center text-white font-bold text-sm">

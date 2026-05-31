@@ -64,12 +64,7 @@ export default function LandingPage() {
       <header className="border-b border-slate-100 sticky top-0 bg-white/90 backdrop-blur-xl z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center shadow-lg shadow-violet-200">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>
-              LeadTrak
-            </span>
+            <img src="/logo-light.png" alt="Leadtrak" className="h-9 w-auto" data-testid="landing-header-logo" />
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
             <a href="#features" className="hover:text-violet-700 transition-colors">Features</a>
@@ -218,7 +213,7 @@ export default function LandingPage() {
                     <div className="w-6 h-6 bg-violet-600 rounded-md flex items-center justify-center">
                       <Zap className="w-3.5 h-3.5 text-white" />
                     </div>
-                    <span className="text-xs text-white font-medium">LeadTrak</span>
+                    <span className="text-xs text-white font-medium">Leadtrak</span>
                   </div>
                   {['Dashboard', 'Leads', 'Follow-ups', 'Conversions', 'Reports'].map((item, i) => (
                     <div key={item} className={`text-xs px-2 py-1.5 rounded-md ${i === 0 ? 'bg-violet-600 text-white' : 'text-slate-400'}`}>
@@ -317,7 +312,7 @@ export default function LandingPage() {
         </div>
         <div className="grid md:grid-cols-3 gap-6">
           {[
-            { num: '3×', label: 'Faster sales cycles', sub: 'Reported across 9 industries on LeadTrak' },
+            { num: '3×', label: 'Faster sales cycles', sub: 'Reported across 9 industries on Leadtrak' },
             { num: '60%', label: 'Lift in rep productivity', sub: 'Time freed from manual data entry' },
             { num: '₹2.4Cr', label: 'Additional revenue tracked', sub: 'In the first 6 months of going live' },
           ].map((stat, i) => (
@@ -670,7 +665,7 @@ export default function LandingPage() {
               Ready to convert more leads?
             </h2>
             <p className="text-lg text-slate-300 mb-8">
-              Join 1,200+ teams across 9 industries using LeadTrak to grow faster.
+              Join 1,200+ teams across 9 industries using Leadtrak to grow faster.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button
@@ -698,13 +693,8 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="bg-slate-900 text-slate-400 py-12">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-violet-600 to-violet-800 rounded-lg flex items-center justify-center">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-lg font-bold text-white" style={{ fontFamily: 'Sora' }}>LeadTrak</span>
-          </div>
-          <p className="text-sm">© 2026 LeadTrak. The CRM for every industry.</p>
+          <img src="/logo-dark.png" alt="Leadtrak" className="h-9 w-auto" data-testid="footer-logo" />
+          <p className="text-sm">© 2026 Leadtrak. The CRM for every industry.</p>
         </div>
       </footer>
     </div>
