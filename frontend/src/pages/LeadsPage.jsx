@@ -391,6 +391,18 @@ export default function LeadsPage() {
         temperature: editLead.temperature,
         remarks: editLead.remarks || '',
       };
+      // Industry-specific extras — only send if the industry exposes them
+      if (showCompanyCol) {
+        payload.company_name = editLead.company_name || null;
+      }
+      if (user?.industry === 'admission_consultancy') {
+        payload.target_college = editLead.target_college || null;
+        payload.course_fee = editLead.course_fee != null && editLead.course_fee !== ''
+          ? Number(editLead.course_fee) : null;
+      }
+      if (['real_estate', 'travel'].includes(user?.industry)) {
+        payload.budget_range = editLead.budget_range || null;
+      }
       const { data } = await axios.put(`${API}/leads/${editLead._id}`, payload);
       toast.success('Lead updated');
       setShowEditDialog(false);
@@ -1260,6 +1272,51 @@ export default function LeadsPage() {
                   <Label>{t.serviceLabel || 'Course Interested'} *</Label>
                   <Input value={editLead.course_interested || ''} onChange={(e) => setEditLead({ ...editLead, course_interested: e.target.value })} data-testid="edit-course-input" />
                 </div>
+                {showCompanyCol && (
+                  <div className="space-y-2">
+                    <Label>Company Name</Label>
+                    <Input
+                      value={editLead.company_name || ''}
+                      onChange={(e) => setEditLead({ ...editLead, company_name: e.target.value })}
+                      placeholder="e.g. Acme Tech Pvt Ltd"
+                      data-testid="edit-company-input"
+                    />
+                  </div>
+                )}
+                {user?.industry === 'admission_consultancy' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Target College</Label>
+                      <Input
+                        value={editLead.target_college || ''}
+                        onChange={(e) => setEditLead({ ...editLead, target_college: e.target.value })}
+                        placeholder="e.g. IIM Bangalore"
+                        data-testid="edit-target-college-input"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Course Fee (₹)</Label>
+                      <Input
+                        type="number"
+                        value={editLead.course_fee ?? ''}
+                        onChange={(e) => setEditLead({ ...editLead, course_fee: e.target.value })}
+                        placeholder="e.g. 250000"
+                        data-testid="edit-course-fee-input"
+                      />
+                    </div>
+                  </>
+                )}
+                {['real_estate', 'travel'].includes(user?.industry) && (
+                  <div className="space-y-2">
+                    <Label>Budget Range</Label>
+                    <Input
+                      value={editLead.budget_range || ''}
+                      onChange={(e) => setEditLead({ ...editLead, budget_range: e.target.value })}
+                      placeholder="e.g. ₹50L - ₹1Cr"
+                      data-testid="edit-budget-input"
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>State</Label>
                   <Input value={editLead.state || ''} onChange={(e) => setEditLead({ ...editLead, state: e.target.value })} data-testid="edit-state-input" />
