@@ -77,7 +77,7 @@ export default function InvoiceDialog({ invoice, open, onClose, justPaid = false
               <div>
                 <h1 className="text-2xl font-bold text-slate-900" style={{ fontFamily: 'Sora' }}>Leadtrak</h1>
                 <p className="text-xs text-slate-500 mt-0.5">Multi-Industry CRM Platform</p>
-                <p className="text-[11px] text-slate-500 mt-2">leadtrak.in · support@leadtrak.in</p>
+                <p className="text-[11px] text-slate-500 mt-2">leadtrak.in · care@leadtrak.in · +91 98368 07060</p>
               </div>
               <div className="text-right">
                 <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Tax Invoice</h2>
@@ -105,7 +105,13 @@ export default function InvoiceDialog({ invoice, open, onClose, justPaid = false
             <div className="flex-1 min-w-[200px]">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 mb-1">Billed by</p>
               <p className="text-sm font-semibold text-slate-900">Leadtrak — Ncriptech Labs</p>
-              <p className="text-xs text-slate-600">India</p>
+              <p className="text-xs text-slate-600 leading-snug mt-0.5">
+                185/35, Rajiv Gandhi Road,<br />
+                Konnagar (M), District: Hooghly,<br />
+                West Bengal — 712235, India
+              </p>
+              <p className="text-xs text-slate-600 mt-1">GSTIN: <span className="font-mono font-semibold text-slate-900">19BMZPS3329E1ZD</span></p>
+              <p className="text-xs text-slate-600">care@leadtrak.in · +91 98368 07060</p>
             </div>
           </div>
 
