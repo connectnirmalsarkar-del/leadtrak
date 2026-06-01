@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Plus, Users, UserPlus, Trash2, PauseCircle, PlayCircle,
-  IndianRupee, Hourglass, ShoppingCart, Wallet, CalendarPlus,
+  IndianRupee, Hourglass, ShoppingCart, Wallet, CalendarPlus, Link2, Copy, ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,6 +64,13 @@ export default function PlatformOrgsPage() {
   // Extend trial dialog
   const [trialDialog, setTrialDialog] = useState(null); // { id, name, days }
   const [extendDays, setExtendDays] = useState(7);
+
+  // Razorpay payment link dialog
+  const [linkDialog, setLinkDialog] = useState(null); // { id, name }
+  const [linkForm, setLinkForm] = useState({ plan_id: '', billing_cycle: 'monthly', notify_email: true, notify_sms: true, expire_in_days: 7 });
+  const [linkResult, setLinkResult] = useState(null); // { short_url, amount, expires_at, ... }
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [razorpayConfigured, setRazorpayConfigured] = useState(true); // assume yes until checked
 
   useEffect(() => {
     if (user && user.role !== 'super_admin') {
@@ -216,6 +223,51 @@ export default function PlatformOrgsPage() {
       if (tab === 'trials') loadTrials();
       load();
     } catch (e) { toast.error('Failed'); }
+  };
+
+  // ---- Razorpay Payment Link ----
+  const openPaymentLink = async (org) => {
+    setLinkDialog({ id: org.id, name: org.name });
+    setLinkResult(null);
+    setLinkForm({ plan_id: '', billing_cycle: 'monthly', notify_email: true, notify_sms: true, expire_in_days: 7 });
+    try {
+      const { data } = await axios.get(`${API}/razorpay/config`);
+      setRazorpayConfigured(!!data.configured);
+    } catch (e) {
+      setRazorpayConfigured(false);
+    }
+  };
+
+  const handleCreatePaymentLink = async () => {
+    if (!linkForm.plan_id) { toast.error('Pick a plan'); return; }
+    setLinkLoading(true);
+    try {
+      const { data } = await axios.post(
+        `${API}/platform/organizations/${linkDialog.id}/payment-link`,
+        linkForm
+      );
+      setLinkResult(data);
+      toast.success('Payment link created');
+      if (tab === 'orders') loadOrders();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to create payment link');
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Copied to clipboard');
+    } catch (e) {
+      toast.error('Copy failed');
+    }
+  };
+
+  const shareWhatsApp = (url, orgName) => {
+    const msg = encodeURIComponent(`Hello! Here is the payment link for your Leadtrak subscription (${orgName}). Pay securely via Razorpay:\n\n${url}\n\nLink expires in ${linkForm.expire_in_days} day(s). Reach out if you face any issues.`);
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
   };
 
   return (
@@ -410,6 +462,9 @@ export default function PlatformOrgsPage() {
                         <button onClick={() => openManualPayment(o)} className="text-slate-400 hover:text-emerald-700" title="Record Payment" data-testid={`pay-${o.id}`}>
                           <Wallet className="w-4 h-4" />
                         </button>
+                        <button onClick={() => openPaymentLink(o)} className="text-slate-400 hover:text-indigo-700" title="Send Razorpay Payment Link" data-testid={`payment-link-${o.id}`}>
+                          <Link2 className="w-4 h-4" />
+                        </button>
                         <button onClick={() => { setTrialDialog({ id: o.id, name: o.name }); setExtendDays(7); }} className="text-slate-400 hover:text-violet-700" title="Extend Trial" data-testid={`extend-${o.id}`}>
                           <CalendarPlus className="w-4 h-4" />
                         </button>
@@ -474,6 +529,9 @@ export default function PlatformOrgsPage() {
                         </button>
                         <button onClick={() => openManualPayment(r)} className="text-slate-400 hover:text-emerald-700" title="Record Payment" data-testid={`trial-pay-${r.id}`}>
                           <Wallet className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => openPaymentLink(r)} className="text-slate-400 hover:text-indigo-700" title="Send Razorpay Payment Link" data-testid={`trial-payment-link-${r.id}`}>
+                          <Link2 className="w-4 h-4" />
                         </button>
                       </div>
                     </TableCell>
@@ -691,6 +749,124 @@ export default function PlatformOrgsPage() {
             <Button variant="outline" onClick={() => setTrialDialog(null)}>Cancel</Button>
             <Button onClick={handleExtendTrial} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="confirm-extend-btn">Extend by {extendDays} days</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Razorpay Payment Link Dialog */}
+      <Dialog open={!!linkDialog} onOpenChange={(o) => { if (!o) { setLinkDialog(null); setLinkResult(null); } }}>
+        <DialogContent className="max-w-lg" data-testid="payment-link-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Link2 className="w-5 h-5 text-indigo-600" /> Send Razorpay Payment Link</DialogTitle>
+            <DialogDescription>
+              {linkDialog?.name && <>For <strong className="text-slate-900">{linkDialog.name}</strong> — </>}
+              The customer pays securely via Razorpay; subscription auto-activates after payment.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!razorpayConfigured ? (
+            <div className="space-y-3 py-2">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
+                <p className="font-semibold mb-1">Razorpay not configured</p>
+                <p>Add live keys to <code className="bg-white px-1 py-0.5 rounded text-xs">backend/.env</code>:</p>
+                <ul className="list-disc list-inside mt-2 text-xs font-mono">
+                  <li>RAZORPAY_KEY_ID</li>
+                  <li>RAZORPAY_KEY_SECRET</li>
+                  <li>RAZORPAY_WEBHOOK_SECRET (for auto-activation)</li>
+                </ul>
+                <p className="mt-2 text-xs">Then restart the backend.</p>
+              </div>
+              <Button onClick={() => setLinkDialog(null)} className="w-full">Close</Button>
+            </div>
+          ) : linkResult ? (
+            <div className="space-y-4 py-2">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-emerald-900 mb-2">✅ Payment link created</p>
+                <div className="bg-white rounded-md p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-500">Amount</span>
+                    <span className="font-semibold text-slate-900">₹{(linkResult.amount || 0).toLocaleString('en-IN')} <span className="text-slate-500 text-[10px]">(incl. 18% GST)</span></span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-500">Expires</span>
+                    <span className="text-slate-700">{new Date(linkResult.expires_at).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="pt-2 border-t border-slate-100">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Short URL</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        readOnly
+                        value={linkResult.short_url}
+                        className="flex-1 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-xs font-mono text-slate-700"
+                        data-testid="payment-link-url"
+                        onFocus={(e) => e.target.select()}
+                      />
+                      <Button size="sm" variant="outline" onClick={() => copyToClipboard(linkResult.short_url)} data-testid="copy-payment-link-btn">
+                        <Copy className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button onClick={() => shareWhatsApp(linkResult.short_url, linkDialog?.name)} className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="whatsapp-share-btn">
+                  Share on WhatsApp
+                </Button>
+                <Button variant="outline" onClick={() => window.open(linkResult.short_url, '_blank')} data-testid="open-payment-link-btn">
+                  <ExternalLink className="w-4 h-4 mr-1.5" /> Open
+                </Button>
+              </div>
+              <Button variant="ghost" onClick={() => { setLinkDialog(null); setLinkResult(null); }} className="w-full">Done</Button>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3 py-2">
+                <div className="space-y-1.5">
+                  <Label>Plan *</Label>
+                  <Select value={linkForm.plan_id} onValueChange={(v) => setLinkForm({ ...linkForm, plan_id: v })}>
+                    <SelectTrigger data-testid="link-plan-select"><SelectValue placeholder="Select a plan" /></SelectTrigger>
+                    <SelectContent>
+                      {plans.map((p) => {
+                        const inc = linkForm.billing_cycle === 'annual'
+                          ? (p.total_annual ?? Math.round((p.price_annual || 0) * 1.18 * 100) / 100)
+                          : (p.total_monthly ?? Math.round((p.price_monthly || 0) * 1.18 * 100) / 100);
+                        return <SelectItem key={p.id} value={p.id}>{p.name} · ₹{inc.toLocaleString('en-IN')} (incl. GST)</SelectItem>;
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Billing Cycle *</Label>
+                  <Select value={linkForm.billing_cycle} onValueChange={(v) => setLinkForm({ ...linkForm, billing_cycle: v })}>
+                    <SelectTrigger data-testid="link-cycle-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="annual">Annual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Link Expires In (days)</Label>
+                  <Input type="number" min={1} max={30} value={linkForm.expire_in_days} onChange={(e) => setLinkForm({ ...linkForm, expire_in_days: Math.max(1, Math.min(30, parseInt(e.target.value) || 7)) })} data-testid="link-expire-input" />
+                </div>
+                <div className="flex items-center gap-4 text-xs text-slate-600">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={linkForm.notify_email} onChange={(e) => setLinkForm({ ...linkForm, notify_email: e.target.checked })} data-testid="link-notify-email" />
+                    Email customer
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={linkForm.notify_sms} onChange={(e) => setLinkForm({ ...linkForm, notify_sms: e.target.checked })} data-testid="link-notify-sms" />
+                    SMS customer
+                  </label>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setLinkDialog(null)}>Cancel</Button>
+                <Button onClick={handleCreatePaymentLink} disabled={linkLoading || !linkForm.plan_id} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="generate-payment-link-btn">
+                  {linkLoading ? 'Generating…' : 'Generate Link'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

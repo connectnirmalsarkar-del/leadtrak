@@ -1,16 +1,41 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API } from '@/context/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import { CheckCircle2, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
+const RAZORPAY_SCRIPT = 'https://checkout.razorpay.com/v1/checkout.js';
+
+function loadRazorpayScript() {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const existing = document.querySelector(`script[src="${RAZORPAY_SCRIPT}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true));
+      existing.addEventListener('error', () => resolve(false));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = RAZORPAY_SCRIPT;
+    s.async = true;
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
+}
+
 export default function SubscriptionPage() {
+  const { user } = useAuth();
   const [plans, setPlans] = useState([]);
   const [billingCycle, setBillingCycle] = useState('monthly');
+  const [processing, setProcessing] = useState(false);
+  const [rzpConfig, setRzpConfig] = useState({ configured: false, key_id: '' });
 
   useEffect(() => {
     fetchPlans();
+    fetchRzpConfig();
   }, []);
 
   const fetchPlans = async () => {
@@ -22,12 +47,77 @@ export default function SubscriptionPage() {
     }
   };
 
-  const handleSubscribe = async (planId) => {
+  const fetchRzpConfig = async () => {
     try {
-      // This would integrate with Razorpay checkout
-      toast.info('Razorpay integration will redirect to payment gateway. Configure RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to enable live payments.');
+      const { data } = await axios.get(`${API}/razorpay/config`);
+      setRzpConfig(data);
     } catch (e) {
-      toast.error('Failed to initiate payment');
+      setRzpConfig({ configured: false, key_id: '' });
+    }
+  };
+
+  const handleSubscribe = async (planId) => {
+    if (!rzpConfig.configured) {
+      toast.error('Online payments are temporarily unavailable. Please contact your account manager.');
+      return;
+    }
+    setProcessing(true);
+    try {
+      const ok = await loadRazorpayScript();
+      if (!ok) {
+        toast.error('Could not load Razorpay. Check your internet connection.');
+        return;
+      }
+      // 1) Create order on backend
+      const { data: order } = await axios.post(`${API}/subscriptions/create-order`, {
+        plan_id: planId,
+        billing_cycle: billingCycle,
+      });
+
+      // 2) Open Razorpay checkout
+      const options = {
+        key: rzpConfig.key_id,
+        amount: order.amount, // in paise, already incl. GST
+        currency: order.currency || 'INR',
+        order_id: order.order_id,
+        name: 'Leadtrak',
+        description: `Subscription · ${billingCycle === 'annual' ? 'Annual' : 'Monthly'} · incl. 18% GST`,
+        image: '/icon-512.png',
+        prefill: {
+          name: user?.name || '',
+          email: user?.email || '',
+          contact: user?.mobile || '',
+        },
+        theme: { color: '#7C3AED' },
+        handler: async (response) => {
+          try {
+            await axios.post(`${API}/subscriptions/verify`, {
+              payment_id: response.razorpay_payment_id,
+              order_id: response.razorpay_order_id,
+              signature: response.razorpay_signature,
+            });
+            toast.success('Payment successful — subscription activated!');
+            // Reload to refresh subscription badge in header
+            setTimeout(() => window.location.reload(), 1200);
+          } catch (e) {
+            toast.error(e.response?.data?.detail || 'Payment verification failed. Please contact support.');
+          }
+        },
+        modal: {
+          ondismiss: () => setProcessing(false),
+        },
+      };
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', (resp) => {
+        toast.error(resp?.error?.description || 'Payment failed');
+        setProcessing(false);
+      });
+      rzp.open();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to initiate payment');
+    } finally {
+      // Don't unblock immediately — the modal will close via ondismiss
+      setTimeout(() => setProcessing(false), 3000);
     }
   };
 
@@ -38,6 +128,12 @@ export default function SubscriptionPage() {
         <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Subscription Plans</h1>
         <p className="text-sm text-slate-600 mt-1">Choose the plan that fits your organization</p>
       </div>
+
+      {!rzpConfig.configured && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900" data-testid="rzp-not-configured-banner">
+          Online payments are temporarily unavailable. Your account manager will share a payment link directly. You can also continue on your trial.
+        </div>
+      )}
 
       <div className="flex items-center justify-center gap-2 bg-slate-100 p-1 rounded-md w-fit mx-auto">
         <button
@@ -65,6 +161,8 @@ export default function SubscriptionPage() {
             : Math.round((plan.gst_annual ?? plan.price_annual * 0.18) / 12 * 100) / 100;
           const totalPerMonth = Math.round((basePrice + gstPerMonth) * 100) / 100;
           const isPopular = plan.name === 'Growth';
+          // Plans returned use `id` (not `_id`) per /api/subscription-plans serializer
+          const planId = plan.id || plan._id;
           return (
             <div
               key={plan.name}
@@ -99,11 +197,12 @@ export default function SubscriptionPage() {
               <Button
                 className={`w-full ${isPopular ? 'bg-violet-700 hover:bg-violet-800 text-white' : ''}`}
                 variant={isPopular ? 'default' : 'outline'}
-                onClick={() => handleSubscribe(plan._id)}
+                onClick={() => handleSubscribe(planId)}
+                disabled={processing || !rzpConfig.configured}
                 data-testid={`subscribe-${plan.name.toLowerCase()}-btn`}
               >
                 <CreditCard className="w-4 h-4 mr-2" />
-                Subscribe
+                {processing ? 'Processing…' : (rzpConfig.configured ? 'Subscribe' : 'Coming soon')}
               </Button>
             </div>
           );

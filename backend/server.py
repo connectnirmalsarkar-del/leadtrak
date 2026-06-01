@@ -40,7 +40,15 @@ JWT_SECRET = os.environ.get("JWT_SECRET")
 JWT_ALGORITHM = "HS256"
 
 # Razorpay Configuration
-razorpay_client = razorpay.Client(auth=(os.environ.get("RAZORPAY_KEY_ID", ""), os.environ.get("RAZORPAY_KEY_SECRET", "")))
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
+RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
+razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+
+
+def _razorpay_configured() -> bool:
+    """True only when real (non-empty) keys are present."""
+    return bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)
 
 # Cloudinary Configuration
 cloudinary.config(
@@ -2354,6 +2362,8 @@ async def create_subscription_order(data: SubscriptionCreate, current_user: dict
     plan = await db.subscription_plans.find_one({"_id": ObjectId(data.plan_id)})
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
+    if not _razorpay_configured():
+        raise HTTPException(status_code=503, detail="Razorpay not configured. Contact the platform owner.")
     
     base_amount = plan[f"price_{data.billing_cycle}"]
     gst_breakdown = with_gst(base_amount)
@@ -2399,46 +2409,37 @@ async def create_subscription_order(data: SubscriptionCreate, current_user: dict
         logger.error(f"Razorpay error: {str(e)}")
         raise HTTPException(status_code=500, detail="Payment order creation failed")
 
+class VerifyPaymentRequest(BaseModel):
+    payment_id: str
+    order_id: str
+    signature: str
+
+
 @api_router.post("/subscriptions/verify")
-async def verify_subscription(payment_id: str, order_id: str, signature: str, current_user: dict = Depends(get_current_user)):
+async def verify_subscription(data: VerifyPaymentRequest, current_user: dict = Depends(get_current_user)):
+    if not _razorpay_configured():
+        raise HTTPException(status_code=503, detail="Razorpay not configured")
     try:
         razorpay_client.utility.verify_payment_signature({
-            "razorpay_order_id": order_id,
-            "razorpay_payment_id": payment_id,
-            "razorpay_signature": signature
+            "razorpay_order_id": data.order_id,
+            "razorpay_payment_id": data.payment_id,
+            "razorpay_signature": data.signature
         })
-        
-        # Lookup the order
-        order_doc = await db.subscription_orders.find_one({"razorpay_order_id": order_id})
-        days = 365 if (order_doc or {}).get("billing_cycle") == "annual" else 30
-        now = datetime.now(timezone.utc)
-        new_end = now + timedelta(days=days)
-        # Update organization subscription
-        await db.organizations.update_one(
-            {"_id": ObjectId(current_user["organization_id"])},
-            {"$set": {
-                "subscription_status": "active",
-                "subscription_end_date": new_end,
-                "last_payment_date": now,
-                "subscription_plan": (order_doc or {}).get("plan_name", "").lower() or "growth",
-            }}
-        )
-        # Mark order paid
-        if order_doc:
-            await db.subscription_orders.update_one(
-                {"_id": order_doc["_id"]},
-                {"$set": {
-                    "status": "paid",
-                    "razorpay_payment_id": payment_id,
-                    "paid_at": now,
-                    "subscription_end_date": new_end,
-                }}
-            )
-        
-        return {"message": "Payment verified successfully"}
     except Exception as e:
-        logger.error(f"Payment verification error: {str(e)}")
+        logger.error(f"Payment signature verify failed: {e}")
         raise HTTPException(status_code=400, detail="Payment verification failed")
+
+    order_doc = await db.subscription_orders.find_one({"razorpay_order_id": data.order_id})
+    if not order_doc:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # Safety: only the same tenant (or super admin) can verify their own order
+    if (current_user.get("role") != "super_admin"
+            and str(order_doc.get("organization_id")) != str(current_user.get("organization_id"))):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    r = await _activate_subscription_from_paid_order(order_doc, data.payment_id)
+    return {"message": "Payment verified successfully", **r}
 
 
 # ==================== Tenant Subscription Status ====================
@@ -2696,6 +2697,313 @@ async def extend_trial(org_id: str, days: int = 7, current_user: dict = Depends(
         }}
     )
     return {"trial_end_date": new_end.isoformat(), "days_added": days}
+
+
+# ==================== Razorpay: Public Config + Payment Links + Webhook ====================
+@api_router.get("/razorpay/config")
+async def razorpay_config(current_user: dict = Depends(get_current_user)):
+    """Expose just the public Key ID to the frontend checkout. Secret is never sent."""
+    return {
+        "configured": _razorpay_configured(),
+        "key_id": RAZORPAY_KEY_ID if _razorpay_configured() else "",
+    }
+
+
+class PaymentLinkRequest(BaseModel):
+    plan_id: str
+    billing_cycle: str  # "monthly" | "annual"
+    notify_sms: bool = True
+    notify_email: bool = True
+    expire_in_days: Optional[int] = 7  # link auto-expires
+    note: Optional[str] = None
+
+
+@api_router.post("/platform/organizations/{org_id}/payment-link")
+async def create_payment_link_for_org(
+    org_id: str,
+    data: PaymentLinkRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Super Admin: generate a Razorpay Payment Link for a tenant.
+    Returns a short_url to share via WhatsApp/email. Payment success triggers
+    the webhook which auto-activates the org's subscription.
+    """
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    if not _razorpay_configured():
+        raise HTTPException(status_code=503, detail="Razorpay not configured. Set RAZORPAY_KEY_ID & RAZORPAY_KEY_SECRET in backend .env")
+    if data.billing_cycle not in ("monthly", "annual"):
+        raise HTTPException(status_code=400, detail="billing_cycle must be 'monthly' or 'annual'")
+
+    org_oid = safe_object_id(org_id, "org_id")
+    plan_oid = safe_object_id(data.plan_id, "plan_id")
+
+    org = await db.organizations.find_one({"_id": org_oid})
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    plan = await db.subscription_plans.find_one({"_id": plan_oid})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    # Find the org admin for prefill (name / email / mobile)
+    admin = await db.users.find_one(
+        {"organization_id": org_oid, "role": "org_admin"},
+        {"name": 1, "email": 1, "mobile": 1},
+    ) or {}
+
+    base_amount = float(plan.get(f"price_{data.billing_cycle}", 0) or 0)
+    gst = with_gst(base_amount)
+    amount_paise = int(round(gst["total_amount"] * 100))
+
+    now = datetime.now(timezone.utc)
+    # Insert pending order first so we have an internal reference_id
+    order_doc = {
+        "organization_id": org_oid,
+        "plan_id": plan_oid,
+        "plan_name": plan.get("name"),
+        "billing_cycle": data.billing_cycle,
+        "amount": gst["total_amount"],
+        "base_amount": gst["base_amount"],
+        "gst_rate": GST_RATE,
+        "gst_amount": gst["gst_amount"],
+        "currency": "INR",
+        "status": "pending",
+        "payment_method": "razorpay_payment_link",
+        "razorpay_payment_link_id": None,
+        "razorpay_short_url": None,
+        "razorpay_payment_id": None,
+        "created_by": ObjectId(current_user["id"]),
+        "created_by_name": current_user.get("name"),
+        "created_at": now,
+        "paid_at": None,
+        "notes": data.note or f"Payment link for {plan.get('name')} ({data.billing_cycle})",
+    }
+    result = await db.subscription_orders.insert_one(order_doc)
+    ref_id = str(result.inserted_id)
+
+    # Build payment link payload. expire_by is a unix timestamp.
+    expire_days = max(1, min(int(data.expire_in_days or 7), 30))
+    expire_by = int((now + timedelta(days=expire_days)).timestamp())
+
+    description = f"{plan.get('name')} ({data.billing_cycle}) — {org.get('name')} · Leadtrak CRM"
+    # Razorpay requires customer.contact in E.164 (with country code). Best-effort normalize.
+    contact = (admin.get("mobile") or org.get("phone") or "").strip()
+    if contact and not contact.startswith("+"):
+        # Assume India if 10 digits
+        digits = "".join([c for c in contact if c.isdigit()])
+        if len(digits) == 10:
+            contact = f"+91{digits}"
+        elif len(digits) == 12 and digits.startswith("91"):
+            contact = f"+{digits}"
+        else:
+            contact = ""  # invalid — skip to avoid Razorpay error
+
+    payload = {
+        "amount": amount_paise,
+        "currency": "INR",
+        "accept_partial": False,
+        "expire_by": expire_by,
+        "reference_id": ref_id,
+        "description": description[:2048],
+        "customer": {
+            "name": (admin.get("name") or org.get("name") or "Customer")[:200],
+            "email": admin.get("email") or org.get("email") or "",
+            "contact": contact,
+        },
+        "notify": {
+            "sms": bool(data.notify_sms) and bool(contact),
+            "email": bool(data.notify_email) and bool(admin.get("email") or org.get("email")),
+        },
+        "reminder_enable": True,
+        "notes": {
+            "organization_id": str(org_oid),
+            "plan_id": str(plan_oid),
+            "plan_name": plan.get("name", ""),
+            "billing_cycle": data.billing_cycle,
+            "internal_order_id": ref_id,
+        },
+    }
+    # Drop empty contact / email to satisfy Razorpay validation
+    if not payload["customer"]["contact"]:
+        payload["customer"].pop("contact", None)
+        payload["notify"]["sms"] = False
+    if not payload["customer"]["email"]:
+        payload["customer"].pop("email", None)
+        payload["notify"]["email"] = False
+
+    try:
+        link = razorpay_client.payment_link.create(payload)
+    except Exception as e:
+        # Roll back the pending order so the dashboard isn't polluted
+        await db.subscription_orders.delete_one({"_id": result.inserted_id})
+        logger.error(f"Razorpay payment_link.create failed: {e}")
+        raise HTTPException(status_code=502, detail=f"Razorpay error: {str(e)[:300]}")
+
+    # Persist link id + short_url on the order
+    await db.subscription_orders.update_one(
+        {"_id": result.inserted_id},
+        {"$set": {
+            "razorpay_payment_link_id": link.get("id"),
+            "razorpay_short_url": link.get("short_url"),
+            "razorpay_payment_link_status": link.get("status"),
+        }}
+    )
+
+    return {
+        "order_id": ref_id,
+        "payment_link_id": link.get("id"),
+        "short_url": link.get("short_url"),
+        "amount": gst["total_amount"],
+        "base_amount": gst["base_amount"],
+        "gst_amount": gst["gst_amount"],
+        "currency": "INR",
+        "expires_at": datetime.fromtimestamp(expire_by, tz=timezone.utc).isoformat(),
+        "status": link.get("status"),
+    }
+
+
+@api_router.get("/platform/organizations/{org_id}/payment-links")
+async def list_org_payment_links(org_id: str, current_user: dict = Depends(get_current_user)):
+    """Super Admin: recent payment links sent to this org (paid + pending)."""
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    org_oid = safe_object_id(org_id, "org_id")
+    rows = await db.subscription_orders.find(
+        {"organization_id": org_oid, "payment_method": "razorpay_payment_link"}
+    ).sort("created_at", -1).limit(20).to_list(20)
+    out = []
+    for r in rows:
+        out.append({
+            "id": str(r["_id"]),
+            "plan_name": r.get("plan_name"),
+            "billing_cycle": r.get("billing_cycle"),
+            "amount": r.get("amount"),
+            "status": r.get("status"),
+            "short_url": r.get("razorpay_short_url"),
+            "payment_link_id": r.get("razorpay_payment_link_id"),
+            "created_at": (r.get("created_at").isoformat() if isinstance(r.get("created_at"), datetime) else ""),
+            "paid_at": (r.get("paid_at").isoformat() if isinstance(r.get("paid_at"), datetime) else None),
+        })
+    return out
+
+
+async def _activate_subscription_from_paid_order(order_doc: dict, razorpay_payment_id: Optional[str] = None) -> dict:
+    """Shared helper: mark order paid, extend org subscription. Idempotent."""
+    if not order_doc:
+        return {"updated": False, "reason": "order not found"}
+    if order_doc.get("status") == "paid":
+        return {"updated": False, "reason": "already paid"}
+
+    now = datetime.now(timezone.utc)
+    billing_cycle = order_doc.get("billing_cycle", "monthly")
+    days = 365 if billing_cycle == "annual" else 30
+
+    org_oid = order_doc["organization_id"]
+    org = await db.organizations.find_one({"_id": org_oid}, {"subscription_status": 1, "subscription_end_date": 1})
+    current_end = (org or {}).get("subscription_end_date")
+    if current_end and current_end.tzinfo is None:
+        current_end = current_end.replace(tzinfo=timezone.utc)
+    base = current_end if (current_end and current_end > now and (org or {}).get("subscription_status") == "active") else now
+    new_end = base + timedelta(days=days)
+
+    receipt_no = order_doc.get("receipt_no") or f"RCP-{now.strftime('%Y%m%d')}-{secrets.token_hex(3).upper()}"
+    await db.subscription_orders.update_one(
+        {"_id": order_doc["_id"]},
+        {"$set": {
+            "status": "paid",
+            "razorpay_payment_id": razorpay_payment_id,
+            "paid_at": now,
+            "subscription_end_date": new_end,
+            "receipt_no": receipt_no,
+        }}
+    )
+    await db.organizations.update_one(
+        {"_id": org_oid},
+        {"$set": {
+            "subscription_status": "active",
+            "subscription_plan": (order_doc.get("plan_name") or "growth").lower(),
+            "subscription_end_date": new_end,
+            "last_payment_date": now,
+        }}
+    )
+    return {"updated": True, "subscription_end_date": new_end.isoformat(), "receipt_no": receipt_no}
+
+
+@api_router.post("/webhooks/razorpay")
+async def razorpay_webhook(request: Request):
+    """Public Razorpay webhook receiver. Validates X-Razorpay-Signature (HMAC-SHA256)
+    and activates subscriptions on `payment_link.paid` / `payment.captured`.
+    Configure in Razorpay Dashboard → Webhooks with the same RAZORPAY_WEBHOOK_SECRET.
+    """
+    body = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature", "")
+
+    if not RAZORPAY_WEBHOOK_SECRET:
+        logger.error("Razorpay webhook received but RAZORPAY_WEBHOOK_SECRET is not set")
+        raise HTTPException(status_code=503, detail="Webhook not configured")
+
+    # Manual HMAC verification (Razorpay sends raw body)
+    expected_sig = hmac.new(
+        RAZORPAY_WEBHOOK_SECRET.encode("utf-8"),
+        body,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(expected_sig, signature):
+        logger.warning("Razorpay webhook signature mismatch")
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    event = payload.get("event", "")
+    entity = (payload.get("payload") or {})
+
+    # Log raw event for the webhook health dashboard
+    try:
+        await db.webhook_logs.insert_one({
+            "source": "razorpay",
+            "event": event,
+            "status": "received",
+            "payload": payload,
+            "received_at": datetime.now(timezone.utc),
+        })
+    except Exception:
+        pass
+
+    result = {"event": event, "handled": False}
+
+    if event == "payment_link.paid":
+        link_entity = (entity.get("payment_link") or {}).get("entity") or {}
+        link_id = link_entity.get("id")
+        rzp_payment_id = ((entity.get("payment") or {}).get("entity") or {}).get("id")
+        order_doc = await db.subscription_orders.find_one({"razorpay_payment_link_id": link_id})
+        if not order_doc:
+            ref_id = link_entity.get("reference_id")
+            if ref_id:
+                try:
+                    order_doc = await db.subscription_orders.find_one({"_id": ObjectId(ref_id)})
+                except Exception:
+                    order_doc = None
+        if order_doc:
+            r = await _activate_subscription_from_paid_order(order_doc, rzp_payment_id)
+            result.update({"handled": True, **r})
+
+    elif event == "payment.captured":
+        # Standard checkout flow — find the order by razorpay_order_id
+        pay_entity = (entity.get("payment") or {}).get("entity") or {}
+        rzp_order_id = pay_entity.get("order_id")
+        rzp_payment_id = pay_entity.get("id")
+        if rzp_order_id:
+            order_doc = await db.subscription_orders.find_one({"razorpay_order_id": rzp_order_id})
+            if order_doc:
+                r = await _activate_subscription_from_paid_order(order_doc, rzp_payment_id)
+                result.update({"handled": True, **r})
+
+    return result
+# ==================== End Razorpay ====================
+
 
 # ==================== Locations (States & Cities) ====================
 class CityCreate(BaseModel):

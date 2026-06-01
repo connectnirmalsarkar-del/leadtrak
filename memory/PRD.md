@@ -321,3 +321,39 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 **Verified in preview (390×844 mobile viewport):** landing, leads, reports, settings — all have `documentElement.scrollWidth === 390`, no horizontal scroll, no overlapping grids.
 
 **Deploy note:** Going forward, any production deploy that touches CSS/JS only needs the CACHE_NAME bumped to invalidate stale bundles for already-installed PWAs.
+
+
+---
+
+## 2026-06-01 — Razorpay Integration (Super Admin Payment Links + Org Checkout)
+
+**Scope:** Real Razorpay payments for subscription activation. Two flows:
+1. **Super Admin → Payment Link** (NEW): Super Admin opens any org, picks plan + cycle, system creates a Razorpay Payment Link (with prefill, GST-inclusive amount, internal ref_id, configurable expiry & notify SMS/email), returns `short_url`. UI provides Copy, Open, and "Share on WhatsApp" buttons. Auto-activates subscription via webhook.
+2. **Org Admin → Direct Checkout** (UPGRADED): SubscriptionPage now loads `checkout.razorpay.com/v1/checkout.js`, creates an order via `/api/subscriptions/create-order`, opens the Razorpay modal with branded theme + prefill, and verifies signature on success via `/api/subscriptions/verify`.
+
+**Backend additions (`/app/backend/server.py`):**
+- `GET /api/razorpay/config` — returns `{configured, key_id}` (secret never exposed)
+- `POST /api/platform/organizations/{org_id}/payment-link` — Super Admin only, uses `razorpay_client.payment_link.create()` with `reference_id`, `customer` prefill, `notify`, `expire_by`, GST-inclusive amount, structured `notes`. Rolls back the pending `subscription_orders` doc on Razorpay error.
+- `GET /api/platform/organizations/{org_id}/payment-links` — recent links sent to an org
+- `POST /api/webhooks/razorpay` — public webhook. Manual HMAC-SHA256 verification via `RAZORPAY_WEBHOOK_SECRET`, handles `payment_link.paid` and `payment.captured`, idempotent activation.
+- `_activate_subscription_from_paid_order()` — shared helper used by webhook AND `/subscriptions/verify`. Extends `subscription_end_date` (30/365 days), sets `subscription_status=active`, marks order paid with auto-generated `receipt_no`.
+- `POST /api/subscriptions/verify` refactored to accept JSON body (was query params) and uses the shared helper.
+- 503 guard on all payment endpoints when keys are empty (`_razorpay_configured()`).
+- Webhook events also logged to `webhook_logs` so Org Admin's Webhook Health Dashboard shows Razorpay deliveries.
+
+**Frontend additions:**
+- `PlatformOrgsPage.jsx`: new `Link2` icon button per org row (both Organizations + Trials tabs); opens `PaymentLinkDialog` with plan select (shows GST-inclusive prices), billing cycle, expiry days (1-30), email/SMS toggles. After creation: copy URL, WhatsApp share (pre-filled message), open link.
+- `SubscriptionPage.jsx`: real Razorpay checkout integration. Gracefully shows an "Online payments unavailable" banner + disables Subscribe buttons when keys aren't configured.
+
+**.env:**
+- `RAZORPAY_KEY_ID=""`, `RAZORPAY_KEY_SECRET=""`, `RAZORPAY_WEBHOOK_SECRET=""` — user fills with live keys.
+
+**Verified:**
+- `/api/razorpay/config` returns `configured:false` when empty ✓
+- Payment Link creation returns 503 with clear message when not configured ✓
+- Webhook with bad signature → 400 ✓
+- Webhook with valid signature + unknown event → 200, `handled:false` (graceful) ✓
+- Webhook with valid signature + `payment_link.paid` for unknown link → 200, `handled:false` (no crash) ✓
+- UI: Send Payment Link dialog renders correctly with "not configured" warning when keys empty ✓
+
+**To go live:** User adds live `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` from Razorpay Dashboard, creates a Webhook in Dashboard pointing to `https://leadtrak.in/api/webhooks/razorpay` with events `payment_link.paid` + `payment.captured`, copies the Webhook Secret into `RAZORPAY_WEBHOOK_SECRET`, restarts backend.
