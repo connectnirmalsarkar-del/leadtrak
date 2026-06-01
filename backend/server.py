@@ -1229,10 +1229,7 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
         "completed": False,
     }
     if is_caller:
-        followup_filter["$or"] = [
-            {"assigned_to": current_user["id"]},
-            {"created_by": current_user["id"]},
-        ]
+        followup_filter["assigned_to"] = current_user["id"]
     pending_followups = await db.followups.count_documents(followup_filter)
 
     # Admissions/conversions — caller's own (admissions store `created_by`)
@@ -1744,6 +1741,13 @@ async def assign_lead(lead_id: str, assigned_to: str, current_user: dict = Depen
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    # Reassign any open follow-ups for this lead so they show on the new
+    # owner's dashboard instead of the previous owner's.
+    await db.followups.update_many(
+        {"lead_id": lead_id, "completed": {"$ne": True}},
+        {"$set": {"assigned_to": assigned_to}},
+    )
+
     # Create notification
     lead = await db.leads.find_one({"_id": lid}, {"name": 1})
     await db.notifications.insert_one({
@@ -1792,6 +1796,14 @@ async def transfer_lead(lead_id: str, data: LeadTransfer, current_user: dict = D
 
     await db.leads.update_one(
         {"_id": lid, "organization_id": org_id},
+        {"$set": {"assigned_to": data.new_assignee_id}},
+    )
+
+    # Reassign any open follow-ups for this lead to the new owner so the
+    # follow-up correctly shows on the new caller's dashboard (and stops
+    # showing on the previous caller's dashboard).
+    await db.followups.update_many(
+        {"lead_id": lead_id, "completed": {"$ne": True}},
         {"$set": {"assigned_to": data.new_assignee_id}},
     )
 
@@ -2393,6 +2405,18 @@ async def complete_followup(followup_id: str, data: FollowupComplete, current_us
 async def create_followup(data: FollowupCreate, current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
 
+    # Inherit `assigned_to` from the lead so the followup always belongs to
+    # the lead's current owner — even when a manager or admin schedules it
+    # on behalf of a caller. Falls back to the creator if the lead has no
+    # assignee.
+    assigned_to = current_user["id"]
+    try:
+        lead = await db.leads.find_one({"_id": ObjectId(data.lead_id)}, {"assigned_to": 1})
+        if lead and lead.get("assigned_to"):
+            assigned_to = lead["assigned_to"]
+    except Exception:
+        pass
+
     followup_doc = {
         "lead_id": data.lead_id,
         "followup_date": data.followup_date,
@@ -2404,6 +2428,7 @@ async def create_followup(data: FollowupCreate, current_user: dict = Depends(get
         "voice_recording_duration": data.voice_recording_duration,
         "completed": False,
         "organization_id": org_id,
+        "assigned_to": assigned_to,
         "created_by": current_user["id"],
         "created_by_name": current_user.get("name"),
         "created_at": datetime.now(timezone.utc)
@@ -2451,6 +2476,11 @@ async def get_followups(
     elif filter_type == "missed":
         query["followup_date"] = {"$lt": today}
         query["completed"] = False
+
+    # Strict caller visibility: counselor/telecaller see only the followups
+    # currently assigned to them.
+    if current_user["role"] in ("counselor", "telecaller"):
+        query["assigned_to"] = current_user["id"]
 
     page = max(1, int(page or 1))
     limit = max(1, min(int(limit or 50), 500))
@@ -3389,6 +3419,43 @@ async def platform_subscription_orders(current_user: dict = Depends(get_current_
             "recorded_by": o.get("recorded_by_name", o.get("created_by_name", "")),
         })
     return rows
+
+
+@api_router.post("/platform/migrate-followups-assignment")
+async def migrate_followups_assignment(current_user: dict = Depends(get_current_user)):
+    """One-time migration: backfill `assigned_to` on existing followups by
+    inheriting from their parent lead. Without this, callers may see other
+    callers' followups on their dashboard. Idempotent.
+    """
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+
+    updated = 0
+    skipped = 0
+    async for fu in db.followups.find({}, {"_id": 1, "lead_id": 1, "assigned_to": 1, "created_by": 1}):
+        # If already has a valid assignee, skip
+        if fu.get("assigned_to"):
+            skipped += 1
+            continue
+        # Pull current owner from the lead
+        target = None
+        try:
+            lead = await db.leads.find_one({"_id": ObjectId(fu["lead_id"])}, {"assigned_to": 1})
+            if lead and lead.get("assigned_to"):
+                target = lead["assigned_to"]
+        except Exception:
+            target = None
+        # Fall back to the creator
+        target = target or fu.get("created_by")
+        if not target:
+            skipped += 1
+            continue
+        await db.followups.update_one(
+            {"_id": fu["_id"]},
+            {"$set": {"assigned_to": target}},
+        )
+        updated += 1
+    return {"message": "Migration complete", "updated": updated, "skipped": skipped}
 
 
 @api_router.post("/platform/migrate-conversion-statuses")
@@ -5313,12 +5380,10 @@ async def get_today_followups(current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     query = {"organization_id": org_id, "followup_date": today}
-    # Strict caller visibility: counselor/telecaller see only their own followups
+    # Strict caller visibility: counselor/telecaller see only the followups
+    # assigned to them. Lead transfer auto-reassigns followups (see below).
     if current_user["role"] in ("counselor", "telecaller"):
-        query["$or"] = [
-            {"assigned_to": current_user["id"]},
-            {"created_by": current_user["id"]},
-        ]
+        query["assigned_to"] = current_user["id"]
     followups = await db.followups.find(query).limit(20).to_list(20)
     for fu in followups:
         fu["_id"] = str(fu["_id"])
