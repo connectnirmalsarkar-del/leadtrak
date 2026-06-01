@@ -182,7 +182,7 @@ export default function DashboardLayout({ children }) {
       >
         <div className="flex h-16 items-center justify-between px-6 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
-            <img src="/logo-dark.png?v=2" alt="Leadtrak" className="h-[38px] w-auto" data-testid="header-logo" />
+            <img src="/logo-dark.png?v=3" alt="Leadtrak" className="h-[38px] w-auto" data-testid="header-logo" />
           </div>
           <button
             className="lg:hidden text-slate-400 hover:text-white"
