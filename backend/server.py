@@ -439,6 +439,24 @@ class LeadSourceCreate(BaseModel):
     name: str
 
 GST_REGEX = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$")
+CONVERSION_STATUS_BY_INDUSTRY = {
+    "education": "Admission Done",
+    "admission_consultancy": "Admission Confirmed",
+    "it_software": "Won",
+    "real_estate": "Booked",
+    "healthcare": "Completed",
+    "insurance": "Issued",
+    "travel": "Confirmed",
+    "retail": "Delivered",
+    "fitness": "Joined",
+    "generic": "Won",
+}
+
+def get_conversion_status(industry: str) -> str:
+    """Industry-specific status name set when a lead converts to admission/deal."""
+    return CONVERSION_STATUS_BY_INDUSTRY.get(industry, "Admission Done")
+
+
 GST_RATE = 0.18  # 18% GST applied on all subscription invoices (India)
 
 
@@ -1223,7 +1241,11 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
         admissions_filter["created_by"] = current_user["id"]
     admissions_done = await db.admissions.count_documents(admissions_filter)
 
-    interested_leads = await db.leads.count_documents({**base_filter, "status": {"$in": ["Interested", "Admission Done"]}})
+    # Determine the industry's "converted" status for accurate conversion-rate calc
+    org_doc = await db.organizations.find_one({"_id": org_id}, {"industry": 1})
+    conv_status = get_conversion_status((org_doc or {}).get("industry", "education"))
+
+    interested_leads = await db.leads.count_documents({**base_filter, "status": {"$in": ["Interested", conv_status]}})
     conversion_rate = round((interested_leads / total_leads * 100), 2) if total_leads > 0 else 0
 
     return {
@@ -2531,12 +2553,19 @@ async def create_admission(data: AdmissionCreate, current_user: dict = Depends(g
     result = await db.admissions.insert_one(admission_doc)
     admission_doc["_id"] = str(result.inserted_id)
     admission_doc["organization_id"] = str(org_id)
-    
+
+    # Determine industry-specific conversion status (Won for IT, Booked for
+    # Real Estate, etc.) so the lead's status reflects the right vocabulary
+    # for the org's industry instead of always hardcoding "Admission Done".
+    org_doc = await db.organizations.find_one({"_id": org_id}, {"industry": 1})
+    industry = (org_doc or {}).get("industry", "education")
+    conv_status = get_conversion_status(industry)
+
     # Update lead status if lead_id provided + log timeline event
     if data.lead_id:
         await db.leads.update_one(
             {"_id": ObjectId(data.lead_id)},
-            {"$set": {"status": "Admission Done"}}
+            {"$set": {"status": conv_status}}
         )
         await log_lead_event(
             data.lead_id,
