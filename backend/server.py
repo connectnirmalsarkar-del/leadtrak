@@ -1591,6 +1591,122 @@ async def get_lead_timeline(lead_id: str, current_user: dict = Depends(get_curre
     return events
 
 
+class LogCallRequest(BaseModel):
+    summary: str                                  # what happened on the call (required)
+    voice_recording_url: Optional[str] = None
+    voice_recording_public_id: Optional[str] = None
+    voice_recording_duration: Optional[float] = None
+    new_status: Optional[str] = None
+    next_followup_date: Optional[str] = None      # YYYY-MM-DD
+    next_followup_time: Optional[str] = None      # HH:MM
+    next_followup_remarks: Optional[str] = None
+
+
+@api_router.post("/leads/{lead_id}/log-call")
+async def log_call(lead_id: str, data: LogCallRequest, current_user: dict = Depends(get_current_user)):
+    """Counselor logs a call that JUST happened. One dialog captures everything:
+    voice + remarks + status update + optional next follow-up schedule.
+
+    Creates a synthetic followup doc (marked complete immediately) so it shows up
+    on the Follow-ups page in the 'Done' state with the audio + outcome.
+    """
+    summary = (data.summary or "").strip()
+    if not summary:
+        raise HTTPException(status_code=400, detail="Outcome / remarks are required")
+
+    org_id = ObjectId(current_user["organization_id"])
+    lid = safe_object_id(lead_id, "lead_id")
+    lead = await db.leads.find_one({"_id": lid, "organization_id": org_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Counselors / telecallers may only log calls on leads assigned to them
+    if current_user["role"] in ("counselor", "telecaller") and lead.get("assigned_to") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You can only log calls on leads assigned to you")
+
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%Y-%m-%d")
+    now_str = now.strftime("%H:%M")
+
+    # 1) Insert a completed-on-creation follow-up doc so it shows in Follow-ups page history
+    fu_doc = {
+        "lead_id": str(lid),
+        "lead_name": lead.get("name"),
+        "lead_mobile": lead.get("mobile"),
+        "followup_date": today_str,
+        "followup_time": now_str,
+        "remarks": f"Call logged just now — {summary[:120]}",
+        "completed": True,
+        "completed_at": now,
+        "completed_by_id": current_user["id"],
+        "completed_by_name": current_user.get("name"),
+        "completion_summary": summary,
+        "voice_recording_url": data.voice_recording_url,
+        "voice_recording_public_id": data.voice_recording_public_id,
+        "voice_recording_duration": data.voice_recording_duration,
+        "organization_id": org_id,
+        "created_by": current_user["id"],
+        "created_by_name": current_user.get("name"),
+        "created_at": now,
+    }
+    fu_res = await db.followups.insert_one(fu_doc)
+
+    # 2) Timeline event — followup_completed (so it renders the rich way with outcome+audio)
+    await log_lead_event(
+        lid, "followup_completed",
+        {
+            "followup_id": str(fu_res.inserted_id),
+            "scheduled_remarks": None,  # call was unplanned
+            "outcome_summary": summary,
+            "followup_date": today_str,
+            "followup_time": now_str,
+            "voice_recording_url": data.voice_recording_url,
+            "voice_recording_duration": data.voice_recording_duration,
+            "logged_inline": True,
+        },
+        current_user, org_id,
+    )
+
+    # 3) Status change (optional)
+    if data.new_status and data.new_status != lead.get("status"):
+        old_status = lead.get("status")
+        await db.leads.update_one({"_id": lid}, {"$set": {"status": data.new_status}})
+        ev_type = "lead_lost" if data.new_status == "Lost" else "status_changed"
+        await log_lead_event(lid, ev_type, {"from": old_status, "to": data.new_status}, current_user, org_id)
+
+    out = {"message": "Call logged", "followup_id": str(fu_res.inserted_id)}
+
+    # 4) Schedule next follow-up if date given
+    if data.next_followup_date:
+        next_doc = {
+            "lead_id": str(lid),
+            "lead_name": lead.get("name"),
+            "lead_mobile": lead.get("mobile"),
+            "followup_date": data.next_followup_date,
+            "followup_time": data.next_followup_time or "10:00",
+            "remarks": (data.next_followup_remarks or "").strip() or f"Scheduled from previous call. Prior outcome: {summary[:80]}",
+            "completed": False,
+            "organization_id": org_id,
+            "created_by": current_user["id"],
+            "created_by_name": current_user.get("name"),
+            "created_at": now,
+        }
+        nxt = await db.followups.insert_one(next_doc)
+        await log_lead_event(
+            lid, "followup_added",
+            {
+                "followup_id": str(nxt.inserted_id),
+                "remarks": next_doc["remarks"],
+                "followup_date": next_doc["followup_date"],
+                "followup_time": next_doc["followup_time"],
+            },
+            current_user, org_id,
+        )
+        out["next_followup_id"] = str(nxt.inserted_id)
+
+    return out
+
+
 # ==================== Lead Comments (note_added in timeline) ====================
 class LeadCommentCreate(BaseModel):
     note: str

@@ -102,6 +102,8 @@ export default function LeadsPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [showFollowupDialog, setShowFollowupDialog] = useState(false);
+  const [showLogCallDialog, setShowLogCallDialog] = useState(false);
+  const [logCall, setLogCall] = useState({ summary: '', voice: null, new_status: '', schedule_next: false, next_date: '', next_time: '10:00', next_remarks: '' });
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showDemoDialog, setShowDemoDialog] = useState(false);
   const [transferTo, setTransferTo] = useState('');
@@ -315,6 +317,43 @@ export default function LeadsPage() {
       setActiveTab('timeline');
     } catch (e) {
       toast.error('Failed to add follow-up');
+    }
+  };
+
+  const handleLogCall = async () => {
+    if (!selectedLead) return;
+    const summary = (logCall.summary || '').trim();
+    if (!summary) {
+      toast.error('Please add outcome / remarks of the call');
+      return;
+    }
+    if (logCall.schedule_next && !logCall.next_date) {
+      toast.error('Please pick a date for the next follow-up');
+      return;
+    }
+    try {
+      const payload = {
+        summary,
+        new_status: logCall.new_status || null,
+        voice_recording_url: logCall.voice?.url || null,
+        voice_recording_public_id: logCall.voice?.public_id || null,
+        voice_recording_duration: logCall.voice?.duration || null,
+      };
+      if (logCall.schedule_next && logCall.next_date) {
+        payload.next_followup_date = logCall.next_date;
+        payload.next_followup_time = logCall.next_time || '10:00';
+        payload.next_followup_remarks = logCall.next_remarks;
+      }
+      await axios.post(`${API}/leads/${selectedLead._id}/log-call`, payload);
+      toast.success('Call logged');
+      setShowLogCallDialog(false);
+      setLogCall({ summary: '', voice: null, new_status: '', schedule_next: false, next_date: '', next_time: '10:00', next_remarks: '' });
+      setTimelineRefresh((r) => r + 1);
+      setActiveTab('timeline');
+      // Refresh lead in-place so status badge updates
+      fetchLeads();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to log call');
     }
   };
 
@@ -716,9 +755,13 @@ export default function LeadsPage() {
                       <MessageSquare className="w-4 h-4 mr-2" />
                       WhatsApp
                     </Button>
+                    <Button className="flex-1 min-w-[120px] bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setShowLogCallDialog(true)} data-testid="log-call-btn">
+                      <Phone className="w-4 h-4 mr-2" />
+                      Log Call
+                    </Button>
                     <Button variant="outline" className="flex-1 min-w-[120px]" onClick={() => setShowFollowupDialog(true)} data-testid="add-followup-btn">
                       <Clock className="w-4 h-4 mr-2" />
-                      Follow-up
+                      Schedule
                     </Button>
                     <Button variant="outline" className="flex-1 min-w-[120px] border-violet-200 text-violet-700 hover:bg-violet-50" onClick={() => setShowDemoDialog(true)} data-testid="book-demo-btn">
                       <Video className="w-4 h-4 mr-2" />
@@ -906,6 +949,86 @@ export default function LeadsPage() {
           setTimelineRefresh((r) => r + 1);
         }}
       />
+
+      {/* ============ LOG CALL DIALOG (call just happened — capture everything) ============ */}
+      <Dialog open={showLogCallDialog} onOpenChange={setShowLogCallDialog}>
+        <DialogContent className="max-w-lg max-h-[88vh] p-0 overflow-hidden flex flex-col gap-0" data-testid="log-call-dialog">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-slate-100 flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2"><Phone className="w-5 h-5 text-emerald-600" /> Log Call</DialogTitle>
+            <DialogDescription>
+              {selectedLead?.name && <>Capturing what just happened with <strong className="text-slate-900">{selectedLead.name}</strong> · </>}
+              Upload voice + remarks + status. Schedule next follow-up if needed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+            <div className="space-y-1.5">
+              <Label>What happened on the call? *</Label>
+              <Textarea
+                value={logCall.summary}
+                onChange={(e) => setLogCall({ ...logCall, summary: e.target.value })}
+                rows={3}
+                placeholder="e.g. Lead picked up, said budget is tight. Wants EMI option. Will decide by Friday."
+                maxLength={2000}
+                data-testid="log-call-summary"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Voice recording (highly recommended)</Label>
+              <VoiceRecorder value={logCall.voice} onChange={(v) => setLogCall({ ...logCall, voice: v })} />
+              <p className="text-[11px] text-slate-500">Record your call summary or upload the WhatsApp voice note.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Update lead status (optional)</Label>
+              <Select value={logCall.new_status} onValueChange={(v) => setLogCall({ ...logCall, new_status: v })}>
+                <SelectTrigger data-testid="log-call-status"><SelectValue placeholder="Keep current status" /></SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="bg-slate-50 rounded-md p-3 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={logCall.schedule_next}
+                  onChange={(e) => setLogCall({ ...logCall, schedule_next: e.target.checked })}
+                  data-testid="log-call-schedule-next-toggle"
+                />
+                <span className="text-sm font-medium text-slate-800">Schedule next follow-up</span>
+              </label>
+              {logCall.schedule_next && (
+                <div className="space-y-2 pt-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Date *</Label>
+                      <Input type="date" value={logCall.next_date} onChange={(e) => setLogCall({ ...logCall, next_date: e.target.value })} data-testid="log-call-next-date" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Time</Label>
+                      <Input type="time" value={logCall.next_time} onChange={(e) => setLogCall({ ...logCall, next_time: e.target.value })} data-testid="log-call-next-time" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">What to discuss next (optional)</Label>
+                    <Input value={logCall.next_remarks} onChange={(e) => setLogCall({ ...logCall, next_remarks: e.target.value })} placeholder="e.g. Share fee structure + EMI details" data-testid="log-call-next-remarks" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="px-6 py-4 border-t border-slate-100 flex-shrink-0">
+            <Button variant="outline" onClick={() => setShowLogCallDialog(false)}>Cancel</Button>
+            <Button
+              onClick={handleLogCall}
+              disabled={!logCall.summary.trim() || (logCall.schedule_next && !logCall.next_date)}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white"
+              data-testid="submit-log-call-btn"
+            >
+              Log Call
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
