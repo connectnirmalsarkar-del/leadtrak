@@ -124,13 +124,19 @@ export default function RegisterPage() {
         theme: { color: '#7C3AED' },
         handler: async (response) => {
           try {
-            await axios.post(`${API}/subscriptions/verify`, {
+            const { data: verifyResp } = await axios.post(`${API}/subscriptions/verify`, {
               payment_id: response.razorpay_payment_id,
               order_id: response.razorpay_order_id,
               signature: response.razorpay_signature,
             });
             toast.success(`Payment successful — ${selectedPlan.name} plan activated!`);
-            setTimeout(() => navigate('/dashboard'), 1000);
+            // Land them on the subscription page with the invoice modal popping open
+            const orderId = verifyResp?.order_id;
+            if (orderId) {
+              setTimeout(() => navigate(`/subscription?invoice=${orderId}`), 600);
+            } else {
+              setTimeout(() => navigate('/dashboard'), 1000);
+            }
           } catch (e) {
             toast.error(e.response?.data?.detail || 'Payment verification failed. You can retry from Subscription page.');
             setTimeout(() => navigate('/subscription'), 1500);

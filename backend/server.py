@@ -3033,7 +3033,85 @@ async def verify_subscription(data: VerifyPaymentRequest, current_user: dict = D
         raise HTTPException(status_code=403, detail="Not authorized")
 
     r = await _activate_subscription_from_paid_order(order_doc, data.payment_id)
-    return {"message": "Payment verified successfully", **r}
+    # Return the freshly-paid order id so the frontend can immediately fetch the invoice
+    return {
+        "message": "Payment verified successfully",
+        "order_id": str(order_doc["_id"]),
+        **r,
+    }
+
+
+def _serialize_invoice(order: dict, org: dict | None = None) -> dict:
+    """Shape a subscription_orders document into an invoice JSON payload."""
+    base_amount = float(order.get("base_amount", 0))
+    gst_amount = float(order.get("gst_amount", 0))
+    if not base_amount:
+        # Backfill from total if base wasn't stored historically
+        amount = float(order.get("amount", 0))
+        base_amount = round(amount / (1 + GST_RATE), 2)
+        gst_amount = round(amount - base_amount, 2)
+    return {
+        "id": str(order["_id"]),
+        "receipt_no": order.get("receipt_no", ""),
+        "plan_name": order.get("plan_name", ""),
+        "billing_cycle": order.get("billing_cycle", ""),
+        "base_amount": base_amount,
+        "gst_rate": order.get("gst_rate", GST_RATE),
+        "gst_amount": gst_amount,
+        "amount": float(order.get("amount", 0)),
+        "currency": order.get("currency", "INR"),
+        "status": order.get("status", "pending"),
+        "payment_method": order.get("payment_method", ""),
+        "razorpay_order_id": order.get("razorpay_order_id"),
+        "razorpay_payment_id": order.get("razorpay_payment_id"),
+        "razorpay_short_url": order.get("razorpay_short_url"),
+        "reference": order.get("reference", ""),
+        "notes": order.get("notes", ""),
+        "created_at": order["created_at"].isoformat() if isinstance(order.get("created_at"), datetime) else None,
+        "paid_at": order["paid_at"].isoformat() if isinstance(order.get("paid_at"), datetime) else None,
+        "subscription_end_date": (
+            order["subscription_end_date"].isoformat()
+            if isinstance(order.get("subscription_end_date"), datetime) else None
+        ),
+        "organization": {
+            "id": str((org or {}).get("_id", "")),
+            "name": (org or {}).get("name", ""),
+            "industry": (org or {}).get("industry", ""),
+            "email": (org or {}).get("email", ""),
+            "phone": (org or {}).get("phone", ""),
+            "address": (org or {}).get("address", ""),
+            "gstin": (org or {}).get("gstin", ""),
+        } if org else None,
+    }
+
+
+@api_router.get("/subscriptions/my-orders")
+async def get_my_subscription_orders(current_user: dict = Depends(get_current_user)):
+    """List all subscription orders for the current tenant (newest first)."""
+    org_id = ObjectId(current_user["organization_id"])
+    cursor = db.subscription_orders.find({"organization_id": org_id}).sort("created_at", -1).limit(50)
+    org = await db.organizations.find_one({"_id": org_id})
+    items = []
+    async for o in cursor:
+        items.append(_serialize_invoice(o, org))
+    return items
+
+
+@api_router.get("/subscriptions/orders/{order_id}")
+async def get_subscription_order(order_id: str, current_user: dict = Depends(get_current_user)):
+    """Fetch a single subscription order/invoice for the current user.
+
+    Tenants can only see their own orders; super_admin can see any.
+    """
+    oid = safe_object_id(order_id, "order_id")
+    order = await db.subscription_orders.find_one({"_id": oid})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if (current_user.get("role") != "super_admin"
+            and str(order.get("organization_id")) != str(current_user.get("organization_id"))):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    org = await db.organizations.find_one({"_id": order["organization_id"]})
+    return _serialize_invoice(order, org)
 
 
 # ==================== Tenant Subscription Status ====================

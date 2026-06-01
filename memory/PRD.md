@@ -604,3 +604,32 @@ Added a reusable `<PasswordInput />` component that wraps the standard `<Input>`
 
 **Verified:** Playwright trace on Login page — typed `TestPwd123`, clicked eye → input type flipped from `password` → `text`, password text became visible. Eye-off icon shows in revealed state. Lint clean on all 5 modified files.
 
+---
+
+## 2026-06-01 — Invoice / Tax Bill on Payment Success ✅
+
+Earlier the only feedback after a successful subscription payment was a toast notification + page reload. The user (Pritam) flagged that no actual bill/invoice was shown. Now built a full GST-compliant Tax Invoice experience.
+
+**Backend:**
+- `POST /api/subscriptions/verify` now returns the freshly-paid `order_id` alongside the existing receipt details.
+- New `GET /api/subscriptions/my-orders` — tenant's full order/invoice history (newest first, 50 max).
+- New `GET /api/subscriptions/orders/{order_id}` — full invoice payload for the tenant's own order. Super admin can fetch any.
+- Shared `_serialize_invoice(order, org)` helper builds the JSON payload (org details, plan, GST breakdown, payment metadata).
+
+**Frontend:**
+- New `/app/frontend/src/components/InvoiceDialog.jsx` — professional Tax Invoice modal with:
+  - Leadtrak branded header, receipt number, date, PAID badge
+  - Billed to (org name, industry, GSTIN if present) + Billed by (Leadtrak / Emergent Labs)
+  - Item table → Subtotal + GST 18% + Total Paid (bold underline)
+  - Payment metadata (Razorpay payment ID, method, valid-until, paid-at)
+  - **Download / Print** button uses `window.open()` with scoped print CSS so the user gets a clean PDF via the browser's native print dialog (works on mobile + desktop)
+  - "Email me a copy" button (disabled with tooltip — Resend integration deferred)
+- `/app/frontend/src/pages/SubscriptionPage.jsx` — rewritten with **Plans / Invoices tabs**:
+  - Plans tab: Monthly/Annual toggle + 3 plan cards (existing flow, now opens invoice dialog after payment success instead of just reloading)
+  - Invoices tab: tabular list of past orders with View button per row that re-opens the invoice modal
+  - Auto-opens invoice modal when URL has `?invoice=<orderId>` (used by the direct-pay signup flow)
+- `/app/frontend/src/pages/RegisterPage.jsx` — direct-pay signup now redirects to `/subscription?invoice=<orderId>` after a successful payment so the user lands on their invoice immediately.
+- `/app/frontend/public/service-worker.js` — `CACHE_NAME` bumped to `leadtrak-v33-invoice`.
+
+**Verified:** Created a fake paid order via Mongo script → Playwright opened Invoice modal → all fields rendered correctly (RCP-20260601-A1B2C3 / Growth Plan / ₹2,999 + ₹539.82 GST = ₹3,538.82 / pay_test_invoice_001 / Online Razorpay / Valid until 01 Jul 2026). Test data cleaned up. Backend + frontend lint clean.
+
