@@ -2825,17 +2825,33 @@ async def create_user(data: UserCreate, current_user: dict = Depends(get_current
 
 @api_router.get("/users")
 async def get_users(current_user: dict = Depends(get_current_user)):
-    if current_user["role"] not in ["super_admin", "org_admin", "manager"]:
-        raise HTTPException(status_code=403, detail="Not authorized to view users")
-    
+    """Return org members. Admins/managers get full details. Counselors and
+    telecallers get a lightweight read-only list (id, name, role) so they
+    can populate "presenter", "transfer to", and other dropdowns in the
+    Demo / Lead screens.
+    """
     org_id = ObjectId(current_user["organization_id"])
+    role = current_user["role"]
+    if role in ("counselor", "telecaller"):
+        # Read-only minimal projection — no PII other than name/role
+        users = await db.users.find(
+            {"organization_id": org_id, "active": {"$ne": False}},
+            {"_id": 1, "name": 1, "role": 1},
+        ).to_list(200)
+        for u in users:
+            u["_id"] = str(u["_id"])
+        return users
+
+    if role not in ["super_admin", "org_admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Not authorized to view users")
+
     users = await db.users.find({"organization_id": org_id}, {"password_hash": 0, "organization_id": 0}).to_list(100)
-    
+
     for user in users:
         user["_id"] = str(user["_id"])
         if user.get("reports_to"):
             user["reports_to"] = str(user["reports_to"])
-    
+
     return users
 
 @api_router.put("/users/{user_id}")
