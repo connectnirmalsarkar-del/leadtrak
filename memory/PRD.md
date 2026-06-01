@@ -587,3 +587,20 @@ When the LeadTrak PWA is installed on Android / Desktop, the home-screen icon no
 
 **Verified:** `/api/badge/count` returns `{new_leads:1, unread_notifications:1, count:2}` for the Super Admin. The hook is feature-detected and bails gracefully on unsupported browsers, so there's no console noise or errors anywhere.
 
+---
+
+## 2026-06-01 — Password Eye Toggle (Show/Hide) ✅
+
+Added a reusable `<PasswordInput />` component that wraps the standard `<Input>` with a show/hide eye toggle. Drop-in replacement — keeps all existing props (value, onChange, required, minLength, autoComplete, data-testid). The toggle button gets a derived test id of `${testId}-toggle`.
+
+**Files:**
+- `/app/frontend/src/components/ui/password-input.jsx` — new component
+- Replaced in all 5 password fields across the app:
+  - `LoginPage.jsx` — Sign in form
+  - `RegisterPage.jsx` — Sign up form
+  - `ProfilePage.jsx` — Current / New / Confirm passwords (3 fields)
+  - `PlatformOrgsPage.jsx` — Super-admin "Create Org Admin" dialog
+- `/app/frontend/public/service-worker.js` — `CACHE_NAME` bumped to `leadtrak-v32-password-eye`
+
+**Verified:** Playwright trace on Login page — typed `TestPwd123`, clicked eye → input type flipped from `password` → `text`, password text became visible. Eye-off icon shows in revealed state. Lint clean on all 5 modified files.
+

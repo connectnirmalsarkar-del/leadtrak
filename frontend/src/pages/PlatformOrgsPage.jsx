@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -363,7 +364,7 @@ export default function PlatformOrgsPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Admin Password *</Label>
-                    <Input type="password" value={form.admin_password} onChange={(e) => setForm({ ...form, admin_password: e.target.value })} placeholder="Set initial password" data-testid="admin-password-field" />
+                    <PasswordInput value={form.admin_password} onChange={(e) => setForm({ ...form, admin_password: e.target.value })} placeholder="Set initial password" data-testid="admin-password-field" />
                   </div>
                 </div>
                 <DialogFooter>

@@ -4,6 +4,7 @@ import { API, useAuth } from '@/context/AuthContext';
 import { Lock, User, Mail, Shield, CheckCircle2, Camera, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -252,8 +253,7 @@ export default function ProfilePage() {
         </div>
         <div className="space-y-1.5">
           <Label>Current password</Label>
-          <Input
-            type="password"
+          <PasswordInput
             value={currentPwd}
             onChange={(e) => setCurrentPwd(e.target.value)}
             required
@@ -264,8 +264,7 @@ export default function ProfilePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label>New password</Label>
-            <Input
-              type="password"
+            <PasswordInput
               value={newPwd}
               onChange={(e) => setNewPwd(e.target.value)}
               required
@@ -277,8 +276,7 @@ export default function ProfilePage() {
           </div>
           <div className="space-y-1.5">
             <Label>Confirm new password</Label>
-            <Input
-              type="password"
+            <PasswordInput
               value={confirmPwd}
               onChange={(e) => setConfirmPwd(e.target.value)}
               required
