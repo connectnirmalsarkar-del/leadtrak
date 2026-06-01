@@ -1190,42 +1190,67 @@ async def reset_password(data: ResetPasswordRequest, request: Request, response:
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
-    
-    total_leads = await db.leads.count_documents({"organization_id": org_id})
+
+    # Counselors/telecallers see only their own pipeline numbers
+    base_filter = {"organization_id": org_id}
+    is_caller = current_user["role"] in ("counselor", "telecaller")
+    if is_caller:
+        base_filter["assigned_to"] = current_user["id"]
+
+    total_leads = await db.leads.count_documents(base_filter)
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    todays_leads = await db.leads.count_documents({"organization_id": org_id, "created_at": {"$gte": today_start}})
-    pending_followups = await db.followups.count_documents({"organization_id": org_id, "followup_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "completed": False})
-    admissions_done = await db.admissions.count_documents({"organization_id": org_id})
-    
-    interested_leads = await db.leads.count_documents({"organization_id": org_id, "status": {"$in": ["Interested", "Admission Done"]}})
+    todays_leads = await db.leads.count_documents({**base_filter, "created_at": {"$gte": today_start}})
+
+    followup_filter = {
+        "organization_id": org_id,
+        "followup_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "completed": False,
+    }
+    if is_caller:
+        followup_filter["$or"] = [
+            {"assigned_to": current_user["id"]},
+            {"created_by": current_user["id"]},
+        ]
+    pending_followups = await db.followups.count_documents(followup_filter)
+
+    # Admissions/conversions — for callers, count only the ones they own
+    admissions_filter = {"organization_id": org_id}
+    if is_caller:
+        admissions_filter["closed_by"] = current_user["id"]
+    admissions_done = await db.admissions.count_documents(admissions_filter)
+
+    interested_leads = await db.leads.count_documents({**base_filter, "status": {"$in": ["Interested", "Admission Done"]}})
     conversion_rate = round((interested_leads / total_leads * 100), 2) if total_leads > 0 else 0
-    
+
     return {
         "total_leads": total_leads,
         "todays_leads": todays_leads,
         "pending_followups": pending_followups,
         "admissions_done": admissions_done,
-        "conversion_rate": conversion_rate
+        "conversion_rate": conversion_rate,
     }
 
 @api_router.get("/dashboard/lead-sources")
 async def get_lead_source_chart(current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
-    
+    match = {"organization_id": org_id}
+    if current_user["role"] in ("counselor", "telecaller"):
+        match["assigned_to"] = current_user["id"]
     pipeline = [
-        {"$match": {"organization_id": org_id}},
-        {"$group": {"_id": "$lead_source", "count": {"$sum": 1}}}
+        {"$match": match},
+        {"$group": {"_id": "$lead_source", "count": {"$sum": 1}}},
     ]
-    
     result = await db.leads.aggregate(pipeline).to_list(100)
     return [{"source": item["_id"], "count": item["count"]} for item in result]
 
 @api_router.get("/dashboard/monthly-trend")
 async def get_monthly_trend(current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
-    
+    match = {"organization_id": org_id}
+    if current_user["role"] in ("counselor", "telecaller"):
+        match["assigned_to"] = current_user["id"]
     pipeline = [
-        {"$match": {"organization_id": org_id}},
+        {"$match": match},
         {"$group": {
             "_id": {
                 "year": {"$year": "$created_at"},
@@ -1236,7 +1261,7 @@ async def get_monthly_trend(current_user: dict = Depends(get_current_user)):
         {"$sort": {"_id.year": 1, "_id.month": 1}},
         {"$limit": 12}
     ]
-    
+
     result = await db.leads.aggregate(pipeline).to_list(100)
     return [{"month": f"{item['_id']['year']}-{item['_id']['month']:02d}", "count": item["count"]} for item in result]
 
@@ -5078,13 +5103,15 @@ async def get_lead_funnel(current_user: dict = Depends(get_current_user)):
     industry = (org or {}).get("industry") or "education"
     terms = get_terms(industry)
     stages = ["New", "Contacted", "Interested", "Admission Done"]
-    # Display labels — last stage adapts to industry
     display_labels = {
         "Admission Done": terms.get("conversion_verb", "Converted"),
     }
+    base_filter = {"organization_id": org_id}
+    if current_user["role"] in ("counselor", "telecaller"):
+        base_filter["assigned_to"] = current_user["id"]
     counts = {}
     for stage in stages:
-        counts[stage] = await db.leads.count_documents({"organization_id": org_id, "status": stage})
+        counts[stage] = await db.leads.count_documents({**base_filter, "status": stage})
     total = sum(counts.values()) or 1
     return [
         {
@@ -5123,9 +5150,13 @@ async def get_counselor_leaderboard(current_user: dict = Depends(get_current_use
 @api_router.get("/dashboard/activity-feed")
 async def get_activity_feed(current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
+    is_caller = current_user["role"] in ("counselor", "telecaller")
     activities = []
     # Recent leads
-    leads = await db.leads.find({"organization_id": org_id}).sort("created_at", -1).limit(8).to_list(8)
+    lead_q = {"organization_id": org_id}
+    if is_caller:
+        lead_q["assigned_to"] = current_user["id"]
+    leads = await db.leads.find(lead_q).sort("created_at", -1).limit(8).to_list(8)
     for lead in leads:
         creator = await db.users.find_one({"_id": ObjectId(lead.get("created_by"))}) if lead.get("created_by") else None
         activities.append({
@@ -5135,8 +5166,11 @@ async def get_activity_feed(current_user: dict = Depends(get_current_user)):
             "timestamp": lead["created_at"].isoformat() if isinstance(lead["created_at"], datetime) else lead["created_at"],
             "color": "violet",
         })
-    # Recent admissions
-    admissions = await db.admissions.find({"organization_id": org_id}).sort("created_at", -1).limit(5).to_list(5)
+    # Recent admissions — for callers, only their own conversions
+    adm_q = {"organization_id": org_id}
+    if is_caller:
+        adm_q["closed_by"] = current_user["id"]
+    admissions = await db.admissions.find(adm_q).sort("created_at", -1).limit(5).to_list(5)
     for adm in admissions:
         activities.append({
             "type": "admission",
@@ -5155,7 +5189,10 @@ async def get_today_followups(current_user: dict = Depends(get_current_user)):
     query = {"organization_id": org_id, "followup_date": today}
     # Strict caller visibility: counselor/telecaller see only their own followups
     if current_user["role"] in ("counselor", "telecaller"):
-        query["created_by"] = current_user["id"]
+        query["$or"] = [
+            {"assigned_to": current_user["id"]},
+            {"created_by": current_user["id"]},
+        ]
     followups = await db.followups.find(query).limit(20).to_list(20)
     for fu in followups:
         fu["_id"] = str(fu["_id"])
