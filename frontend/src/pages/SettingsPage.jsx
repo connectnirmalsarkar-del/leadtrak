@@ -168,11 +168,11 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="company">
-        <TabsList className="bg-slate-100">
-          <TabsTrigger value="company" data-testid="tab-company"><Building2 className="w-4 h-4 mr-1.5" />Company Profile</TabsTrigger>
-          <TabsTrigger value="sources" data-testid="tab-sources">Lead Sources</TabsTrigger>
+        <TabsList className="bg-slate-100 flex flex-wrap h-auto gap-1">
+          <TabsTrigger value="company" data-testid="tab-company" className="text-xs sm:text-sm"><Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" /><span className="hidden xs:inline sm:inline">Company Profile</span><span className="xs:hidden sm:hidden">Profile</span></TabsTrigger>
+          <TabsTrigger value="sources" data-testid="tab-sources" className="text-xs sm:text-sm">Lead Sources</TabsTrigger>
           <TabsTrigger value="integrations" data-testid="tab-integrations" asChild>
-            <Link to="/integrations" className="flex items-center"><Layers className="w-4 h-4 mr-1.5" />Integrations →</Link>
+            <Link to="/integrations" className="flex items-center text-xs sm:text-sm"><Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />Integrations →</Link>
           </TabsTrigger>
         </TabsList>
 

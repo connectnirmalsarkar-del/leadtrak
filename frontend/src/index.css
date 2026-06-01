@@ -53,6 +53,17 @@ table { display: table; }
 /* Prevent ResponsiveContainer from making charts overflow */
 .recharts-responsive-container { max-width: 100% !important; }
 
+/* Make tab lists wrap nicely on mobile */
+@media (max-width: 640px) {
+    [data-testid="reports-tabs"] { font-size: 12px; }
+    [role="tablist"] { flex-wrap: wrap; }
+}
+
+/* Tighter button heights on mobile, but don't force taller min-heights */
+@media (max-width: 640px) {
+    .text-2xl.font-bold { font-size: 1.125rem !important; }
+}
+
 h1, h2, h3, h4, h5, h6 {
     font-family: 'Sora', system-ui, sans-serif;
     letter-spacing: -0.025em;

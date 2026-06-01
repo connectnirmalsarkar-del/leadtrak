@@ -404,12 +404,12 @@ export default function LeadsPage() {
                 Add {t.lead}
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
               <DialogTitle>Add New {t.lead}</DialogTitle>
               <DialogDescription>Capture a new prospect into your pipeline</DialogDescription>
             </DialogHeader>
-            <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
                 <Label>Full Name *</Label>
                 <Input value={newLead.name} onChange={(e) => setNewLead({...newLead, name: e.target.value})} data-testid="lead-name-input" />

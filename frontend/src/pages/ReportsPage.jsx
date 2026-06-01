@@ -131,10 +131,10 @@ export default function ReportsPage() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-3 max-w-xl" data-testid="reports-tabs">
-          <TabsTrigger value="overview" data-testid="tab-overview"><TrendingUp className="w-3.5 h-3.5 mr-1.5" /> Overview</TabsTrigger>
-          <TabsTrigger value="caller" data-testid="tab-caller"><Phone className="w-3.5 h-3.5 mr-1.5" /> By Caller</TabsTrigger>
-          <TabsTrigger value="manager" data-testid="tab-manager"><Trophy className="w-3.5 h-3.5 mr-1.5" /> By Manager</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 max-w-xl text-xs sm:text-sm" data-testid="reports-tabs">
+          <TabsTrigger value="overview" data-testid="tab-overview"><TrendingUp className="w-3.5 h-3.5 mr-1 sm:mr-1.5" /> <span className="hidden sm:inline">Overview</span><span className="sm:hidden">Total</span></TabsTrigger>
+          <TabsTrigger value="caller" data-testid="tab-caller"><Phone className="w-3.5 h-3.5 mr-1 sm:mr-1.5" /> <span className="hidden sm:inline">By Caller</span><span className="sm:hidden">Caller</span></TabsTrigger>
+          <TabsTrigger value="manager" data-testid="tab-manager"><Trophy className="w-3.5 h-3.5 mr-1 sm:mr-1.5" /> <span className="hidden sm:inline">By Manager</span><span className="sm:hidden">Manager</span></TabsTrigger>
         </TabsList>
 
         {/* ============== OVERVIEW ============== */}

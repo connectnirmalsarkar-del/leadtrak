@@ -64,7 +64,7 @@ export default function LandingPage() {
       <header className="border-b border-slate-100 sticky top-0 bg-white/90 backdrop-blur-xl z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src="/logo-light.png?v=2" alt="Leadtrak" className="h-12 w-auto" data-testid="landing-header-logo" />
+            <img src="/logo-light.png?v=2" alt="Leadtrak" className="h-9 sm:h-12 w-auto" data-testid="landing-header-logo" />
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
             <a href="#features" className="hover:text-violet-700 transition-colors">Features</a>
@@ -113,7 +113,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.1 }}
-            className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 max-w-5xl mx-auto leading-[1.05]"
+            className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 max-w-5xl mx-auto leading-[1.05]"
             style={{ fontFamily: 'Sora' }}
           >
             The CRM built for{' '}
@@ -306,7 +306,7 @@ export default function LandingPage() {
       <section className="max-w-7xl mx-auto px-6 py-24">
         <div className="text-center mb-16">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Outcomes</p>
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>
+          <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>
             Outcomes you can measure
           </h2>
         </div>
@@ -324,7 +324,7 @@ export default function LandingPage() {
               viewport={{ once: true }}
               className="bg-gradient-to-br from-violet-50 to-white border border-violet-100 rounded-2xl p-8"
             >
-              <p className="text-6xl font-bold text-violet-700 mb-3" style={{ fontFamily: 'Sora' }}>
+              <p className="text-4xl sm:text-6xl font-bold text-violet-700 mb-3" style={{ fontFamily: 'Sora' }}>
                 {stat.num}
               </p>
               <p className="text-base font-semibold text-slate-900 mb-2">{stat.label}</p>
@@ -338,7 +338,7 @@ export default function LandingPage() {
       <section id="features" className="max-w-7xl mx-auto px-6 py-24">
         <div className="text-center max-w-2xl mx-auto mb-16">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Platform</p>
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
+          <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
             Everything your sales team needs
           </h2>
           <p className="text-lg text-slate-600">
@@ -385,7 +385,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center max-w-2xl mx-auto mb-12">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Industries</p>
-            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
+            <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
               Pre-built for 9 industries
             </h2>
             <p className="text-lg text-slate-600">
@@ -474,7 +474,7 @@ export default function LandingPage() {
       <section className="max-w-7xl mx-auto px-6 py-24">
         <div className="text-center max-w-2xl mx-auto mb-16">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Artificial Intelligence</p>
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
+          <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
             AI built in. Not bolted on.
           </h2>
           <p className="text-lg text-slate-600">
@@ -514,7 +514,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Customers</p>
-            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>
+            <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>
               Loved by teams everywhere
             </h2>
           </div>
@@ -594,7 +594,7 @@ export default function LandingPage() {
       <section id="pricing" className="max-w-7xl mx-auto px-6 py-24">
         <div className="text-center max-w-2xl mx-auto mb-16">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Pricing</p>
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
+          <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
             Plans that scale with you
           </h2>
           <p className="text-lg text-slate-600">No hidden fees. Switch plans anytime.</p>
