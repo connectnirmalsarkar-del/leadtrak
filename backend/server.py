@@ -3391,6 +3391,47 @@ async def platform_subscription_orders(current_user: dict = Depends(get_current_
     return rows
 
 
+@api_router.post("/platform/migrate-conversion-statuses")
+async def migrate_conversion_statuses(current_user: dict = Depends(get_current_user)):
+    """One-time migration: update legacy "Admission Done" leads to the
+    industry-specific conversion status (e.g. "Won" for IT Software,
+    "Booked" for Real Estate). Idempotent — safe to re-run.
+
+    Only super admin can trigger this. Returns counts per industry.
+    """
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+
+    report = {}
+    # Iterate every org and re-key the converted-status leads
+    async for org in db.organizations.find({}, {"_id": 1, "industry": 1, "name": 1}):
+        industry = org.get("industry", "education")
+        target_status = get_conversion_status(industry)
+        if target_status == "Admission Done":
+            continue  # Education industry — nothing to migrate
+        # Match all the legacy status names used historically when an
+        # admission was recorded, regardless of industry.
+        result = await db.leads.update_many(
+            {
+                "organization_id": org["_id"],
+                "status": {"$in": ["Admission Done", "Converted", "Closed Won"]},
+            },
+            {"$set": {"status": target_status}},
+        )
+        if result.modified_count > 0:
+            report[org.get("name", str(org["_id"]))] = {
+                "industry": industry,
+                "new_status": target_status,
+                "updated": result.modified_count,
+            }
+
+    return {
+        "message": "Migration complete",
+        "organizations_updated": len(report),
+        "details": report,
+    }
+
+
 @api_router.post("/platform/manual-payment")
 async def platform_manual_payment(data: ManualPaymentRequest, current_user: dict = Depends(get_current_user)):
     """Super Admin: manually mark an offline payment (Cash / Cheque / Bank Transfer)."""
