@@ -1095,7 +1095,7 @@ async def refresh_token(request: Request, response: Response):
 
 @api_router.post("/auth/forgot-password")
 @limiter.limit("3/minute")
-async def forgot_password(data: ForgotPasswordRequest, request: Request):
+async def forgot_password(data: ForgotPasswordRequest, request: Request, response: Response):
     email = data.email.lower()
     user = await db.users.find_one({"email": email})
     
@@ -1120,7 +1120,7 @@ async def forgot_password(data: ForgotPasswordRequest, request: Request):
 
 @api_router.post("/auth/reset-password")
 @limiter.limit("5/minute")
-async def reset_password(data: ResetPasswordRequest, request: Request):
+async def reset_password(data: ResetPasswordRequest, request: Request, response: Response):
     reset_token = await db.password_reset_tokens.find_one({"token": data.token, "used": False})
     
     if not reset_token:
@@ -3062,7 +3062,7 @@ async def _activate_subscription_from_paid_order(order_doc: dict, razorpay_payme
 
 @api_router.post("/webhooks/razorpay")
 @limiter.limit("120/minute")
-async def razorpay_webhook(request: Request):
+async def razorpay_webhook(request: Request, response: Response):
     """Public Razorpay webhook receiver. Validates X-Razorpay-Signature (HMAC-SHA256)
     and activates subscriptions on `payment_link.paid` / `payment.captured`.
     Configure in Razorpay Dashboard → Webhooks with the same RAZORPAY_WEBHOOK_SECRET.
@@ -4694,7 +4694,7 @@ async def public_widget_cities(widget_token: str, state: str):
 
 @api_router.post("/widget/lead/{widget_token}")
 @limiter.limit("30/minute")
-async def public_widget_lead(widget_token: str, data: PublicLeadCreate, request: Request):
+async def public_widget_lead(widget_token: str, data: PublicLeadCreate, request: Request, response: Response):
     org = await db.organizations.find_one({"widget_token": widget_token})
     if not org:
         raise HTTPException(status_code=404, detail="Invalid widget token")

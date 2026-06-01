@@ -1,0 +1,34 @@
+{
+  "summary": "RETEST of iteration_11 slowapi `response: Response` parameter fix. Re-ran the 2 originally-failing tests + smoke-tested 3 sibling endpoints that received the same fix. ALL 5 CHECKS PASS. No HTTP 500s on any endpoint. User-enumeration prevention verified (forgot-password returns identical body for known/unknown emails). Rate-limit decorator now coexists cleanly with success path on every endpoint that has `@limiter.limit`.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration11_security.py",
+    "/app/test_reports/pytest/iteration_12.xml"
+  ],
+  "verification_results": {
+    "test_forgot_password_known_email": "PASS (HTTP 200, body='If email exists, reset link has been sent')",
+    "test_forgot_password_unknown_email": "PASS (HTTP 200, identical body — no user enumeration)",
+    "test_forgot_password_rate_limit_3_per_minute": "PASS (429 observed after 3 requests within 60s)",
+    "smoke_reset_password_invalid_token": "PASS (HTTP 400 'Invalid or expired reset token', not 500)",
+    "smoke_widget_lead_invalid_token": "PASS (HTTP 404 'Invalid widget token', not 500)",
+    "smoke_razorpay_webhook_bad_signature": "PASS (HTTP 400 'Invalid signature', not 500)",
+    "smoke_razorpay_webhook_valid_hmac": "PASS (HTTP 200 {event:'payment_link.paid', handled:false}, not 500)"
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix verified — all 4 slowapi rate-limited endpoints (forgot-password, reset-password, public_widget_lead, razorpay_webhook) now correctly declare `response: Response`. Suggest adding a small pre-commit/CI assertion or wrapper that fails if any handler decorated with `@limiter.limit` lacks `response: Response` to prevent regression.",
+    "Carry-over from iteration_11 (not blocking): server.py is 5357 lines — split into routers/. Impersonation audit log lacks `ended_at`. No second-org user in seed (TestAssignLeadAuthorization cross-tenant test still skipped, but not in scope this iteration)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (4/4 targeted pytest + 3/3 smoke curl)", "frontend": "skipped"},
+  "test_credentials": "From /app/memory/test_credentials.md — super: admin@educationcrm.com/Admin@123, org_admin: orgadmin@demo.com/Demo@123",
+  "seed_data_creation": "None. Existing demo data reused.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "slowapi fix is fully verified. Next full-suite regression can simply run /app/backend/tests/test_iteration11_security.py (expect 26/26 pass + 1 skip for second-org). For valid-HMAC razorpay smoke test, compute HMAC-SHA256 of the raw body with RAZORPAY_WEBHOOK_SECRET from backend/.env and send as X-Razorpay-Signature header — endpoint returns 200 with {handled:false} when the referenced subscription id does not exist (expected).",
+  "rca_of_the_issue": "Already resolved in iteration_12 by main agent. RCA from iteration_11: slowapi Limiter initialised with headers_enabled=True requires every rate-limited handler to declare `response: Response` so it can inject X-RateLimit-* headers. Missing parameter caused HTTP 500 on the success branch (429 branch was unaffected). Fix: added `response: Response` to forgot_password (L1098), reset_password (L1123), razorpay_webhook (L3065), public_widget_lead (L4697). All four signatures verified via grep + functional pytest + curl."
+}
