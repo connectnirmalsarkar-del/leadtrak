@@ -380,28 +380,28 @@ export default function LeadsPage() {
           <p className="text-sm text-slate-600 mt-1">{leads.length} {leads.length === 1 ? t.lead.toLowerCase() : t.leads.toLowerCase()} total</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <Button variant="outline" size="sm" onClick={handleDownloadSample} data-testid="download-csv-sample-btn">
             <Download className="w-3.5 h-3.5 mr-1.5" />
-            Sample CSV
+            <span className="hidden sm:inline">Sample CSV</span><span className="sm:hidden">Sample</span>
           </Button>
           <label htmlFor="csv-upload" className="cursor-pointer">
-            <div className="inline-flex items-center gap-1.5 h-10 px-3 border border-slate-300 hover:bg-slate-50 rounded-md text-sm font-medium text-slate-700">
+            <div className="inline-flex items-center gap-1.5 h-9 sm:h-10 px-3 border border-slate-300 hover:bg-slate-50 rounded-md text-sm font-medium text-slate-700">
               <Upload className="w-4 h-4" />
-              Import CSV
+              <span className="hidden sm:inline">Import CSV</span><span className="sm:hidden">Import</span>
             </div>
             <input id="csv-upload" type="file" accept=".csv" onChange={handleCSVImport} className="hidden" data-testid="csv-import-input" />
           </label>
-          <Button variant="outline" onClick={handleExcelExport} data-testid="export-excel-leads-btn">
-            <Download className="w-4 h-4 mr-1.5" />
-            Excel
+          <Button variant="outline" size="sm" onClick={handleExcelExport} data-testid="export-excel-leads-btn">
+            <Download className="w-4 h-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Excel</span>
           </Button>
 
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
-              <Button className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="add-lead-btn">
-                <Plus className="w-4 h-4 mr-2" />
-                Add {t.lead}
+              <Button size="sm" className="bg-violet-700 hover:bg-violet-800 text-white ml-auto sm:ml-0" data-testid="add-lead-btn">
+                <Plus className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">Add {t.lead}</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -585,6 +585,7 @@ export default function LeadsPage() {
 
       {/* Leads Table */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50">
@@ -637,9 +638,9 @@ export default function LeadsPage() {
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
-      {/* Lead Detail Drawer */}
       {/* Lead Detail Drawer */}
       <Sheet open={!!selectedLead} onOpenChange={(o) => { if (!o) { setSelectedLead(null); setActiveTab('details'); } }}>
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto" data-testid="lead-detail-drawer">

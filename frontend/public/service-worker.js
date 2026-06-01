@@ -1,5 +1,5 @@
 // Leadtrak Service Worker
-const CACHE_NAME = 'leadtrak-v3-mobile-fix';
+const CACHE_NAME = 'leadtrak-v4-ios-pwa';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
