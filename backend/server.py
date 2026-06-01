@@ -1941,12 +1941,20 @@ async def report_caller_leads(user_id: str, current_user: dict = Depends(get_cur
         {"organization_id": org_id, "assigned_to": str(target_uid)},
         {
             "name": 1, "mobile": 1, "email": 1, "status": 1, "lead_id": 1,
-            "source": 1, "temperature": 1, "created_at": 1, "updated_at": 1,
+            "source": 1, "lead_source": 1, "temperature": 1, "created_at": 1, "updated_at": 1,
+            # Industry-specific extras so the Reports drill-down can show them
+            "company_name": 1, "budget_range": 1, "preferred_date": 1, "travellers": 1,
+            "target_college": 1, "course_fee": 1, "course_interested": 1,
         },
     ).sort("created_at", -1).to_list(500)
 
     for lead in leads:
         lead["_id"] = str(lead["_id"])
+        # Backfill `source` from the canonical `lead_source` field so the
+        # frontend's column always has a value (some older docs only store
+        # one of them).
+        if not lead.get("source"):
+            lead["source"] = lead.get("lead_source", "")
         for k in ("created_at", "updated_at"):
             if isinstance(lead.get(k), datetime):
                 lead[k] = lead[k].isoformat()

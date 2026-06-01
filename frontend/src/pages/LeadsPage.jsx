@@ -234,9 +234,24 @@ export default function LeadsPage() {
   };
 
   const handleAddLead = async () => {
+    // Client-side validation — fail fast with clear error before hitting the API
+    const trimmedName = (newLead.name || '').trim();
+    const trimmedMobile = (newLead.mobile || '').trim();
+    if (!trimmedName) {
+      toast.error('Full Name is required');
+      return;
+    }
+    if (!trimmedMobile) {
+      toast.error('Mobile number is required');
+      return;
+    }
+    if (!newLead.course_interested) {
+      toast.error('Please select a Course / Service');
+      return;
+    }
     try {
       // Strip the UI-only `wa_different` flag; send whatsapp_number only when toggled
-      const payload = { ...newLead };
+      const payload = { ...newLead, name: trimmedName, mobile: trimmedMobile };
       const waDifferent = !!payload.wa_different;
       delete payload.wa_different;
       if (!waDifferent) {
@@ -259,8 +274,13 @@ export default function LeadsPage() {
         // Duplicate — show inline
         setDuplicate(detail);
         toast.error(detail.message || 'Duplicate lead');
+      } else if (Array.isArray(detail)) {
+        // Pydantic 422 — pluck the first field error and humanize it
+        const first = detail[0];
+        const field = (first?.loc || []).filter((p) => p !== 'body').join('.');
+        toast.error(`${field || 'Field'}: ${first?.msg || 'invalid'}`);
       } else {
-        toast.error(typeof detail === 'string' ? detail : (detail || 'Failed to add lead'));
+        toast.error(typeof detail === 'string' ? detail : (detail?.message || 'Failed to add lead'));
       }
     }
   };
@@ -529,7 +549,13 @@ export default function LeadsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
                 <Label>Full Name *</Label>
-                <Input value={newLead.name} onChange={(e) => setNewLead({...newLead, name: e.target.value})} data-testid="lead-name-input" />
+                <Input
+                  value={newLead.name}
+                  onChange={(e) => setNewLead({...newLead, name: e.target.value})}
+                  required
+                  placeholder="e.g. Rahul Sharma"
+                  data-testid="lead-name-input"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Mobile (Call) *</Label>
@@ -538,6 +564,7 @@ export default function LeadsPage() {
                   onChange={(e) => setNewLead({...newLead, mobile: e.target.value})}
                   onBlur={checkForDuplicate}
                   placeholder="+91 9830XXXXXX"
+                  required
                   data-testid="lead-mobile-input"
                 />
               </div>
@@ -686,7 +713,7 @@ export default function LeadsPage() {
               <Button variant="outline" onClick={() => { setShowAddDialog(false); setDuplicate(null); }} data-testid="cancel-add-lead-btn">Cancel</Button>
               <Button
                 onClick={handleAddLead}
-                disabled={!!duplicate}
+                disabled={!!duplicate || !(newLead.name || '').trim() || !(newLead.mobile || '').trim() || !newLead.course_interested}
                 className="bg-violet-700 hover:bg-violet-800 disabled:bg-slate-300 text-white"
                 data-testid="submit-add-lead-btn"
               >

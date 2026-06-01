@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { API } from '@/context/AuthContext';
+import { API, useAuth } from '@/context/AuthContext';
 import {
   Download, IndianRupee, Users, TrendingUp, Target, Trophy, Activity, UserCheck,
   ArrowUpRight, ArrowDownRight, Phone, Award, Layers, X, MessageSquare, Eye,
@@ -45,6 +45,10 @@ const StatCard = ({ icon: Icon, label, value, sublabel, color = 'violet' }) => {
 
 export default function ReportsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // Industry-specific column visibility — show Company / Budget where applicable
+  const hasCompanyField = (user?.industry === 'it_software');
+  const hasBudgetField = ['real_estate', 'travel'].includes(user?.industry);
   const [tab, setTab] = useState('overview');
   const [summary, setSummary] = useState(null);
   const [callerRows, setCallerRows] = useState([]);
@@ -443,6 +447,8 @@ export default function ReportsPage() {
                   <TableRow>
                     <TableHead>Lead</TableHead>
                     <TableHead>Mobile</TableHead>
+                    {hasCompanyField && <TableHead>Company</TableHead>}
+                    {hasBudgetField && <TableHead>Budget</TableHead>}
                     <TableHead>Source</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Temp.</TableHead>
@@ -454,6 +460,12 @@ export default function ReportsPage() {
                     <TableRow key={l._id} data-testid={`drill-lead-${l._id}`}>
                       <TableCell className="font-medium text-slate-900">{l.name}</TableCell>
                       <TableCell className="text-xs text-slate-600 font-mono">{l.mobile}</TableCell>
+                      {hasCompanyField && (
+                        <TableCell className="text-xs text-slate-700">{l.company_name || '—'}</TableCell>
+                      )}
+                      {hasBudgetField && (
+                        <TableCell className="text-xs text-slate-700">{l.budget_range || '—'}</TableCell>
+                      )}
                       <TableCell className="text-xs text-slate-500">{l.source || '—'}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-[10px]">{l.status || 'New'}</Badge>
