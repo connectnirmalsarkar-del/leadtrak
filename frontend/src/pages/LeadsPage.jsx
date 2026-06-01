@@ -872,18 +872,16 @@ export default function LeadsPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Remarks *</Label>
-              <Textarea value={followup.remarks} onChange={(e) => setFollowup({...followup, remarks: e.target.value})} rows={3} data-testid="followup-remarks-input" />
+              <Label>What is this follow-up about? *</Label>
+              <Textarea
+                value={followup.remarks}
+                onChange={(e) => setFollowup({...followup, remarks: e.target.value})}
+                rows={3}
+                placeholder="e.g. Discuss EMI options, share demo recording, confirm fee structure…"
+                data-testid="followup-remarks-input"
+              />
+              <p className="text-[11px] text-slate-500">This is the plan for the call. The actual call outcome + voice recording is captured later when you mark the follow-up complete.</p>
             </div>
-            {canRecordVoice && (
-              <div className="space-y-2">
-                <Label>Voice note (optional)</Label>
-                <VoiceRecorder
-                  value={followup.voice}
-                  onChange={(v) => setFollowup({ ...followup, voice: v })}
-                />
-              </div>
-            )}
             <div className="space-y-2">
               <Label>Next Follow-up (optional)</Label>
               <Input type="date" value={followup.next_followup} onChange={(e) => setFollowup({...followup, next_followup: e.target.value})} data-testid="followup-next-input" />
