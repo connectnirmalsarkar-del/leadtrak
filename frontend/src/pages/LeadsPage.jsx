@@ -38,9 +38,10 @@ const SOURCES = ['Facebook Ads', 'Website', 'Google Ads', 'Referral', 'Walk-in',
 const TEMP_OPTIONS = ['hot', 'warm', 'cold'];
 const tempBadgeClass = (t) => {
   const k = (t || 'warm').toLowerCase();
-  if (k === 'hot') return 'bg-red-100 text-red-700 border-red-200';
-  if (k === 'cold') return 'bg-sky-100 text-sky-700 border-sky-200';
-  return 'bg-amber-100 text-amber-700 border-amber-200';
+  const base = 'whitespace-nowrap';
+  if (k === 'hot') return `${base} bg-red-100 text-red-700 border-red-200`;
+  if (k === 'cold') return `${base} bg-sky-100 text-sky-700 border-sky-200`;
+  return `${base} bg-amber-100 text-amber-700 border-amber-200`;
 };
 const tempEmoji = { hot: '🔥', warm: '☀️', cold: '❄️' };
 
@@ -836,16 +837,16 @@ export default function LeadsPage() {
                       {lead.company_name || '—'}
                     </TableCell>
                   )}
-                  <TableCell className="text-sm text-slate-600">{lead.lead_source}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-sm text-slate-600 whitespace-nowrap">{lead.lead_source}</TableCell>
+                  <TableCell className="whitespace-nowrap">
                     <Badge variant="outline" className={tempBadgeClass(lead.temperature)} data-testid={`temp-badge-${lead._id}`}>
                       {tempEmoji[(lead.temperature || 'warm').toLowerCase()]} {(lead.temperature || 'warm')}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={statusBadgeClass(lead.status)}>{lead.status}</Badge>
+                  <TableCell className="whitespace-nowrap">
+                    <Badge variant="outline" className={`${statusBadgeClass(lead.status)} whitespace-nowrap`}>{lead.status}</Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-slate-500">
+                  <TableCell className="text-sm text-slate-500 whitespace-nowrap">
                     {new Date(lead.created_at).toLocaleDateString()}
                   </TableCell>
                 </TableRow>
