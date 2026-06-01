@@ -312,6 +312,7 @@ class LeadCreate(BaseModel):
     temperature: Optional[str] = "warm"  # hot | warm | cold
     # Industry-specific extras (parity with widget capture)
     company_name: Optional[str] = None
+    designation: Optional[str] = None  # B2B contact designation (CEO, CTO, etc.)
     budget_range: Optional[str] = None
     preferred_date: Optional[str] = None
     travellers: Optional[str] = None
@@ -336,6 +337,7 @@ class LeadUpdate(BaseModel):
     status: Optional[str] = None
     temperature: Optional[str] = None  # hot | warm | cold
     company_name: Optional[str] = None
+    designation: Optional[str] = None  # B2B contact designation
     budget_range: Optional[str] = None
     preferred_date: Optional[str] = None
     travellers: Optional[str] = None
@@ -1327,6 +1329,7 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
         "status": data.status,
         "temperature": (data.temperature or "warm").lower(),
         "company_name": data.company_name,
+        "designation": data.designation,
         "budget_range": data.budget_range,
         "preferred_date": data.preferred_date,
         "travellers": data.travellers,
@@ -1943,7 +1946,7 @@ async def report_caller_leads(user_id: str, current_user: dict = Depends(get_cur
             "name": 1, "mobile": 1, "email": 1, "status": 1, "lead_id": 1,
             "source": 1, "lead_source": 1, "temperature": 1, "created_at": 1, "updated_at": 1,
             # Industry-specific extras so the Reports drill-down can show them
-            "company_name": 1, "budget_range": 1, "preferred_date": 1, "travellers": 1,
+            "company_name": 1, "designation": 1, "budget_range": 1, "preferred_date": 1, "travellers": 1,
             "target_college": 1, "course_fee": 1, "course_interested": 1,
         },
     ).sort("created_at", -1).to_list(500)
@@ -5290,8 +5293,8 @@ async def export_leads_excel(current_user: dict = Depends(get_current_user)):
     ]
     extra_keys = []  # per-industry column keys to append
     if industry == "it_software":
-        headers += ["Company"]
-        extra_keys.append("company_name")
+        headers += ["Company", "Designation"]
+        extra_keys += ["company_name", "designation"]
     if industry == "admission_consultancy":
         headers += ["Target College", "Course Fee", "Commission %"]
         extra_keys += ["target_college", "course_fee", "commission_percent"]
@@ -5386,6 +5389,7 @@ class PublicLeadCreate(BaseModel):
     state: Optional[str] = ""
     city: Optional[str] = ""
     company_name: Optional[str] = None
+    designation: Optional[str] = None
     budget_range: Optional[str] = None
     preferred_date: Optional[str] = None
     travellers: Optional[str] = None
@@ -5478,6 +5482,7 @@ async def public_widget_lead(widget_token: str, data: PublicLeadCreate, request:
         "state": data.state or "",
         "city": data.city or "",
         "company_name": data.company_name,
+        "designation": data.designation,
         "budget_range": data.budget_range,
         "preferred_date": data.preferred_date,
         "travellers": data.travellers,

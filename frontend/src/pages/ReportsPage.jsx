@@ -448,6 +448,7 @@ export default function ReportsPage() {
                     <TableHead>Lead</TableHead>
                     <TableHead>Mobile</TableHead>
                     {hasCompanyField && <TableHead>Company</TableHead>}
+                    {hasCompanyField && <TableHead>Designation</TableHead>}
                     {hasBudgetField && <TableHead>Budget</TableHead>}
                     <TableHead>Source</TableHead>
                     <TableHead>Status</TableHead>
@@ -462,6 +463,9 @@ export default function ReportsPage() {
                       <TableCell className="text-xs text-slate-600 font-mono">{l.mobile}</TableCell>
                       {hasCompanyField && (
                         <TableCell className="text-xs text-slate-700">{l.company_name || '—'}</TableCell>
+                      )}
+                      {hasCompanyField && (
+                        <TableCell className="text-xs text-slate-700">{l.designation || '—'}</TableCell>
                       )}
                       {hasBudgetField && (
                         <TableCell className="text-xs text-slate-700">{l.budget_range || '—'}</TableCell>

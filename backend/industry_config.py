@@ -364,6 +364,7 @@ INDUSTRY_WIDGET_FIELDS = {
     ],
     "it_software": [
         {"name": "company_name", "label": "Company Name", "type": "text", "required": False, "placeholder": "Your organization"},
+        {"name": "designation", "label": "Contact Designation", "type": "text", "required": False, "placeholder": "e.g. CEO, CTO, VP Sales"},
         {"name": "course_interested", "label": "Service Required", "type": "service-select", "required": False, "placeholder": "Pick a service"},
     ],
     "real_estate": [

@@ -130,7 +130,7 @@ export default function LeadsPage() {
   const [newLead, setNewLead] = useState({
     name: '', mobile: '', whatsapp_number: '', wa_different: false, email: '', course_interested: '', state: '', city: '',
     lead_source: 'Website', assigned_to: '', status: 'New', temperature: 'warm',
-    company_name: '', budget_range: '', preferred_date: '', travellers: '',
+    company_name: '', designation: '', budget_range: '', preferred_date: '', travellers: '',
   });
   const [formConfig, setFormConfig] = useState({ fields: [], services: [] });
 
@@ -267,7 +267,7 @@ export default function LeadsPage() {
       setNewLead({
         name: '', mobile: '', whatsapp_number: '', wa_different: false, email: '', course_interested: '', state: '', city: '',
         lead_source: 'Website', assigned_to: '', status: 'New', temperature: 'warm',
-        company_name: '', budget_range: '', preferred_date: '', travellers: '',
+        company_name: '', designation: '', budget_range: '', preferred_date: '', travellers: '',
       });
       setCitiesForState([]);
       fetchLeads();
@@ -394,6 +394,7 @@ export default function LeadsPage() {
       // Industry-specific extras — only send if the industry exposes them
       if (showCompanyCol) {
         payload.company_name = editLead.company_name || null;
+        payload.designation = editLead.designation || null;
       }
       if (user?.industry === 'admission_consultancy') {
         payload.target_college = editLead.target_college || null;
@@ -650,6 +651,28 @@ export default function LeadsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {showCompanyCol && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Company Name</Label>
+                    <Input
+                      value={newLead.company_name}
+                      onChange={(e) => setNewLead({ ...newLead, company_name: e.target.value })}
+                      placeholder="e.g. Acme Tech Pvt Ltd"
+                      data-testid="lead-company-input"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Designation</Label>
+                    <Input
+                      value={newLead.designation}
+                      onChange={(e) => setNewLead({ ...newLead, designation: e.target.value })}
+                      placeholder="e.g. CEO, CTO, VP Sales"
+                      data-testid="lead-designation-input"
+                    />
+                  </div>
+                </>
+              )}
               <div className="space-y-2">
                 <Label>State</Label>
                 <Select value={newLead.state || ''} onValueChange={onStateChange}>
@@ -1273,15 +1296,26 @@ export default function LeadsPage() {
                   <Input value={editLead.course_interested || ''} onChange={(e) => setEditLead({ ...editLead, course_interested: e.target.value })} data-testid="edit-course-input" />
                 </div>
                 {showCompanyCol && (
-                  <div className="space-y-2">
-                    <Label>Company Name</Label>
-                    <Input
-                      value={editLead.company_name || ''}
-                      onChange={(e) => setEditLead({ ...editLead, company_name: e.target.value })}
-                      placeholder="e.g. Acme Tech Pvt Ltd"
-                      data-testid="edit-company-input"
-                    />
-                  </div>
+                  <>
+                    <div className="space-y-2">
+                      <Label>Company Name</Label>
+                      <Input
+                        value={editLead.company_name || ''}
+                        onChange={(e) => setEditLead({ ...editLead, company_name: e.target.value })}
+                        placeholder="e.g. Acme Tech Pvt Ltd"
+                        data-testid="edit-company-input"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Designation</Label>
+                      <Input
+                        value={editLead.designation || ''}
+                        onChange={(e) => setEditLead({ ...editLead, designation: e.target.value })}
+                        placeholder="e.g. CEO, CTO, VP Sales"
+                        data-testid="edit-designation-input"
+                      />
+                    </div>
+                  </>
                 )}
                 {user?.industry === 'admission_consultancy' && (
                   <>
