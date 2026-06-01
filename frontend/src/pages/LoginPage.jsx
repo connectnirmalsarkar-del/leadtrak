@@ -183,7 +183,7 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative">
         {/* Mobile-only brand */}
         <Link to="/" className="lg:hidden absolute top-6 left-6 flex items-center gap-2">
-          <img src="/logo-light.png?v=3" alt="Leadtrak" className="h-12 w-auto" />
+          <img src="/logo-light.png?v=3" alt="Leadtrak" className="h-7 w-auto" data-testid="login-mobile-logo" />
         </Link>
 
         <div className="w-full max-w-sm space-y-8">
