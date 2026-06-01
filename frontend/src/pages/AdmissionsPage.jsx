@@ -67,13 +67,15 @@ export default function AdmissionsPage() {
         axios.get(`${API}/admissions`),
         axios.get(`${API}/reports/revenue`),
         axios.get(`${API}/services`),
-        axios.get(`${API}/leads`),
+        axios.get(`${API}/leads`, { params: { limit: 500 } }),
       ]);
       setAdmissions(admRes.data);
       setRevenue(revRes.data.total_revenue);
       setServices(srvRes.data);
+      // Backend now returns paginated shape {items,total,...}; defensive fallback to array
+      const leadsList = Array.isArray(leadsRes.data) ? leadsRes.data : (leadsRes.data?.items || []);
       // Filter to non-converted leads only (status != Admission Done / Lost)
-      const eligible = (leadsRes.data || []).filter(
+      const eligible = leadsList.filter(
         (l) => !['Admission Done', 'Lost'].includes(l.status)
       );
       setLeads(eligible);

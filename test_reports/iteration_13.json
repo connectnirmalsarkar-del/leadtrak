@@ -1,0 +1,55 @@
+{
+  "summary": "Iteration 13 — Verified backend pagination for /api/leads and /api/followups, PUT /api/users/me (route ordering + validations), and Cloudinary avatar upload/delete + auth/me reflection. Also verified frontend ProfilePage, LeadsPage pagination footer, FollowupsPage tabbed pagination, AdmissionsPage compatibility, and DashboardLayout. 18/18 backend tests PASS. Frontend smoke covered all data-testids defined for these features.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "ProfilePage / DashboardLayout user context",
+        "issue": "After successfully saving the profile via PUT /api/users/me (backend persists correctly — confirmed in pytest), the displayed profile-name element and topbar user-name still show the OLD name even after a full page reload, until a hard refresh or re-login. Likely the useAuth context (or localStorage cached user object) is not invalidated/refetched after PUT /api/users/me succeeds. Recommended fix: on successful response from PUT /api/users/me and POST/DELETE /api/uploads/avatar, call refreshAuth() / refetch /api/auth/me and update the auth context so DashboardLayout avatar + name update without manual reload.",
+        "selector": "[data-testid=\"profile-name\"], header user name/avatar",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard / Profile",
+        "issues": [
+          "Setup-guide modal auto-opens and partially overlays the page on first visit per session — not a regression, but it intercepts clicks if a Playwright/QA test does not dismiss it first. Consider auto-dismissing once user has 1 lead + completed identity."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration13_pagination_avatar.py",
+    "/app/test_reports/pytest/iteration_13.xml"
+  ],
+  "action_items": [
+    "Refresh useAuth user state after successful PUT /api/users/me and POST/DELETE /api/uploads/avatar so the topbar avatar and profile-name update without a manual reload.",
+    "Optionally: dismiss the onboarding setup-guide modal automatically when prerequisites are met, to avoid covering profile/admin pages."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py is 5962 lines — violates the file-size guideline (>700). Recommend splitting into modules (auth, leads, followups, uploads, users, billing, settings, etc.). This is a long-standing tech-debt note, not new.",
+    "PUT /api/users/me route is correctly registered BEFORE PUT /api/users/{user_id} (verified by counselor flow returning 200 instead of 403). Good.",
+    "Avatar upload validates size and mime correctly (returns 400 for >800 KB and PDF). Good.",
+    "GET /api/leads and GET /api/followups now always return the paginated dict shape — confirmed. AdmissionsPage was updated to read .items with fallback, so the breaking-change blast-radius is contained.",
+    "GET /api/auth/me reflects avatar_url after upload and clears it after DELETE — confirmed via integration test.",
+    "Counselor RBAC: GET /api/leads scopes to assigned_to == current_user.id — confirmed for all returned items."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration13_pagination_avatar.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 pytest)",
+    "frontend": "~90% (all required data-testids render; profile save persists in backend but UI display does not refresh in same session — minor)"
+  },
+  "test_credentials": "Super Admin: admin@educationcrm.com / Admin@123. Org Admin: orgadmin@demo.com / Demo@123. Counselor: counselor@demo.com / Demo@123 (read from /app/memory/test_credentials.md).",
+  "seed_data_creation": "Created 5 TEST_LeadPag leads and 3 TEST_pagination followups (today/upcoming/missed) via session-scoped pytest fixtures. All teardown deletes by _id at end of session. Also temporarily uploaded an avatar to Cloudinary for the org-admin user, then DELETEd to clear avatar_url at end of test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend P1 enhancements (pagination + avatar) are working correctly per /app/backend/tests/test_iteration13_pagination_avatar.py (18/18). The only open UI nit is that ProfilePage save does not refresh useAuth user context in the same session — the topbar avatar/name remain stale until full re-login. If the next iteration touches user-state hooks, add a refetch on PUT /api/users/me and POST/DELETE /api/uploads/avatar success.",
+  "rca of the issue": "Stale auth-context after PUT /api/users/me: likely the AuthContext stores user object from /api/auth/me at login time only (and caches in localStorage). Successful PUT /api/users/me updates the DB but no re-fetch or context.setUser is triggered on the frontend, so DashboardLayout avatar (AvatarImage src=user.avatar_url) and ProfilePage profile-name (user.name) read the cached object. Mitigation: in handleProfileSave / handleAvatarUpload success branches, call refreshUser() or fetch('/api/auth/me') and dispatch into context."
+}

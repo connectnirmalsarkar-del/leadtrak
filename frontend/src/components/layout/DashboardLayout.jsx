@@ -33,7 +33,7 @@ import {
   UserCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTerminology } from '@/lib/terminology';
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard';
 import InstallPWAPrompt from '@/components/pwa/InstallPWAPrompt';
@@ -425,6 +425,7 @@ export default function DashboardLayout({ children }) {
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 hover:bg-slate-50 rounded-md p-1.5 transition-colors" data-testid="user-menu-btn">
                   <Avatar className="w-8 h-8">
+                    {user?.avatar_url && <AvatarImage src={user.avatar_url} alt={user?.name || ''} />}
                     <AvatarFallback className="bg-gradient-to-br from-violet-600 to-violet-800 text-white text-xs font-semibold">{userInitials}</AvatarFallback>
                   </Avatar>
                   <div className="text-left hidden sm:block">

@@ -99,6 +99,10 @@ export default function LeadsPage() {
   const [services, setServices] = useState([]);
   const [filterStatus, setFilterStatus] = useState('all');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalLeads, setTotalLeads] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const LEADS_PER_PAGE = 50;
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [showFollowupDialog, setShowFollowupDialog] = useState(false);
@@ -140,6 +144,11 @@ export default function LeadsPage() {
     fetchUsers();
     fetchServices();
     fetchStates();
+  }, [filterStatus, search, page]);
+
+  // Reset to page 1 whenever the filters/search change
+  useEffect(() => {
+    setPage(1);
   }, [filterStatus, search]);
 
   // Deep-link: open a specific lead from notification or report drill-down
@@ -183,11 +192,21 @@ export default function LeadsPage() {
 
   const fetchLeads = async () => {
     try {
-      const params = {};
+      const params = { page, limit: LEADS_PER_PAGE };
       if (filterStatus !== 'all') params.status = filterStatus;
       if (search) params.search = search;
       const { data } = await axios.get(`${API}/leads`, { params });
-      setLeads(data);
+      // Backend now always returns paginated shape {items, total, page, limit, total_pages}
+      // Defensive fallback for the (legacy) array shape just in case
+      if (Array.isArray(data)) {
+        setLeads(data);
+        setTotalLeads(data.length);
+        setTotalPages(1);
+      } else {
+        setLeads(data.items || []);
+        setTotalLeads(data.total || 0);
+        setTotalPages(data.total_pages || 1);
+      }
     } catch (e) {
       toast.error('Failed to fetch leads');
     }
@@ -471,7 +490,7 @@ export default function LeadsPage() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Pipeline</p>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>{t.leads}</h1>
-          <p className="text-sm text-slate-600 mt-1">{leads.length} {leads.length === 1 ? t.lead.toLowerCase() : t.leads.toLowerCase()} total</p>
+          <p className="text-sm text-slate-600 mt-1">{totalLeads} {totalLeads === 1 ? t.lead.toLowerCase() : t.leads.toLowerCase()} total</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -757,6 +776,48 @@ export default function LeadsPage() {
         </Table>
         </div>
       </div>
+
+      {/* Pagination Footer */}
+      {totalLeads > 0 && (
+        <div
+          className="flex items-center justify-between gap-3 flex-wrap pt-1"
+          data-testid="leads-pagination"
+        >
+          <p className="text-xs text-slate-600">
+            Showing <span className="font-semibold text-slate-900">{(page - 1) * LEADS_PER_PAGE + 1}</span>
+            {' – '}
+            <span className="font-semibold text-slate-900">
+              {Math.min(page * LEADS_PER_PAGE, totalLeads)}
+            </span>
+            {' of '}
+            <span className="font-semibold text-slate-900">{totalLeads}</span> {t.leads.toLowerCase()}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              data-testid="leads-prev-page"
+            >
+              Prev
+            </Button>
+            <span className="text-xs text-slate-600 px-2">
+              Page <span className="font-semibold text-slate-900">{page}</span> of{' '}
+              <span className="font-semibold text-slate-900">{totalPages}</span>
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              data-testid="leads-next-page"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Lead Detail Drawer */}
       <Sheet open={!!selectedLead} onOpenChange={(o) => { if (!o) { setSelectedLead(null); setActiveTab('details'); } }}>

@@ -1400,7 +1400,9 @@ async def get_leads(
     status: Optional[str] = None,
     source: Optional[str] = None,
     assigned_to: Optional[str] = None,
-    search: Optional[str] = None
+    search: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
 ):
     org_id = ObjectId(current_user["organization_id"])
     query = {"organization_id": org_id}
@@ -1422,12 +1424,31 @@ async def get_leads(
             {"whatsapp_number": {"$regex": search, "$options": "i"}},
             {"email": {"$regex": search, "$options": "i"}}
         ]
-    
-    leads = await db.leads.find(query, {"organization_id": 0}).sort("created_at", -1).to_list(1000)
+
+    # Pagination guardrails
+    page = max(1, int(page or 1))
+    limit = max(1, min(int(limit or 50), 500))
+    skip = (page - 1) * limit
+
+    total = await db.leads.count_documents(query)
+    cursor = (
+        db.leads.find(query, {"organization_id": 0})
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(limit)
+    )
+    leads = await cursor.to_list(limit)
     for lead in leads:
         lead["_id"] = str(lead["_id"])
-    
-    return leads
+
+    total_pages = (total + limit - 1) // limit if limit else 1
+    return {
+        "items": leads,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages,
+    }
 
 
 @api_router.get("/leads/form-config")
@@ -2264,13 +2285,15 @@ async def create_followup(data: FollowupCreate, current_user: dict = Depends(get
 @api_router.get("/followups")
 async def get_followups(
     current_user: dict = Depends(get_current_user),
-    filter_type: Optional[str] = None
+    filter_type: Optional[str] = None,
+    page: int = 1,
+    limit: int = 50,
 ):
     org_id = ObjectId(current_user["organization_id"])
     query = {"organization_id": org_id}
-    
+
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    
+
     if filter_type == "today":
         query["followup_date"] = today
     elif filter_type == "upcoming":
@@ -2278,18 +2301,41 @@ async def get_followups(
     elif filter_type == "missed":
         query["followup_date"] = {"$lt": today}
         query["completed"] = False
-    
-    followups = await db.followups.find(query, {"organization_id": 0}).sort("followup_date", 1).to_list(1000)
-    
+
+    page = max(1, int(page or 1))
+    limit = max(1, min(int(limit or 50), 500))
+    skip = (page - 1) * limit
+
+    total = await db.followups.count_documents(query)
+    cursor = (
+        db.followups.find(query, {"organization_id": 0})
+        .sort("followup_date", 1)
+        .skip(skip)
+        .limit(limit)
+    )
+    followups = await cursor.to_list(limit)
+
     # Populate lead details
     for followup in followups:
         followup["_id"] = str(followup["_id"])
-        lead = await db.leads.find_one({"_id": ObjectId(followup["lead_id"])}, {"name": 1, "mobile": 1})
-        if lead:
-            followup["lead_name"] = lead["name"]
-            followup["lead_mobile"] = lead["mobile"]
-    
-    return followups
+        try:
+            lead = await db.leads.find_one(
+                {"_id": ObjectId(followup["lead_id"])}, {"name": 1, "mobile": 1}
+            )
+            if lead:
+                followup["lead_name"] = lead["name"]
+                followup["lead_mobile"] = lead["mobile"]
+        except Exception:
+            pass
+
+    total_pages = (total + limit - 1) // limit if limit else 1
+    return {
+        "items": followups,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages,
+    }
 
 @api_router.put("/followups/{followup_id}/complete")
 async def complete_followup_simple(followup_id: str, current_user: dict = Depends(get_current_user)):
@@ -2511,6 +2557,42 @@ async def get_lead_sources(current_user: dict = Depends(get_current_user)):
     return sources
 
 # ==================== User Management Routes ====================
+class SelfProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    mobile: Optional[str] = None
+    avatar_url: Optional[str] = None  # allow clearing ("") to remove
+
+
+@api_router.put("/users/me")
+async def update_my_profile(
+    data: SelfProfileUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Logged-in user updates their own profile (name, mobile, avatar)."""
+    update_data: dict = {}
+    if data.name is not None:
+        name = data.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Name cannot be empty")
+        if len(name) > 100:
+            raise HTTPException(status_code=400, detail="Name too long (max 100 chars)")
+        update_data["name"] = name
+    if data.mobile is not None:
+        mobile = data.mobile.strip()
+        update_data["mobile"] = mobile or None
+    if data.avatar_url is not None:
+        update_data["avatar_url"] = data.avatar_url.strip() or None
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No data to update")
+
+    await db.users.update_one(
+        {"_id": ObjectId(current_user["id"])},
+        {"$set": update_data},
+    )
+    return {"message": "Profile updated", **update_data}
+
+
 @api_router.post("/users")
 async def create_user(data: UserCreate, current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ["super_admin", "org_admin"]:
@@ -2758,6 +2840,65 @@ async def upload_org_logo(
         {"$set": {"logo_url": logo_url}},
     )
     return {"logo_url": logo_url, "public_id": result.get("public_id")}
+
+
+# ==================== User Avatar Upload (Cloudinary) + Self Profile Update ====================
+ALLOWED_AVATAR_MIME = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
+MAX_AVATAR_SIZE = 800 * 1024  # 800 KB
+
+
+@api_router.post("/uploads/avatar")
+async def upload_user_avatar(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload the logged-in user's avatar/profile picture to Cloudinary.
+
+    Stores `avatar_url` on the user document and returns the public URL.
+    """
+    if not os.environ.get("CLOUDINARY_CLOUD_NAME"):
+        raise HTTPException(status_code=500, detail="Avatar upload not configured")
+    if file.content_type not in ALLOWED_AVATAR_MIME:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type {file.content_type} not allowed. Use JPG/PNG/WEBP.",
+        )
+    content = await file.read()
+    if len(content) > MAX_AVATAR_SIZE:
+        raise HTTPException(status_code=400, detail="Avatar too large. Max 800 KB allowed.")
+    folder = f"leadtrak/user-avatar/{current_user['organization_id']}"
+    try:
+        result = cloudinary.uploader.upload(
+            content,
+            folder=folder,
+            resource_type="image",
+            overwrite=True,
+            public_id=f"u_{current_user['id']}",
+            transformation=[
+                {"width": 400, "height": 400, "crop": "fill", "gravity": "face"},
+                {"quality": "auto", "fetch_format": "auto"},
+            ],
+        )
+    except Exception as e:
+        logger.error(f"Cloudinary avatar upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Avatar upload failed")
+
+    avatar_url = result.get("secure_url")
+    await db.users.update_one(
+        {"_id": ObjectId(current_user["id"])},
+        {"$set": {"avatar_url": avatar_url}},
+    )
+    return {"avatar_url": avatar_url, "public_id": result.get("public_id")}
+
+
+@api_router.delete("/uploads/avatar")
+async def delete_user_avatar(current_user: dict = Depends(get_current_user)):
+    """Remove the logged-in user's avatar."""
+    await db.users.update_one(
+        {"_id": ObjectId(current_user["id"])},
+        {"$set": {"avatar_url": None}},
+    )
+    return {"message": "Avatar removed"}
 
 # ==================== Subscription Routes ====================
 @api_router.get("/subscription-plans")

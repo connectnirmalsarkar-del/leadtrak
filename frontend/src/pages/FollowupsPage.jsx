@@ -251,29 +251,46 @@ function CompleteFollowupDialog({ followup, open, onOpenChange, onDone }) {
 
 export default function FollowupsPage() {
   const [followups, setFollowups] = useState({ today: [], upcoming: [], missed: [] });
+  const [totals, setTotals] = useState({ today: 0, upcoming: 0, missed: 0 });
+  const [pages, setPages] = useState({ today: 1, upcoming: 1, missed: 1 });
+  const [totalPages, setTotalPages] = useState({ today: 1, upcoming: 1, missed: 1 });
+  const PER_PAGE = 25;
   const [activeTab, setActiveTab] = useState('today');
   const [voiceOnly, setVoiceOnly] = useState(false);
   const [completing, setCompleting] = useState(null); // followup obj
 
   useEffect(() => {
-    fetchAll();
+    fetchTab('today', pages.today);
+    fetchTab('upcoming', pages.upcoming);
+    fetchTab('missed', pages.missed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchAll = async () => {
+  const fetchTab = async (tab, p) => {
     try {
-      const [todayRes, upcomingRes, missedRes] = await Promise.all([
-        axios.get(`${API}/followups`, { params: { filter_type: 'today' } }),
-        axios.get(`${API}/followups`, { params: { filter_type: 'upcoming' } }),
-        axios.get(`${API}/followups`, { params: { filter_type: 'missed' } }),
-      ]);
-      setFollowups({
-        today: todayRes.data,
-        upcoming: upcomingRes.data,
-        missed: missedRes.data,
+      const { data } = await axios.get(`${API}/followups`, {
+        params: { filter_type: tab, page: p, limit: PER_PAGE },
       });
+      const items = Array.isArray(data) ? data : (data.items || []);
+      const total = Array.isArray(data) ? data.length : (data.total || 0);
+      const tp = Array.isArray(data) ? 1 : (data.total_pages || 1);
+      setFollowups((prev) => ({ ...prev, [tab]: items }));
+      setTotals((prev) => ({ ...prev, [tab]: total }));
+      setTotalPages((prev) => ({ ...prev, [tab]: tp }));
     } catch (e) {
-      toast.error('Failed to fetch follow-ups');
+      toast.error(`Failed to fetch ${tab} follow-ups`);
     }
+  };
+
+  const fetchAll = () => {
+    fetchTab('today', pages.today);
+    fetchTab('upcoming', pages.upcoming);
+    fetchTab('missed', pages.missed);
+  };
+
+  const changePage = (tab, newPage) => {
+    setPages((prev) => ({ ...prev, [tab]: newPage }));
+    fetchTab(tab, newPage);
   };
 
   const openComplete = (followup) => setCompleting(followup);
@@ -283,6 +300,48 @@ export default function FollowupsPage() {
   const upcomingList = applyVoiceFilter(followups.upcoming);
   const missedList = applyVoiceFilter(followups.missed);
   const voiceCount = (followups.today.concat(followups.upcoming, followups.missed)).filter((f) => !!f.voice_recording_url).length;
+
+  const PaginationFooter = ({ tab }) => {
+    const total = totals[tab];
+    const tp = totalPages[tab];
+    const p = pages[tab];
+    if (!total || tp <= 1) return null;
+    return (
+      <div className="flex items-center justify-between gap-3 flex-wrap pt-2" data-testid={`followups-pagination-${tab}`}>
+        <p className="text-xs text-slate-600">
+          Showing <span className="font-semibold text-slate-900">{(p - 1) * PER_PAGE + 1}</span>
+          {' – '}
+          <span className="font-semibold text-slate-900">{Math.min(p * PER_PAGE, total)}</span>
+          {' of '}
+          <span className="font-semibold text-slate-900">{total}</span>
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={p <= 1}
+            onClick={() => changePage(tab, Math.max(1, p - 1))}
+            data-testid={`followups-prev-${tab}`}
+          >
+            Prev
+          </Button>
+          <span className="text-xs text-slate-600 px-2">
+            Page <span className="font-semibold text-slate-900">{p}</span> of{' '}
+            <span className="font-semibold text-slate-900">{tp}</span>
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={p >= tp}
+            onClick={() => changePage(tab, Math.min(tp, p + 1))}
+            data-testid={`followups-next-${tab}`}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6" data-testid="followups-page">
@@ -305,9 +364,9 @@ export default function FollowupsPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-slate-100">
-          <TabsTrigger value="today" data-testid="tab-today">Today ({todayList.length})</TabsTrigger>
-          <TabsTrigger value="upcoming" data-testid="tab-upcoming">Upcoming ({upcomingList.length})</TabsTrigger>
-          <TabsTrigger value="missed" data-testid="tab-missed">Missed ({missedList.length})</TabsTrigger>
+          <TabsTrigger value="today" data-testid="tab-today">Today ({totals.today})</TabsTrigger>
+          <TabsTrigger value="upcoming" data-testid="tab-upcoming">Upcoming ({totals.upcoming})</TabsTrigger>
+          <TabsTrigger value="missed" data-testid="tab-missed">Missed ({totals.missed})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="today" className="space-y-3 mt-4">
@@ -318,6 +377,7 @@ export default function FollowupsPage() {
           ) : (
             todayList.map((fu) => <FollowupCard key={fu._id} followup={fu} onComplete={openComplete} type="today" />)
           )}
+          <PaginationFooter tab="today" />
         </TabsContent>
 
         <TabsContent value="upcoming" className="space-y-3 mt-4">
@@ -328,6 +388,7 @@ export default function FollowupsPage() {
           ) : (
             upcomingList.map((fu) => <FollowupCard key={fu._id} followup={fu} onComplete={openComplete} type="upcoming" />)
           )}
+          <PaginationFooter tab="upcoming" />
         </TabsContent>
 
         <TabsContent value="missed" className="space-y-3 mt-4">
@@ -338,6 +399,7 @@ export default function FollowupsPage() {
           ) : (
             missedList.map((fu) => <FollowupCard key={fu._id} followup={fu} onComplete={openComplete} type="missed" />)
           )}
+          <PaginationFooter tab="missed" />
         </TabsContent>
       </Tabs>
 
