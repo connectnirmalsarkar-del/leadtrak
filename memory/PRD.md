@@ -382,3 +382,67 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - POST `/api/uploads/voice-recording` → 200, Cloudinary URL returned, duration 66.15 sec detected ✓
 
 **Deploy note:** SW cache bumped to `leadtrak-v9-audio-mp4` so production users get the updated validator immediately on next visit.
+
+---
+
+## 2026-06-01 — Security Hardening + Impersonate Tenant Admin
+
+### 🔒 Security Hardening (Critical + High + Medium fixes)
+
+**1. CORS — wildcard removed**
+- `.env`: `CORS_ORIGINS="*"` → explicit list `https://leadtrak.in,https://www.leadtrak.in,<preview>,http://localhost:3000`
+- `server.py`: strips empty/wildcard origins, refuses to start with wildcard + `allow_credentials=True`, restricts methods to `GET/POST/PUT/PATCH/DELETE/OPTIONS`, sets 10-min preflight cache.
+
+**2. JWT_SECRET rotated**
+- Old key was sequential `a1b2c3...` (predictable pattern) → replaced with 96-char cryptographically random hex from `openssl rand -hex 48`. All existing tokens invalidated (one-time forced re-login).
+
+**3. Rate limiting (slowapi)**
+- `Limiter` keyed by leftmost X-Forwarded-For (k8s ingress / Cloudflare aware).
+- `POST /api/auth/login` — 10/min
+- `POST /api/auth/register` — 5/hour
+- `POST /api/auth/forgot-password` — 3/min
+- `POST /api/auth/reset-password` — 5/min
+- `POST /api/widget/lead/{token}` — 30/min
+- `POST /api/webhooks/razorpay` — 120/min
+
+**4. Brute-force lockout bug fixed**
+- `check_brute_force()` was crashing with `TypeError: can't compare offset-naive and offset-aware datetimes` (Mongo strips tzinfo). Fixed to coerce naive → UTC before comparison. Now returns clean 429 after 5 failed login attempts.
+
+**5. `assign_lead` IDOR + authorization fix**
+- Was: any logged-in user could re-assign any lead in their org to any string `assigned_to`.
+- Now: role check (only `super_admin / org_admin / manager`), `assigned_to` validated as ObjectId, target user MUST exist in same org and be active. Cross-tenant assignment blocked.
+
+**6. Password-reset info disclosure**
+- Was: full reset URL logged in plaintext (`logger.info(f"Password reset link: ...")`).
+- Now: only masked email is logged (`r***@domain`). The token never appears in logs/responses. Endpoint always returns identical message (prevents user enumeration).
+
+**7. Razorpay webhook**
+- HMAC-SHA256 signature verification with `hmac.compare_digest` (constant-time) — verified bad signature → 400.
+
+### 🎭 Impersonate Tenant Admin (Super Admin feature)
+
+**Backend:** `POST /api/platform/organizations/{org_id}/impersonate`
+- Super Admin only (403 for others)
+- Picks the org's active `org_admin` (falls back to any active user)
+- Issues a 30-min access token tagged with `impersonator_id` (set in cookie, refresh token cleared)
+- Inserts audit row in `impersonation_audit_log` collection: `{impersonator_id, impersonator_email, target_user_id, target_email, target_org_id, target_org_name, started_at}`
+- Logs at WARNING level for security review
+
+**`/api/auth/me`** now returns `impersonating: true` + `impersonator_id` when acting as impersonated user.
+
+**Frontend:**
+- `PlatformOrgsPage.jsx` — new `UserCog` icon per org row → confirm dialog → redirects to `/dashboard` as the tenant user
+- `DashboardLayout.jsx` — sticky amber banner across the top of every page while impersonating, with "Exit Impersonation" button that hits `/api/auth/logout`
+
+**Audit trail:** every impersonation start is logged; ending happens on logout or 30-min token expiry (no silent extension since refresh token is cleared).
+
+### Tests
+- `iteration_11.json` — found 1 backend bug (slowapi needs `response: Response` parameter on rate-limited endpoints to inject headers).
+- `iteration_12.json` — fix verified, **100% pass rate** (4/4 pytest + 3/3 curl smoke). Cross-tenant `assign_lead` test still skipped — needs a second-org user in seed (low priority).
+
+### Known follow-ups (non-blocking)
+- Add `ended_at` field to `impersonation_audit_log` (currently inferred by token expiry / logout)
+- CI / pre-commit check that any `@limiter.limit` handler also has `response: Response`
+- Server.py is now 5357 lines — refactor into `routes/auth.py`, `routes/billing.py`, `routes/leads.py`, `routes/platform.py`, `routes/webhooks.py`
+- Seed a second-organization user to enable cross-tenant tests
+
