@@ -83,8 +83,8 @@ export default function LoginPage() {
 
         <div className="relative z-10 flex flex-col h-screen p-12 xl:p-16">
           {/* Top brand */}
-          <Link to="/" className="flex items-center gap-2.5">
-            <img src="/logo-dark.png?v=3" alt="Leadtrak" className="h-14 w-auto" data-testid="login-logo" />
+          <Link to="/" className="flex items-center gap-2.5 mb-12">
+            <img src="/logo-dark.png?v=3" alt="Leadtrak" className="h-10 xl:h-12 w-auto" data-testid="login-logo" />
           </Link>
 
           {/* Middle content */}

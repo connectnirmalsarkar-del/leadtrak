@@ -288,7 +288,9 @@ export default function RegisterPage() {
                     onValueChange={(v) => setForm({ ...form, industry: v })}
                   >
                     <SelectTrigger id="industry" className="h-11 border-slate-300 focus:ring-violet-300" data-testid="register-industry-select">
-                      <SelectValue placeholder="Select your industry" />
+                      <SelectValue placeholder="Select your industry">
+                        {form.industry && (industries.find((i) => i.key === form.industry)?.label || form.industry)}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent className="max-h-72">
                       {industries.map((ind) => (
