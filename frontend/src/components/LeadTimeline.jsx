@@ -87,7 +87,7 @@ const EventBody = ({ event }) => {
       );
     case 'followup_added':
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {p.remarks && (
             <p className="text-sm text-slate-700"><span className="text-[10px] uppercase tracking-wider text-slate-400 mr-1">Plan:</span>{p.remarks}</p>
           )}
@@ -96,6 +96,22 @@ const EventBody = ({ event }) => {
             {p.followup_date} {p.followup_time}
             {p.next_followup ? <span className="ml-1">· next on {p.next_followup}</span> : null}
           </p>
+          {p.voice_recording_url && (
+            <div className="bg-slate-50 border border-slate-200 rounded-md p-2 flex items-center gap-2" data-testid="timeline-voice-player">
+              <Mic className="w-3.5 h-3.5 text-violet-600 flex-shrink-0" />
+              <audio src={p.voice_recording_url} controls className="flex-1 h-8" />
+              {p.voice_recording_duration && (
+                <span className="text-[10px] font-mono text-slate-500 flex-shrink-0">
+                  {Math.floor(p.voice_recording_duration)}s
+                </span>
+              )}
+            </div>
+          )}
+          {p.call_disposition && (
+            <p className="text-[11px] text-slate-500">
+              Disposition: <span className="font-medium text-slate-700">{p.call_disposition}</span>
+            </p>
+          )}
         </div>
       );
     case 'followup_completed':

@@ -1687,6 +1687,7 @@ async def get_lead_timeline(lead_id: str, current_user: dict = Depends(get_curre
 
 class LogCallRequest(BaseModel):
     summary: str                                  # what happened on the call (required)
+    call_disposition: Optional[str] = "Connected" # Connected, Not Picked, Switched Off, Busy, Wrong Number, Call Back Later
     voice_recording_url: Optional[str] = None
     voice_recording_public_id: Optional[str] = None
     voice_recording_duration: Optional[float] = None
@@ -1746,6 +1747,9 @@ async def log_call(lead_id: str, data: LogCallRequest, current_user: dict = Depe
     fu_res = await db.followups.insert_one(fu_doc)
 
     # 2) Timeline event — followup_completed (so it renders the rich way with outcome+audio)
+    # If call wasn't connected, auto-schedule retry 1 day later 11am (industry standard call-center practice)
+    disposition = (data.call_disposition or "Connected").strip()
+    no_connect = disposition in ("Not Picked", "Switched Off", "Busy", "Call Back Later")
     await log_lead_event(
         lid, "followup_completed",
         {
@@ -1756,22 +1760,37 @@ async def log_call(lead_id: str, data: LogCallRequest, current_user: dict = Depe
             "followup_time": now_str,
             "voice_recording_url": data.voice_recording_url,
             "voice_recording_duration": data.voice_recording_duration,
+            "call_disposition": disposition,
             "logged_inline": True,
         },
         current_user, org_id,
     )
 
-    # 3) Status change (optional)
-    if data.new_status and data.new_status != lead.get("status"):
+    # 3) Status change (optional) — override to "Not Reachable" if no-connect AND user didn't pick a status
+    effective_status = data.new_status
+    if no_connect and not effective_status:
+        effective_status = "Not Reachable"
+    if effective_status and effective_status != lead.get("status"):
         old_status = lead.get("status")
-        await db.leads.update_one({"_id": lid}, {"$set": {"status": data.new_status}})
-        ev_type = "lead_lost" if data.new_status == "Lost" else "status_changed"
-        await log_lead_event(lid, ev_type, {"from": old_status, "to": data.new_status}, current_user, org_id)
+        await db.leads.update_one({"_id": lid}, {"$set": {"status": effective_status}})
+        ev_type = "lead_lost" if effective_status == "Lost" else "status_changed"
+        await log_lead_event(lid, ev_type, {"from": old_status, "to": effective_status}, current_user, org_id)
 
-    out = {"message": "Call logged", "followup_id": str(fu_res.inserted_id)}
+    out = {"message": "Call logged", "followup_id": str(fu_res.inserted_id), "disposition": disposition}
 
-    # 4) Schedule next follow-up if date given
+    # 4) Schedule next follow-up: explicit user-provided date wins; otherwise auto-retry next day for no-connects
+    auto_next = None
+    if not data.next_followup_date and no_connect:
+        next_day = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+        auto_next = {"date": next_day, "time": "11:00", "remarks": f"Auto-scheduled retry — previous call was {disposition.lower()}"}
+
+    target_next = None
     if data.next_followup_date:
+        target_next = {"date": data.next_followup_date, "time": data.next_followup_time or "10:00", "remarks": (data.next_followup_remarks or "").strip() or f"Scheduled from previous call. Prior outcome: {summary[:80]}"}
+    elif auto_next:
+        target_next = auto_next
+
+    if target_next:
         next_doc = {
             "lead_id": str(lid),
             "lead_name": lead.get("name"),
