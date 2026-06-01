@@ -929,6 +929,8 @@ async def register(data: RegisterRequest, request: Request, response: Response):
         "organization_name": data.organization_name,
         "industry": industry,
         "terminology": industry_cfg["terms"],
+        "lead_statuses": get_lead_statuses(industry),
+        "features": get_features(industry),
     }
 
 @api_router.post("/auth/login")
@@ -972,6 +974,11 @@ async def login(data: LoginRequest, request: Request, response: Response):
         "organization_name": org_name,
         "industry": industry,
         "terminology": get_terms(industry),
+        # Include industry-derived data so the frontend has everything it
+        # needs to render the dashboard correctly on the first paint (no
+        # need to wait for a follow-up /auth/me call).
+        "lead_statuses": get_lead_statuses(industry),
+        "features": get_features(industry),
     }
 
 @api_router.post("/auth/logout")
