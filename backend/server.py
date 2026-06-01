@@ -4916,10 +4916,15 @@ async def delete_organization(org_id: str, current_user: dict = Depends(get_curr
 # ==================== Voice Recording Upload ====================
 ALLOWED_VOICE_MIME = {
     "audio/webm", "audio/mp4", "audio/mpeg", "audio/mp3", "audio/ogg",
-    "audio/wav", "audio/x-wav", "audio/x-m4a", "audio/aac",
-    # Some browsers send video/* for webm audio recordings
-    "video/webm",
+    "audio/wav", "audio/x-wav", "audio/x-m4a", "audio/aac", "audio/opus",
+    "audio/3gpp", "audio/amr",
+    # Some browsers send video/* for audio-only containers (esp. WhatsApp .mp4 voice notes
+    # and Chrome MediaRecorder webm). Accept these too.
+    "video/webm", "video/mp4",
+    # Generic fallback when the OS / browser couldn't sniff a MIME
+    "application/octet-stream",
 }
+ALLOWED_VOICE_EXTS = (".mp3", ".m4a", ".wav", ".ogg", ".webm", ".mp4", ".aac", ".opus", ".3gp", ".amr")
 MAX_VOICE_SIZE = 5 * 1024 * 1024  # 5 MB (supports uploaded calls up to ~5 min)
 MAX_VOICE_DURATION = 300  # 5 minutes
 
@@ -4938,7 +4943,11 @@ async def upload_voice_recording(
     if not os.environ.get("CLOUDINARY_CLOUD_NAME"):
         raise HTTPException(status_code=500, detail="Voice uploads not configured")
     if file.content_type not in ALLOWED_VOICE_MIME:
-        raise HTTPException(status_code=400, detail=f"Audio type {file.content_type} not allowed")
+        # Fall back to extension check (e.g. WhatsApp .mp4 voice notes may report odd MIME)
+        fname = (file.filename or "").lower()
+        ext_ok = any(fname.endswith(ext) for ext in ALLOWED_VOICE_EXTS)
+        if not ext_ok:
+            raise HTTPException(status_code=400, detail=f"Audio type {file.content_type} not allowed")
     content = await file.read()
     if len(content) > MAX_VOICE_SIZE:
         raise HTTPException(status_code=400, detail="Recording too large. Max 5 MB allowed.")

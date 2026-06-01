@@ -357,3 +357,28 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - UI: Send Payment Link dialog renders correctly with "not configured" warning when keys empty ✓
 
 **To go live:** User adds live `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` from Razorpay Dashboard, creates a Webhook in Dashboard pointing to `https://leadtrak.in/api/webhooks/razorpay` with events `payment_link.paid` + `payment.captured`, copies the Webhook Secret into `RAZORPAY_WEBHOOK_SECRET`, restarts backend.
+
+
+---
+
+## 2026-06-01 — Voice Upload: WhatsApp `.mp4` Audio Fix
+
+**Issue:** User tried to upload a WhatsApp voice note (`.mp4` extension, browser-reported MIME `video/mp4`) from desktop. Frontend `VoiceRecorder` rejected with "Please choose an audio file (.mp3, .m4a, .wav, .ogg, .webm)" because validation was strictly `f.type.startsWith('audio/')`.
+
+**Root cause:** WhatsApp on macOS/iOS exports voice messages as `.mp4` containers (AAC inside ISO BMFF). The browser sniffs the extension and reports `video/mp4` even though the payload is audio-only.
+
+**Fix:**
+- `frontend/src/components/VoiceRecorder.jsx`:
+  - Validation now ALSO accepts by file extension: `.mp3 .m4a .wav .ogg .webm .mp4 .aac .opus`
+  - Explicitly allows `video/mp4` and `video/webm` MIME types
+  - `<input accept>` extended + helper text updated to mention "MP4 (WhatsApp voice)"
+- `backend/server.py`:
+  - `ALLOWED_VOICE_MIME` expanded with `video/mp4`, `audio/opus`, `audio/3gpp`, `audio/amr`, `application/octet-stream`
+  - Added `ALLOWED_VOICE_EXTS` fallback — if MIME isn't recognized, accept based on filename extension
+  - Cloudinary upload uses `resource_type="video"` which correctly handles MP4 audio (Cloudinary internally re-encodes to 3gp for playback)
+
+**Verified:**
+- Downloaded the actual user file (`WhatsApp Audio 2026-05-28 at 1.41.54 PM.mp4`, 1 MB, `video/mp4`)
+- POST `/api/uploads/voice-recording` → 200, Cloudinary URL returned, duration 66.15 sec detected ✓
+
+**Deploy note:** SW cache bumped to `leadtrak-v9-audio-mp4` so production users get the updated validator immediately on next visit.

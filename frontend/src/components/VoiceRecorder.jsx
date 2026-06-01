@@ -61,8 +61,14 @@ export default function VoiceRecorder({ value, onChange, disabled }) {
   const handleFileChoose = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (!f.type.startsWith('audio/') && f.type !== 'video/webm') {
-      toast.error('Please choose an audio file (.mp3, .m4a, .wav, .ogg, .webm)');
+    const name = (f.name || '').toLowerCase();
+    const allowedExts = ['.mp3', '.m4a', '.wav', '.ogg', '.webm', '.mp4', '.aac', '.opus'];
+    const extOk = allowedExts.some((ext) => name.endsWith(ext));
+    // Browsers sometimes report 'video/mp4' / 'video/webm' for audio-only containers
+    // (especially WhatsApp voice notes exported as .mp4). Accept by extension as fallback.
+    const mimeOk = (f.type || '').startsWith('audio/') || f.type === 'video/webm' || f.type === 'video/mp4';
+    if (!mimeOk && !extOk) {
+      toast.error('Please choose an audio file (.mp3, .m4a, .wav, .ogg, .webm, .mp4)');
       return;
     }
     if (f.size > MAX_UPLOAD_BYTES) {
@@ -249,7 +255,7 @@ export default function VoiceRecorder({ value, onChange, disabled }) {
           <input
             ref={fileInputRef}
             type="file"
-            accept="audio/*,.mp3,.m4a,.wav,.ogg,.webm"
+            accept="audio/*,video/mp4,.mp3,.m4a,.wav,.ogg,.webm,.mp4,.aac,.opus"
             onChange={handleFileChoose}
             className="hidden"
             data-testid="voice-file-input"
@@ -265,7 +271,7 @@ export default function VoiceRecorder({ value, onChange, disabled }) {
             Choose audio file
           </button>
           <p className="text-[11px] text-slate-500 mt-2">
-            MP3, M4A, WAV, OGG, WebM · max 5 MB
+            MP3, M4A, WAV, OGG, WebM, MP4 (WhatsApp voice) · max 5 MB
           </p>
         </div>
       ) : (
