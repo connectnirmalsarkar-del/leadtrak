@@ -420,11 +420,12 @@ export default function LeadsPage() {
                 <span className="hidden sm:inline">Add {t.lead}</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
+            <DialogContent className="max-w-2xl max-h-[88vh] p-0 overflow-hidden flex flex-col gap-0">
+              <DialogHeader className="px-6 pt-6 pb-3 border-b border-slate-100 flex-shrink-0">
               <DialogTitle>Add New {t.lead}</DialogTitle>
               <DialogDescription>Capture a new prospect into your pipeline</DialogDescription>
             </DialogHeader>
+            <div className="overflow-y-auto flex-1 px-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
                 <Label>Full Name *</Label>
@@ -559,7 +560,8 @@ export default function LeadsPage() {
                 </div>
               ))}
             </div>
-            <DialogFooter>
+            </div>
+            <DialogFooter className="px-6 py-4 border-t border-slate-100 flex-shrink-0">
               <Button variant="outline" onClick={() => { setShowAddDialog(false); setDuplicate(null); }} data-testid="cancel-add-lead-btn">Cancel</Button>
               <Button
                 onClick={handleAddLead}
@@ -662,12 +664,12 @@ export default function LeadsPage() {
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto" data-testid="lead-detail-drawer">
           {selectedLead && (
             <>
-              <SheetHeader>
-                <div className="flex items-center justify-between mb-2">
+              <SheetHeader className="pr-10">
+                <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                   <span className="text-xs font-mono text-slate-500">{selectedLead.lead_id}</span>
-                  <Badge variant="outline" className={statusBadgeClass(selectedLead.status)}>{selectedLead.status}</Badge>
+                  <Badge variant="outline" className={`${statusBadgeClass(selectedLead.status)} flex-shrink-0`}>{selectedLead.status}</Badge>
                 </div>
-                <SheetTitle className="text-2xl" style={{fontFamily: 'Sora'}}>{selectedLead.name}</SheetTitle>
+                <SheetTitle className="text-xl sm:text-2xl pr-2" style={{fontFamily: 'Sora'}}>{selectedLead.name}</SheetTitle>
                 <SheetDescription>{selectedLead.course_interested}</SheetDescription>
               </SheetHeader>
 
