@@ -1342,7 +1342,13 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
     lead_count = await db.leads.count_documents({"organization_id": org_id})
     lead_id = f"LEAD{lead_count + 1:05d}"
 
-    # Auto round-robin if no assignee specified
+    # Determine assignee:
+    #   1. If caller explicitly chose someone in the form → honor that
+    #      (only counselor / telecaller are allowed — validated below)
+    #   2. If a counselor/telecaller is creating the lead themselves, the
+    #      lead stays with them (they're already on the call). Round-robin
+    #      is only meant for inbound leads where no caller has touched it.
+    #   3. Otherwise (manager/admin creating, or webhook) → round-robin.
     assignee = data.assigned_to
     if assignee:
         # Safety: only counselors/telecallers can hold leads. Reject attempts to
@@ -1357,7 +1363,12 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
                 detail="Leads can only be assigned to counselors or telecallers."
             )
     if not assignee:
-        assignee = await pick_round_robin_assignee(org_id)
+        # If the creator is themselves a counselor/telecaller, the lead
+        # stays with them — they're the one handling it.
+        if current_user["role"] in ("counselor", "telecaller"):
+            assignee = current_user["id"]
+        else:
+            assignee = await pick_round_robin_assignee(org_id)
 
     lead_doc = {
         "lead_id": lead_id,
@@ -1408,8 +1419,9 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
 
     lead_doc["organization_id"] = str(org_id)
     
-    # Create notification for assigned user
-    if assignee:
+    # Create notification for assigned user — skip if they assigned the lead
+    # to themselves (no need to notify yourself about your own action).
+    if assignee and assignee != current_user["id"]:
         await db.notifications.insert_one({
             "user_id": assignee,
             "message": f"New lead '{data.name}' has been assigned to you",
