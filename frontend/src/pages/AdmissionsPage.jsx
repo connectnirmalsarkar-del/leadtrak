@@ -90,8 +90,15 @@ export default function AdmissionsPage() {
       setServices(srvRes.data);
       // Backend now returns paginated shape {items,total,...}; defensive fallback to array
       const leadsList = Array.isArray(leadsRes.data) ? leadsRes.data : (leadsRes.data?.items || []);
-      // Only leads at the industry's WON status are eligible for deal closing
-      const eligible = leadsList.filter((l) => l.status === wonStatus);
+      // Build a set of lead_ids that are already recorded as an admission/deal
+      // so they don't appear again in the dropdown (deal already closed).
+      const admittedLeadIds = new Set(
+        (admRes.data || []).map((a) => a.lead_id).filter(Boolean)
+      );
+      // Only leads at the industry's WON status AND not yet converted into a deal
+      const eligible = leadsList.filter(
+        (l) => l.status === wonStatus && !admittedLeadIds.has(l._id)
+      );
       setLeads(eligible);
     } catch (e) {
       toast.error('Failed to load admissions');
@@ -176,7 +183,7 @@ export default function AdmissionsPage() {
                     )}
                   </SelectContent>
                 </Select>
-                <p className="text-[11px] text-slate-500">Only {t.leads.toLowerCase()} marked <strong>{wonStatus}</strong> appear here.</p>
+                <p className="text-[11px] text-slate-500">Only {t.leads.toLowerCase()} marked <strong>{wonStatus}</strong> that don't yet have a recorded {t.conversion.toLowerCase()} appear here.</p>
                 {selectedLead && (
                   <div className="text-xs text-slate-500 px-3 py-2 bg-slate-50 rounded-md border border-slate-200">
                     <span className="font-medium text-slate-700">{selectedLead.name}</span> · {selectedLead.mobile}

@@ -1,6 +1,6 @@
 // Leadtrak Service Worker
 // IMPORTANT: Bump CACHE_NAME on every release to force the browser to fetch fresh CSS/JS
-const CACHE_NAME = 'leadtrak-v57-hide-reports-caller-counselor';
+const CACHE_NAME = 'leadtrak-v58-exclude-already-converted-leads';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', (event) => {

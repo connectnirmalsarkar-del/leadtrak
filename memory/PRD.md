@@ -670,3 +670,21 @@ Earlier the only feedback after a successful subscription payment was a toast no
 - `/app/frontend/public/service-worker.js` — `CACHE_NAME` bumped to `leadtrak-v57-hide-reports-caller-counselor`.
 
 **Verified via Playwright:** Telecaller (Rohan Verma) login → sidebar shows Dashboard, Leads, Follow-ups, Counselling, Admissions, Tasks, WhatsApp, Support — **no Reports**. ✅
+
+---
+
+## Exclude already-converted leads from Deal Closing dropdown (Feb 2026)
+
+**Request:** "Je Won lead ekbar deal record hoye geche sai lead ar deal close form e dekhabe na — ota to deal record hoye close hoye geche."
+
+**Fix:** `/app/frontend/src/pages/AdmissionsPage.jsx`
+- In `fetchData()`, built a `Set` of `admittedLeadIds` from `/api/admissions` response.
+- Eligible leads now require BOTH `status === wonStatus` AND `!admittedLeadIds.has(_id)`.
+- Helper text updated: "Only leads marked **{wonStatus}** that don't yet have a recorded conversion appear here."
+
+**SW cache:** bumped to `leadtrak-v58-exclude-already-converted-leads`.
+
+**Verified via Playwright (Counselor login):**
+1. Before record → dropdown shows "Demo — Ananya Banerjee · Admission Done" ✅
+2. Record admission for that lead → submit succeeds, Total Admissions = 1.
+3. Re-open Record dialog → dropdown is empty with "No leads at 'Admission Done' status…" message ✅
