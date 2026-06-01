@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 import { API } from '@/context/AuthContext';
@@ -95,6 +95,7 @@ export default function PlatformOrgsPage() {
   const [wipeConfirmName, setWipeConfirmName] = useState('');
   const [wipeAck, setWipeAck] = useState(false);
   const [wipeLoading, setWipeLoading] = useState(false);
+  const wipeInflightRef = useRef(false);
 
   const openWipeDialog = async (org) => {
     setWipeDialog({ id: org.id, name: org.name });
@@ -130,6 +131,10 @@ export default function PlatformOrgsPage() {
 
   const executeWipe = async () => {
     if (!wipeDialog) return;
+    // Re-entry guard: prevents double-click from issuing two parallel requests
+    // (the second one would race against the dialog close and toast a generic
+    // 'Wipe failed' even though the actual wipe succeeded).
+    if (wipeInflightRef.current) return;
     const chosen = Object.entries(wipeSections).filter(([k, v]) => v && k !== 'all').map(([k]) => k);
     const isAll = wipeSections.all;
     if (!isAll && chosen.length === 0) {
@@ -146,6 +151,7 @@ export default function PlatformOrgsPage() {
     }
     const token = `YES_DELETE_${wipeDialog.id.toUpperCase().replace(/\s/g, '_')}`;
     const sectionsParam = isAll ? 'all' : chosen.join(',');
+    wipeInflightRef.current = true;
     setWipeLoading(true);
     try {
       const params = new URLSearchParams({ org_id: wipeDialog.id, confirm: token, sections: sectionsParam });
@@ -155,8 +161,13 @@ export default function PlatformOrgsPage() {
       setWipeDialog(null);
       await fetchOrgs();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Wipe failed');
+      const detail = e.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : (e.message || 'Wipe failed — please try again');
+      toast.error(msg);
     } finally {
+      wipeInflightRef.current = false;
       setWipeLoading(false);
     }
   };
