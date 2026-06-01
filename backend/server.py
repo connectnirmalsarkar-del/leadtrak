@@ -277,9 +277,30 @@ class UserUpdate(BaseModel):
     reports_to: Optional[str] = None
     active: Optional[bool] = None
 
+def _normalize_whatsapp_number(value: Optional[str]) -> Optional[str]:
+    """Strict validator: must be a valid Indian mobile in +91XXXXXXXXXX format.
+    Returns the normalized string or raises HTTPException(400)."""
+    if value is None:
+        return None
+    v = str(value).strip()
+    if not v:
+        return None
+    # Strip spaces, hyphens, parentheses
+    clean = "".join(ch for ch in v if ch.isdigit() or ch == "+")
+    # Auto-prefix +91 if 10 digits
+    if clean.startswith("+91") and len(clean) == 13:
+        return clean
+    if clean.startswith("91") and len(clean) == 12:
+        return "+" + clean
+    if clean.isdigit() and len(clean) == 10:
+        return "+91" + clean
+    raise HTTPException(status_code=400, detail="WhatsApp number must be a valid Indian number (+91XXXXXXXXXX)")
+
+
 class LeadCreate(BaseModel):
     name: str
     mobile: str
+    whatsapp_number: Optional[str] = None  # Optional secondary — if blank, fallback to `mobile` for WhatsApp actions
     email: Optional[str] = None
     course_interested: str
     state: Optional[str] = None
@@ -298,6 +319,7 @@ class LeadCreate(BaseModel):
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
     mobile: Optional[str] = None
+    whatsapp_number: Optional[str] = None
     email: Optional[str] = None
     course_interested: Optional[str] = None
     state: Optional[str] = None
@@ -1230,20 +1252,41 @@ async def check_duplicate_lead(
 async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
 
-    # Hard-block duplicates on mobile OR email
-    or_clauses = [{"mobile": data.mobile}]
+    # Validate WhatsApp number (strict +91XXXXXXXXXX) — falls back to mobile if blank
+    wa_number = _normalize_whatsapp_number(data.whatsapp_number) if data.whatsapp_number else None
+
+    # Normalize the mobile field for matching against existing leads' whatsapp_number
+    # (which is always stored in +91 format). The original mobile is preserved as-is.
+    try:
+        norm_mobile = _normalize_whatsapp_number(data.mobile)
+    except HTTPException:
+        norm_mobile = None  # Not Indian format — skip cross-check on mobile
+
+    # Hard-block duplicates on mobile (raw + normalized) OR whatsapp_number OR email
+    phone_values = {data.mobile}
+    if norm_mobile:
+        phone_values.add(norm_mobile)
+    if wa_number:
+        phone_values.add(wa_number)
+    phone_list = [v for v in phone_values if v]
+    or_clauses = [{"mobile": {"$in": phone_list}}, {"whatsapp_number": {"$in": phone_list}}]
     if data.email:
         or_clauses.append({"email": data.email})
     duplicate = await db.leads.find_one(
         {"organization_id": org_id, "$or": or_clauses},
-        {"name": 1, "mobile": 1, "email": 1, "lead_id": 1},
+        {"name": 1, "mobile": 1, "whatsapp_number": 1, "email": 1, "lead_id": 1},
     )
     if duplicate:
         duplicate["_id"] = str(duplicate["_id"])
+        match_on = (
+            "mobile" if duplicate.get("mobile") in phone_list
+            else "whatsapp_number" if duplicate.get("whatsapp_number") in phone_list
+            else "email"
+        )
         raise HTTPException(
             status_code=409,
             detail={
-                "message": f"Lead already exists with this {'mobile' if duplicate.get('mobile') == data.mobile else 'email'}",
+                "message": f"Lead already exists with this {match_on}",
                 "existing_lead": duplicate,
             },
         )
@@ -1261,6 +1304,7 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
         "lead_id": lead_id,
         "name": data.name,
         "mobile": data.mobile,
+        "whatsapp_number": wa_number,
         "email": data.email,
         "course_interested": data.course_interested,
         "state": data.state,
@@ -1357,6 +1401,7 @@ async def get_leads(
         query["$or"] = [
             {"name": {"$regex": search, "$options": "i"}},
             {"mobile": {"$regex": search, "$options": "i"}},
+            {"whatsapp_number": {"$regex": search, "$options": "i"}},
             {"email": {"$regex": search, "$options": "i"}}
         ]
     
@@ -1425,7 +1470,15 @@ async def update_lead(lead_id: str, data: LeadUpdate, current_user: dict = Depen
     org_id = ObjectId(current_user["organization_id"])
     lid = safe_object_id(lead_id, "lead_id")
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
-    
+
+    # Validate WhatsApp number if being changed (strict +91 format) or clear it if blank string
+    if "whatsapp_number" in update_data:
+        wn = update_data["whatsapp_number"]
+        if wn == "" or wn is None:
+            update_data["whatsapp_number"] = None
+        else:
+            update_data["whatsapp_number"] = _normalize_whatsapp_number(wn)
+
     if not update_data:
         raise HTTPException(status_code=400, detail="No data to update")
 

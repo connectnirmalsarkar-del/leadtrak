@@ -116,7 +116,7 @@ export default function LeadsPage() {
   const canRecordVoice = user && ['super_admin', 'org_admin', 'manager', 'counselor', 'telecaller'].includes(user.role);
 
   const [newLead, setNewLead] = useState({
-    name: '', mobile: '', email: '', course_interested: '', state: '', city: '',
+    name: '', mobile: '', whatsapp_number: '', wa_different: false, email: '', course_interested: '', state: '', city: '',
     lead_source: 'Website', assigned_to: '', status: 'New', temperature: 'warm',
     company_name: '', budget_range: '', preferred_date: '', travellers: '',
   });
@@ -211,12 +211,19 @@ export default function LeadsPage() {
 
   const handleAddLead = async () => {
     try {
-      await axios.post(`${API}/leads`, newLead);
+      // Strip the UI-only `wa_different` flag; send whatsapp_number only when toggled
+      const payload = { ...newLead };
+      const waDifferent = !!payload.wa_different;
+      delete payload.wa_different;
+      if (!waDifferent) {
+        payload.whatsapp_number = null;
+      }
+      await axios.post(`${API}/leads`, payload);
       toast.success('Lead added successfully');
       setShowAddDialog(false);
       setDuplicate(null);
       setNewLead({
-        name: '', mobile: '', email: '', course_interested: '', state: '', city: '',
+        name: '', mobile: '', whatsapp_number: '', wa_different: false, email: '', course_interested: '', state: '', city: '',
         lead_source: 'Website', assigned_to: '', status: 'New', temperature: 'warm',
         company_name: '', budget_range: '', preferred_date: '', travellers: '',
       });
@@ -229,7 +236,7 @@ export default function LeadsPage() {
         setDuplicate(detail);
         toast.error(detail.message || 'Duplicate lead');
       } else {
-        toast.error(typeof detail === 'string' ? detail : 'Failed to add lead');
+        toast.error(typeof detail === 'string' ? detail : (detail || 'Failed to add lead'));
       }
     }
   };
@@ -471,13 +478,34 @@ export default function LeadsPage() {
                 <Input value={newLead.name} onChange={(e) => setNewLead({...newLead, name: e.target.value})} data-testid="lead-name-input" />
               </div>
               <div className="space-y-2">
-                <Label>Mobile *</Label>
+                <Label>Mobile (Call) *</Label>
                 <Input
                   value={newLead.mobile}
                   onChange={(e) => setNewLead({...newLead, mobile: e.target.value})}
                   onBlur={checkForDuplicate}
+                  placeholder="+91 9830XXXXXX"
                   data-testid="lead-mobile-input"
                 />
+              </div>
+              <div className="space-y-2 col-span-2">
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 select-none">
+                  <input
+                    type="checkbox"
+                    checked={!!newLead.wa_different}
+                    onChange={(e) => setNewLead({ ...newLead, wa_different: e.target.checked, whatsapp_number: e.target.checked ? '' : '' })}
+                    data-testid="lead-wa-different-toggle"
+                  />
+                  <span>WhatsApp number is different from calling number</span>
+                </label>
+                {newLead.wa_different && (
+                  <Input
+                    value={newLead.whatsapp_number || ''}
+                    onChange={(e) => setNewLead({...newLead, whatsapp_number: e.target.value})}
+                    placeholder="+91 9830XXXXXX"
+                    className="mt-1"
+                    data-testid="lead-whatsapp-input"
+                  />
+                )}
               </div>
               <div className="space-y-2 col-span-2">
                 <Label>Email</Label>
@@ -621,7 +649,7 @@ export default function LeadsPage() {
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input
-            placeholder="Search by name, mobile, or email..."
+            placeholder="Search by name, mobile, WhatsApp, or email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -729,7 +757,15 @@ export default function LeadsPage() {
                       <div className="flex items-center gap-3 text-sm">
                         <Phone className="w-4 h-4 text-slate-400" />
                         <a href={`tel:${selectedLead.mobile}`} className="text-slate-900 hover:underline">{selectedLead.mobile}</a>
+                        <span className="text-[10px] uppercase tracking-wider text-slate-400">call</span>
                       </div>
+                      {selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile && (
+                        <div className="flex items-center gap-3 text-sm" data-testid="lead-whatsapp-number">
+                          <MessageSquare className="w-4 h-4 text-emerald-500" />
+                          <a href={`https://wa.me/${selectedLead.whatsapp_number.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-slate-900 hover:underline">{selectedLead.whatsapp_number}</a>
+                          <span className="text-[10px] uppercase tracking-wider text-emerald-600">whatsapp</span>
+                        </div>
+                      )}
                       {selectedLead.email && (
                         <div className="flex items-center gap-3 text-sm">
                           <Mail className="w-4 h-4 text-slate-400" />
@@ -749,7 +785,10 @@ export default function LeadsPage() {
                   <div className="flex gap-2 flex-wrap">
                     <Button
                       className="flex-1 min-w-[120px] bg-emerald-600 hover:bg-emerald-700 text-white"
-                      onClick={() => window.open(`https://wa.me/${selectedLead.mobile.replace(/\D/g, '')}`, '_blank')}
+                      onClick={() => {
+                        const waNum = (selectedLead.whatsapp_number || selectedLead.mobile || '').replace(/\D/g, '');
+                        window.open(`https://wa.me/${waNum}`, '_blank');
+                      }}
                       data-testid="whatsapp-lead-btn"
                     >
                       <MessageSquare className="w-4 h-4 mr-2" />
