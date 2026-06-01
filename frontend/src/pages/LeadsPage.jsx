@@ -97,6 +97,9 @@ export default function LeadsPage() {
   const STATUS_OPTIONS = (user && Array.isArray(user.lead_statuses) && user.lead_statuses.length > 0)
     ? user.lead_statuses
     : STATUS_OPTIONS_FALLBACK;
+  // Show industry-specific columns on the leads table (Company shown only
+  // for IT Software industry to keep the table compact for everyone else).
+  const showCompanyCol = (user?.industry === 'it_software');
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [services, setServices] = useState([]);
@@ -758,6 +761,9 @@ export default function LeadsPage() {
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">{t.lead} ID</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Name</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">{t.offering}</TableHead>
+              {showCompanyCol && (
+                <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Company</TableHead>
+              )}
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Source</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Temp</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Status</TableHead>
@@ -767,7 +773,7 @@ export default function LeadsPage() {
           <TableBody>
             {leads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-12 text-slate-500">
+                <TableCell colSpan={showCompanyCol ? 8 : 7} className="text-center py-12 text-slate-500">
                   No {t.leads.toLowerCase()} found. Click "Add {t.lead}" to get started.
                 </TableCell>
               </TableRow>
@@ -787,6 +793,11 @@ export default function LeadsPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-slate-700">{lead.course_interested}</TableCell>
+                  {showCompanyCol && (
+                    <TableCell className="text-sm text-slate-700" data-testid={`lead-company-${lead._id}`}>
+                      {lead.company_name || '—'}
+                    </TableCell>
+                  )}
                   <TableCell className="text-sm text-slate-600">{lead.lead_source}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={tempBadgeClass(lead.temperature)} data-testid={`temp-badge-${lead._id}`}>

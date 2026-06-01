@@ -5281,21 +5281,50 @@ async def export_leads_excel(current_user: dict = Depends(get_current_user)):
     wb = Workbook()
     ws = wb.active
     ws.title = "Leads"
-    headers = ["Lead ID", "Name", "Mobile", "Email", "Course", "Source", "Status", "State", "City", "Created"]
+    # Build headers dynamically — include industry-specific extras so the
+    # exported sheet matches what the user actually sees on screen.
+    industry = (await db.organizations.find_one({"_id": org_id}, {"industry": 1}) or {}).get("industry", "")
+    headers = [
+        "Lead ID", "Name", "Mobile", "WhatsApp", "Email", "Course/Service",
+        "Source", "Status", "Temperature", "State", "City",
+    ]
+    extra_keys = []  # per-industry column keys to append
+    if industry == "it_software":
+        headers += ["Company"]
+        extra_keys.append("company_name")
+    if industry == "admission_consultancy":
+        headers += ["Target College", "Course Fee", "Commission %"]
+        extra_keys += ["target_college", "course_fee", "commission_percent"]
+    if industry in ("real_estate", "travel"):
+        headers += ["Budget Range"]
+        extra_keys.append("budget_range")
+    if industry == "travel":
+        headers += ["Travel Date", "Travellers"]
+        extra_keys += ["preferred_date", "travellers"]
+    headers += ["Created"]
     ws.append(headers)
     for lead in leads:
-        ws.append([
+        row = [
             lead.get("lead_id", ""),
             lead.get("name", ""),
             lead.get("mobile", ""),
+            lead.get("whatsapp_number", ""),
             lead.get("email", ""),
             lead.get("course_interested", ""),
             lead.get("lead_source", ""),
             lead.get("status", ""),
+            lead.get("temperature", ""),
             lead.get("state", ""),
             lead.get("city", ""),
-            lead.get("created_at").strftime("%Y-%m-%d %H:%M") if isinstance(lead.get("created_at"), datetime) else str(lead.get("created_at", "")),
-        ])
+        ]
+        for k in extra_keys:
+            row.append(lead.get(k, ""))
+        row.append(
+            lead.get("created_at").strftime("%Y-%m-%d %H:%M")
+            if isinstance(lead.get("created_at"), datetime)
+            else str(lead.get("created_at", ""))
+        )
+        ws.append(row)
     
     buf = io.BytesIO()
     wb.save(buf)
