@@ -6,6 +6,11 @@ Each template provides:
 - terms: Terminology overrides used across UI labels
 - default_sources / default_lead_statuses / default_pipeline_stages:
   Seed data for a brand-new organization on that industry.
+- features: feature flags controlling industry-specific sidebar nav items.
+  Currently supported: {"demos": bool, "demo_label": str, "admissions": bool}.
+  When `demos` is False, the Demos nav item is hidden for that industry.
+  `demo_label` is the localized label shown for the Demos nav and screen
+  headings (e.g. "Counselling" for Education, "Site Visits" for Real Estate).
 """
 
 INDUSTRY_CONFIG = {
@@ -31,6 +36,7 @@ INDUSTRY_CONFIG = {
             "Not Interested", "Dropped", "Lost"
         ],
         "default_pipeline_stages": ["New Inquiry", "Counseling", "Documentation", "Fee Payment", "Enrolled"],
+        "features": {"demos": True, "demo_label": "Counselling", "admissions": True},
     },
     "it_software": {
         "label": "IT / Software",
@@ -53,6 +59,7 @@ INDUSTRY_CONFIG = {
             "Proposal Sent", "Negotiation", "Contract Sent", "Won", "Lost", "On Hold"
         ],
         "default_pipeline_stages": ["Discovery", "Qualification", "Demo", "Proposal", "Negotiation", "Closed Won"],
+        "features": {"demos": True, "demo_label": "Demos", "admissions": True},
     },
     "real_estate": {
         "label": "Real Estate",
@@ -75,6 +82,7 @@ INDUSTRY_CONFIG = {
             "Negotiation", "Token Paid", "Booked", "Cancelled", "Lost"
         ],
         "default_pipeline_stages": ["Inquiry", "Site Visit", "Negotiation", "Token Money", "Agreement", "Booked"],
+        "features": {"demos": True, "demo_label": "Site Visits", "admissions": True},
     },
     "healthcare": {
         "label": "Healthcare & Clinics",
@@ -93,6 +101,7 @@ INDUSTRY_CONFIG = {
         "default_sources": ["Website", "Google Ad", "Walk-in", "Referral", "Insurance Network", "WhatsApp"],
         "default_lead_statuses": ["New", "Contacted", "Phone Not Received", "Not Reachable", "Wrong Number", "Consulted", "Treatment Ongoing", "Completed", "Lost"],
         "default_pipeline_stages": ["Inquiry", "Consultation Booked", "Consulted", "Treatment Plan", "Treatment Started", "Completed"],
+        "features": {"demos": True, "demo_label": "Consultations", "admissions": True},
     },
     "insurance": {
         "label": "Insurance",
@@ -115,6 +124,7 @@ INDUSTRY_CONFIG = {
             "KYC Pending", "Underwriting", "Issued", "Rejected", "Lost"
         ],
         "default_pipeline_stages": ["Quote", "Proposal", "Medical/KYC", "Underwriting", "Issued"],
+        "features": {"demos": False, "demo_label": "Demos", "admissions": True},
     },
     "travel": {
         "label": "Travel & Tour",
@@ -137,6 +147,7 @@ INDUSTRY_CONFIG = {
             "Token Paid", "Confirmed", "Travelled", "Cancelled", "Lost"
         ],
         "default_pipeline_stages": ["Inquiry", "Itinerary", "Quote", "Negotiation", "Token", "Booked", "Travelled"],
+        "features": {"demos": False, "demo_label": "Demos", "admissions": True},
     },
     "retail": {
         "label": "Retail & E-commerce",
@@ -159,6 +170,7 @@ INDUSTRY_CONFIG = {
             "Ordered", "Shipped", "Delivered", "Returned", "Lost"
         ],
         "default_pipeline_stages": ["Inquiry", "Quote", "Order Placed", "Paid", "Shipped", "Delivered"],
+        "features": {"demos": False, "demo_label": "Demos", "admissions": True},
     },
     "fitness": {
         "label": "Fitness & Wellness",
@@ -181,6 +193,7 @@ INDUSTRY_CONFIG = {
             "Renewal Due", "Renewed", "Churned", "Lost"
         ],
         "default_pipeline_stages": ["Inquiry", "Trial Booked", "Trial Done", "Joined", "Active", "Renewed"],
+        "features": {"demos": True, "demo_label": "Trial Sessions", "admissions": True},
     },
     "admission_consultancy": {
         "label": "Admission Consultancy",
@@ -204,6 +217,7 @@ INDUSTRY_CONFIG = {
             "Not Interested", "Lost"
         ],
         "default_pipeline_stages": ["Inquiry", "Counseling", "Application", "Fee Payment", "Confirmed"],
+        "features": {"demos": True, "demo_label": "Counselling", "admissions": True},
     },
     "generic": {
         "label": "Generic Sales",
@@ -226,6 +240,7 @@ INDUSTRY_CONFIG = {
             "Negotiation", "Won", "Lost", "On Hold"
         ],
         "default_pipeline_stages": ["Lead", "Qualified", "Proposal", "Negotiation", "Won"],
+        "features": {"demos": True, "demo_label": "Demos", "admissions": True},
     },
 }
 
@@ -322,6 +337,18 @@ def get_terms(industry: str) -> dict:
 def get_lead_statuses(industry: str) -> list:
     """Return industry-specific lead status list (used in dropdowns)."""
     return get_industry(industry).get("default_lead_statuses", [])
+
+
+# Default feature flags applied when an industry config omits "features"
+_DEFAULT_FEATURES = {"demos": True, "demo_label": "Demos", "admissions": True}
+
+
+def get_features(industry: str) -> dict:
+    """Return industry-specific feature flags (demos, demo_label, admissions)."""
+    cfg = get_industry(industry)
+    feats = dict(_DEFAULT_FEATURES)
+    feats.update(cfg.get("features", {}))
+    return feats
 
 
 # Industry-specific widget capture fields

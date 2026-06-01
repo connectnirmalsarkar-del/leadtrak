@@ -526,3 +526,37 @@ Built a friction-less paid-signup path so visitors who already want to buy can s
 - Bare `/register` → unchanged "Start your free 14-day trial" flow
 - Landing pricing now shows toggle + dual CTAs per plan
 
+---
+
+## 2026-06-01 — Industry-Aware Sidebar Features ✅
+
+Each industry now controls which sidebar nav items appear + their localized labels through a new `features` block in `INDUSTRY_CONFIG`.
+
+**Industry → Demo nav mapping:**
+
+| Industry | Demos? | Sidebar label |
+|----------|--------|----------------|
+| Education | ✅ | Counselling |
+| Admission Consultancy | ✅ | Counselling |
+| IT/Software | ✅ | Demos |
+| Real Estate | ✅ | Site Visits |
+| Healthcare | ✅ | Consultations |
+| Fitness | ✅ | Trial Sessions |
+| Generic | ✅ | Demos |
+| Insurance | ❌ Hidden | — |
+| Travel | ❌ Hidden | — |
+| Retail | ❌ Hidden | — |
+
+**Files changed:**
+- `/app/backend/industry_config.py` — added `features` dict per industry (`demos`, `demo_label`, `admissions`). Added `get_features(industry)` helper with sensible defaults.
+- `/app/backend/server.py` — `get_current_user` now sets `user["features"]`; imports `get_features`.
+- `/app/frontend/src/components/layout/DashboardLayout.jsx` — `navItems` filtered by `user.features[item.feature]`. Demos label dynamically replaced with `user.features.demo_label` when present.
+- `/app/frontend/src/pages/DemosPage.jsx` — page heading, tabs, empty state, subtitle all use `demoLabel` from `user.features`.
+- `/app/frontend/public/service-worker.js` — `CACHE_NAME` bumped to `leadtrak-v30-industry-features`.
+
+**Verified:**
+- `/api/auth/me` (Education industry): `features={demos:True, demo_label:"Counselling", admissions:True}` ✅
+- Playwright trace: Sidebar shows "Counselling" instead of "Demos" for Education; page heading + tab + empty state all reflect the localized label.
+- All 10 industries verified via python REPL with the correct config (Insurance/Travel/Retail → demos:False).
+- Backend lint clean, frontend lint clean.
+

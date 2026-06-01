@@ -31,7 +31,7 @@ import cloudinary
 import cloudinary.uploader
 from openpyxl import Workbook
 from india_locations import INDIA_LOCATIONS
-from industry_config import INDUSTRY_CONFIG, SUPPORTED_INDUSTRIES, get_industry, get_terms, get_lead_statuses, get_widget_fields, list_industries, get_default_services
+from industry_config import INDUSTRY_CONFIG, SUPPORTED_INDUSTRIES, get_industry, get_terms, get_lead_statuses, get_widget_fields, list_industries, get_default_services, get_features
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -138,6 +138,7 @@ async def get_current_user(request: Request) -> dict:
         user["organization_name"] = org_name
         user["terminology"] = get_terms(industry_key)
         user["lead_statuses"] = get_lead_statuses(industry_key)
+        user["features"] = get_features(industry_key)
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")

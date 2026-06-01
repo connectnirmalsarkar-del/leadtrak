@@ -50,8 +50,8 @@ const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, testId: 'nav-dashboard' },
   { path: '/leads', labelKey: 'leads', fallback: 'Leads', icon: UserPlus, testId: 'nav-leads' },
   { path: '/followups', label: 'Follow-ups', icon: Calendar, testId: 'nav-followups' },
-  { path: '/demos', label: 'Demos', icon: Video, testId: 'nav-demos' },
-  { path: '/admissions', labelKey: 'conversions', fallback: 'Conversions', icon: Trophy, testId: 'nav-admissions' },
+  { path: '/demos', label: 'Demos', icon: Video, testId: 'nav-demos', feature: 'demos' },
+  { path: '/admissions', labelKey: 'conversions', fallback: 'Conversions', icon: Trophy, testId: 'nav-admissions', feature: 'admissions' },
   { path: '/tasks', label: 'Tasks', icon: CheckSquare, testId: 'nav-tasks' },
   { path: '/whatsapp-templates', label: 'WhatsApp', icon: MessageSquare, testId: 'nav-whatsapp' },
   { path: '/reports', label: 'Reports', icon: BarChart3, testId: 'nav-reports' },
@@ -219,10 +219,16 @@ export default function DashboardLayout({ children }) {
 
         <nav className="px-4 py-6 space-y-1 overflow-y-auto h-[calc(100vh-4rem)] custom-scrollbar">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 px-4 mb-2">Main</p>
-          {navItems.map((item) => {
+          {navItems
+            .filter((item) => !item.feature || user?.features?.[item.feature] !== false)
+            .map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
-            const labelText = item.labelKey ? (t[item.labelKey] || item.fallback) : item.label;
+            let labelText = item.labelKey ? (t[item.labelKey] || item.fallback) : item.label;
+            // Industry-specific override for the Demos nav (Counselling / Site Visits / etc.)
+            if (item.path === '/demos' && user?.features?.demo_label) {
+              labelText = user.features.demo_label;
+            }
             const showBadge = item.path === '/leads' && newLeadsCount > 0;
             return (
               <NavLink

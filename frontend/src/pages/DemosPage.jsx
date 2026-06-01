@@ -24,6 +24,8 @@ const statusBadge = (s) => {
 
 export default function DemosPage() {
   const { user } = useAuth();
+  const demoLabel = user?.features?.demo_label || 'Demos';
+  const demoLabelSingular = demoLabel.endsWith('s') ? demoLabel.slice(0, -1) : demoLabel;
   const [demos, setDemos] = useState([]);
   const [scope, setScope] = useState('mine');
   const [activeDemo, setActiveDemo] = useState(null);
@@ -61,13 +63,13 @@ export default function DemosPage() {
     <div className="space-y-6" data-testid="demos-page">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Pre-sales</p>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }}>Demos</h1>
-        <p className="text-sm text-slate-600 mt-1">Track product/service demos before deal close.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'Sora' }} data-testid="demos-heading">{demoLabel}</h1>
+        <p className="text-sm text-slate-600 mt-1">Track {demoLabel.toLowerCase()} before deal close.</p>
       </div>
 
       <Tabs value={scope} onValueChange={setScope}>
         <TabsList data-testid="demos-tabs">
-          <TabsTrigger value="mine" data-testid="demos-tab-mine">My Demos</TabsTrigger>
+          <TabsTrigger value="mine" data-testid="demos-tab-mine">My {demoLabel}</TabsTrigger>
           <TabsTrigger value="upcoming" data-testid="demos-tab-upcoming">Upcoming</TabsTrigger>
           <TabsTrigger value="completed" data-testid="demos-tab-completed">Completed</TabsTrigger>
           <TabsTrigger value="all" data-testid="demos-tab-all">All</TabsTrigger>
@@ -77,7 +79,7 @@ export default function DemosPage() {
             {demos.length === 0 ? (
               <div className="bg-white border border-dashed border-slate-200 rounded-xl p-12 text-center text-slate-500">
                 <Video className="w-8 h-8 mx-auto mb-3 text-slate-300" />
-                No demos in this view yet.
+                No {demoLabel.toLowerCase()} in this view yet.
               </div>
             ) : demos.map((d) => (
               <div key={d._id} className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4" data-testid={`demo-row-${d._id}`}>
