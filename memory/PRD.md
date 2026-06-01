@@ -446,3 +446,33 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - Server.py is now 5357 lines — refactor into `routes/auth.py`, `routes/billing.py`, `routes/leads.py`, `routes/platform.py`, `routes/webhooks.py`
 - Seed a second-organization user to enable cross-tenant tests
 
+
+
+---
+
+## 2026-06-01 — Pagination + User Avatar Upload (P1) ✅
+
+### Backend (`/app/backend/server.py`)
+- `GET /api/leads` now returns paginated shape `{items, total, page, limit, total_pages}` — params `page` (default 1), `limit` (default 50, max 500). Still honors `status`, `source`, `assigned_to`, `search`, RBAC.
+- `GET /api/followups` same paginated shape — params `filter_type`, `page`, `limit` (default 25, max 500). Defensive `try/except` around lead lookup to avoid crash on malformed `lead_id`.
+- `POST /api/uploads/avatar` (any role) — Cloudinary upload to `leadtrak/user-avatar/{org_id}/u_{user_id}`. JPG/PNG/WEBP only, ≤ 800 KB. 400×400 face-crop transformation + `quality=auto`. Persists `avatar_url` on the user doc.
+- `DELETE /api/uploads/avatar` — clears `avatar_url`.
+- `PUT /api/users/me` — logged-in user updates `name`, `mobile`, `avatar_url`. Validates non-empty name + length ≤ 100. **Route registered BEFORE `PUT /api/users/{user_id}`** so `/users/me` doesn't fall through to the admin route.
+
+### Frontend
+- `LeadsPage.jsx` — `page` / `totalLeads` / `totalPages` state; fetch sends `page`+`limit=50`; pagination footer (Prev / Page X of Y / Next) under the table. Header "leads total" now reads `totalLeads` from the response.
+- `FollowupsPage.jsx` — per-tab `pages` / `totals` / `totalPages` state; new `PaginationFooter` rendered inside each tab; tab counters now use server `totals`.
+- `AdmissionsPage.jsx` — `/api/leads` call now passes `limit:500` and reads `.items` (with array fallback).
+- `ProfilePage.jsx` — rewritten: avatar circle with camera button + Remove link, editable name + mobile + Save profile button. Calls `checkAuth()` after every successful change so DashboardLayout topbar avatar/name refresh instantly.
+- `DashboardLayout.jsx` — `Avatar` now renders `<AvatarImage src={user.avatar_url} />` with initials fallback.
+- `service-worker.js` — `CACHE_NAME` bumped to `leadtrak-v27-pagination-avatar`.
+
+### Verification
+- Backend: iteration_13 — 18/18 pytest pass (pagination shape, filters, RBAC, avatar mime/size validation, route ordering, `auth/me` reflects avatar).
+- Frontend: manual Playwright trace — `PUT /api/users/me` save updates topbar AND profile heading in the same session without reload (testing agent had flagged this as MEDIUM but the live trace proved it works).
+- `curl` end-to-end: 55 seeded leads paginated correctly across 3 pages of 20 (page 1: 20, page 2: 20, page 3: 15, page 4: 0). All test data cleaned up.
+
+### Known follow-ups (non-blocking)
+- Email service (Resend) integration — user deferred.
+- Twilio WhatsApp real send — user deferred.
+- Splitting `server.py` (now 5963 lines) into routers — deferred.
