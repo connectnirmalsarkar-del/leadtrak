@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API, useAuth } from '@/context/AuthContext';
 import { useTerminology } from '@/lib/terminology';
-import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare, Upload, Download, ArrowRightLeft, AlertCircle, Clock, Activity, Video } from 'lucide-react';
+import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare, Upload, Download, ArrowRightLeft, AlertCircle, Clock, Activity, Video, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -103,6 +103,8 @@ export default function LeadsPage() {
   const [selectedLead, setSelectedLead] = useState(null);
   const [showFollowupDialog, setShowFollowupDialog] = useState(false);
   const [showLogCallDialog, setShowLogCallDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editLead, setEditLead] = useState(null);  // copy of selectedLead being edited
   const [logCall, setLogCall] = useState({ summary: '', voice: null, new_status: '', schedule_next: false, next_date: '', next_time: '10:00', next_remarks: '' });
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showDemoDialog, setShowDemoDialog] = useState(false);
@@ -324,6 +326,36 @@ export default function LeadsPage() {
       setActiveTab('timeline');
     } catch (e) {
       toast.error('Failed to add follow-up');
+    }
+  };
+
+
+  const handleSaveEdit = async () => {
+    if (!editLead) return;
+    try {
+      const payload = {
+        name: editLead.name,
+        mobile: editLead.mobile,
+        whatsapp_number: editLead.wa_different ? (editLead.whatsapp_number || null) : null,
+        email: editLead.email || null,
+        course_interested: editLead.course_interested,
+        state: editLead.state || null,
+        city: editLead.city || null,
+        lead_source: editLead.lead_source,
+        status: editLead.status,
+        temperature: editLead.temperature,
+        remarks: editLead.remarks || '',
+      };
+      const { data } = await axios.put(`${API}/leads/${editLead._id}`, payload);
+      toast.success('Lead updated');
+      setShowEditDialog(false);
+      setEditLead(null);
+      setSelectedLead((cur) => (cur ? { ...cur, ...payload } : cur));
+      fetchLeads();
+      setTimelineRefresh((r) => r + 1);
+      return data;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update lead');
     }
   };
 
@@ -734,7 +766,21 @@ export default function LeadsPage() {
               <SheetHeader className="pr-10">
                 <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                   <span className="text-xs font-mono text-slate-500">{selectedLead.lead_id}</span>
-                  <Badge variant="outline" className={`${statusBadgeClass(selectedLead.status)} flex-shrink-0`}>{selectedLead.status}</Badge>
+                  <div className="flex items-center gap-2">
+                    {['super_admin', 'org_admin', 'manager'].includes(user?.role) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
+                        data-testid="edit-lead-btn"
+                        title="Edit lead details"
+                      >
+                        <Pencil className="w-3 h-3 mr-1" /> Edit
+                      </Button>
+                    )}
+                    <Badge variant="outline" className={`${statusBadgeClass(selectedLead.status)} flex-shrink-0`}>{selectedLead.status}</Badge>
+                  </div>
                 </div>
                 <SheetTitle className="text-xl sm:text-2xl pr-2" style={{fontFamily: 'Sora'}}>{selectedLead.name}</SheetTitle>
                 <SheetDescription>{selectedLead.course_interested}</SheetDescription>
@@ -1064,6 +1110,107 @@ export default function LeadsPage() {
               data-testid="submit-log-call-btn"
             >
               Log Call
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============ EDIT LEAD DIALOG (admin / org_admin / manager) ============ */}
+      <Dialog open={showEditDialog} onOpenChange={(o) => { if (!o) { setShowEditDialog(false); setEditLead(null); } }}>
+        <DialogContent className="max-w-2xl max-h-[88vh] p-0 overflow-hidden flex flex-col gap-0" data-testid="edit-lead-dialog">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b border-slate-100 flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2"><Pencil className="w-5 h-5 text-violet-600" /> Edit Lead</DialogTitle>
+            <DialogDescription>
+              {editLead?.lead_id && <span className="font-mono text-xs mr-2">{editLead.lead_id}</span>}
+              Update contact, source, status or remarks. Changes log in the timeline.
+            </DialogDescription>
+          </DialogHeader>
+          {editLead && (
+            <div className="overflow-y-auto flex-1 px-6 py-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Name *</Label>
+                  <Input value={editLead.name || ''} onChange={(e) => setEditLead({ ...editLead, name: e.target.value })} data-testid="edit-name-input" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Mobile (Call) *</Label>
+                  <Input value={editLead.mobile || ''} onChange={(e) => setEditLead({ ...editLead, mobile: e.target.value })} placeholder="+91 9830XXXXXX" data-testid="edit-mobile-input" />
+                </div>
+                <div className="space-y-2 col-span-1 sm:col-span-2">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!editLead.wa_different}
+                      onChange={(e) => setEditLead({ ...editLead, wa_different: e.target.checked, whatsapp_number: e.target.checked ? (editLead.whatsapp_number || '') : '' })}
+                      data-testid="edit-wa-different-toggle"
+                    />
+                    <span>WhatsApp number is different from calling number</span>
+                  </label>
+                  {editLead.wa_different && (
+                    <Input value={editLead.whatsapp_number || ''} onChange={(e) => setEditLead({ ...editLead, whatsapp_number: e.target.value })} placeholder="+91 9830XXXXXX" data-testid="edit-whatsapp-input" />
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input value={editLead.email || ''} onChange={(e) => setEditLead({ ...editLead, email: e.target.value })} placeholder="lead@example.com" data-testid="edit-email-input" />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t.serviceLabel || 'Course Interested'} *</Label>
+                  <Input value={editLead.course_interested || ''} onChange={(e) => setEditLead({ ...editLead, course_interested: e.target.value })} data-testid="edit-course-input" />
+                </div>
+                <div className="space-y-2">
+                  <Label>State</Label>
+                  <Input value={editLead.state || ''} onChange={(e) => setEditLead({ ...editLead, state: e.target.value })} data-testid="edit-state-input" />
+                </div>
+                <div className="space-y-2">
+                  <Label>City</Label>
+                  <Input value={editLead.city || ''} onChange={(e) => setEditLead({ ...editLead, city: e.target.value })} data-testid="edit-city-input" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Lead Source</Label>
+                  <Select value={editLead.lead_source || ''} onValueChange={(v) => setEditLead({ ...editLead, lead_source: v })}>
+                    <SelectTrigger data-testid="edit-source-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {['Manual Add', 'Website', 'Facebook Ad', 'Google Ad', 'Instagram', 'Referral', 'CSV Import', 'Walk-in', 'WhatsApp', 'Other'].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={editLead.status || ''} onValueChange={(v) => setEditLead({ ...editLead, status: v })}>
+                    <SelectTrigger data-testid="edit-status-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Temperature</Label>
+                  <Select value={editLead.temperature || 'warm'} onValueChange={(v) => setEditLead({ ...editLead, temperature: v })}>
+                    <SelectTrigger data-testid="edit-temperature-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hot">🔥 Hot</SelectItem>
+                      <SelectItem value="warm">☀️ Warm</SelectItem>
+                      <SelectItem value="cold">❄️ Cold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 col-span-1 sm:col-span-2">
+                  <Label>Remarks</Label>
+                  <Textarea value={editLead.remarks || ''} onChange={(e) => setEditLead({ ...editLead, remarks: e.target.value })} rows={2} placeholder="Any notes about this lead…" data-testid="edit-remarks-input" />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="px-6 py-4 border-t border-slate-100 flex-shrink-0">
+            <Button variant="outline" onClick={() => { setShowEditDialog(false); setEditLead(null); }} data-testid="cancel-edit-btn">Cancel</Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={!editLead?.name?.trim() || !editLead?.mobile?.trim()}
+              className="bg-violet-700 hover:bg-violet-800 disabled:bg-slate-300 text-white"
+              data-testid="save-edit-btn"
+            >
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
