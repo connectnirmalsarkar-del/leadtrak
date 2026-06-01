@@ -30,6 +30,7 @@ import {
   Activity,
   Sparkles,
   AlertTriangle,
+  UserCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -435,6 +436,10 @@ export default function DashboardLayout({ children }) {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/profile')} data-testid="menu-profile">
+                  <UserCircle className="w-4 h-4 mr-2" />
+                  My Profile
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/settings')} data-testid="menu-settings">
                   <Settings className="w-4 h-4 mr-2" />
                   Settings

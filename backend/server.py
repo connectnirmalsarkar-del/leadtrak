@@ -2594,6 +2594,71 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
     
     return {"message": "User deleted successfully"}
 
+
+# ==================== Password Management ====================
+class ChangeOwnPasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@api_router.post("/auth/change-password")
+async def change_own_password(data: ChangeOwnPasswordRequest, current_user: dict = Depends(get_current_user)):
+    """Any logged-in user can change their own password by providing the current password."""
+    user = await db.users.find_one({"_id": ObjectId(current_user["id"])})
+    if not user or not verify_password(data.current_password, user.get("password_hash", "")):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    if data.current_password == data.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from current password")
+    await db.users.update_one(
+        {"_id": ObjectId(current_user["id"])},
+        {"$set": {"password_hash": hash_password(data.new_password), "password_updated_at": datetime.now(timezone.utc)}},
+    )
+    return {"message": "Password changed successfully"}
+
+
+class AdminResetPasswordRequest(BaseModel):
+    new_password: str
+
+
+@api_router.post("/users/{user_id}/reset-password")
+async def admin_reset_user_password(user_id: str, data: AdminResetPasswordRequest, current_user: dict = Depends(get_current_user)):
+    """Admin / Org Admin / Super Admin can reset any team member's password without knowing the current one.
+    Logs an audit entry. Sub-admins cannot reset other admins (lateral privilege escalation prevented)."""
+    if current_user["role"] not in ("super_admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can reset other users' passwords")
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    org_id = ObjectId(current_user["organization_id"])
+    uid = safe_object_id(user_id, "user_id")
+    target = await db.users.find_one({"_id": uid, "organization_id": org_id}, {"role": 1, "email": 1, "name": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found in your organization")
+
+    # Org Admin cannot reset another Org Admin or Super Admin
+    if current_user["role"] == "org_admin" and target.get("role") in ("org_admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="You cannot reset another admin's password")
+
+    await db.users.update_one(
+        {"_id": uid},
+        {"$set": {"password_hash": hash_password(data.new_password), "password_updated_at": datetime.now(timezone.utc)}},
+    )
+    # Audit log
+    await db.password_reset_audit.insert_one({
+        "reset_by_id": ObjectId(current_user["id"]),
+        "reset_by_email": current_user["email"],
+        "target_user_id": uid,
+        "target_email": target["email"],
+        "target_role": target.get("role"),
+        "organization_id": org_id,
+        "reset_at": datetime.now(timezone.utc),
+    })
+    logger.warning(f"PASSWORD RESET: {current_user['email']} reset password for {target['email']} (role: {target.get('role')})")
+    return {"message": f"Password reset for {target.get('name')}"}
+
+
 # ==================== Organization Routes ====================
 @api_router.get("/organization")
 async def get_organization(current_user: dict = Depends(get_current_user)):

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API } from '@/context/AuthContext';
-import { Plus, Trash2, User } from 'lucide-react';
+import { Plus, Trash2, User, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -75,6 +75,22 @@ export default function UsersPage() {
       toast.error('Failed to delete user');
     }
   };
+
+  const handleResetPassword = async (user) => {
+    const newPwd = window.prompt(`Reset password for ${user.name} (${user.email})\n\nEnter a new password (minimum 8 characters):`);
+    if (!newPwd) return;
+    if (newPwd.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+    try {
+      await axios.post(`${API}/users/${user._id}/reset-password`, { new_password: newPwd });
+      toast.success(`Password reset for ${user.name}. Share the new password securely.`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reset password');
+    }
+  };
+
 
   const closeDialog = () => {
     setShowAddDialog(false);
@@ -221,11 +237,24 @@ export default function UsersPage() {
                       {new Date(u.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      {u.role !== 'super_admin' && (
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(u._id)} data-testid={`delete-user-${u._id}`}>
-                          <Trash2 className="w-4 h-4 text-red-600" />
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {u.role !== 'super_admin' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleResetPassword(u)}
+                            data-testid={`reset-password-${u._id}`}
+                            title="Reset password"
+                          >
+                            <KeyRound className="w-4 h-4 text-violet-700" />
+                          </Button>
+                        )}
+                        {u.role !== 'super_admin' && (
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(u._id)} data-testid={`delete-user-${u._id}`}>
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
