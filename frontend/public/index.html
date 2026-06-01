@@ -24,7 +24,8 @@
           if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
               navigator.serviceWorker.register('/service-worker.js').then(function(reg){
-                // Check for updates every time the page loads
+                // Check for updates on every page load so newly-deployed
+                // service workers are picked up without manual refresh.
                 if (reg && typeof reg.update === 'function') { try { reg.update(); } catch(e){} }
                 if (reg) {
                   reg.addEventListener('updatefound', function(){
@@ -32,26 +33,23 @@
                     if (!nw) return;
                     nw.addEventListener('statechange', function(){
                       if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-                        // New worker is ready – ask it to take over
+                        // A previously-controlled tab now has a new worker
+                        // ready. Activate it silently so the next navigation
+                        // picks up the new bundles — without flashing the
+                        // current page.
                         try { nw.postMessage({ type: 'SKIP_WAITING' }); } catch(e){}
                       }
                     });
                   });
                 }
               }).catch(function(){});
-              // When the new SW activates, reload the page exactly once to pick up new CSS/JS
-              var reloaded = false;
-              navigator.serviceWorker.addEventListener('message', function(event){
-                if (event.data && event.data.type === 'SW_UPDATED' && !reloaded) {
-                  reloaded = true;
-                  window.location.reload();
-                }
-              });
-              navigator.serviceWorker.addEventListener('controllerchange', function(){
-                if (reloaded) return;
-                reloaded = true;
-                window.location.reload();
-              });
+              // NOTE: We intentionally do NOT reload on `controllerchange`
+              // or `SW_UPDATED` messages. Reloading caused a visible
+              // double-load (old cached bundle → reload → fresh bundle)
+              // every time a new service worker activated. Since the SW's
+              // fetch handler is network-first for HTML/JS/CSS, the very
+              // next navigation already serves the fresh bundle without
+              // any reload flash.
             });
           }
         </script>

@@ -94,9 +94,12 @@ const statusBadgeClass = (status) => {
 export default function LeadsPage() {
   const t = useTerminology();
   const { user } = useAuth();
+  // Use industry-specific statuses from /auth/me. While user is still
+  // loading (null), keep this empty so we don't briefly flash a generic
+  // fallback list that's different from the real one.
   const STATUS_OPTIONS = (user && Array.isArray(user.lead_statuses) && user.lead_statuses.length > 0)
     ? user.lead_statuses
-    : STATUS_OPTIONS_FALLBACK;
+    : (user ? STATUS_OPTIONS_FALLBACK : []);
   // Show industry-specific columns on the leads table (Company shown only
   // for IT Software industry to keep the table compact for everyone else).
   const showCompanyCol = (user?.industry === 'it_software');
