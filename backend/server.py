@@ -314,6 +314,12 @@ class LeadCreate(BaseModel):
     budget_range: Optional[str] = None
     preferred_date: Optional[str] = None
     travellers: Optional[str] = None
+    # Admission consultancy industry extras
+    target_college: Optional[str] = None
+    target_college_id: Optional[str] = None  # references colleges._id
+    course_fee: Optional[float] = None
+    admission_year: Optional[str] = None
+    commission_pct: Optional[float] = None
     remarks: Optional[str] = None
 
 class LeadUpdate(BaseModel):
@@ -332,6 +338,12 @@ class LeadUpdate(BaseModel):
     budget_range: Optional[str] = None
     preferred_date: Optional[str] = None
     travellers: Optional[str] = None
+    # Admission consultancy industry extras
+    target_college: Optional[str] = None
+    target_college_id: Optional[str] = None
+    course_fee: Optional[float] = None
+    admission_year: Optional[str] = None
+    commission_pct: Optional[float] = None
     remarks: Optional[str] = None
 
 class FollowupCreate(BaseModel):
@@ -1317,6 +1329,12 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
         "budget_range": data.budget_range,
         "preferred_date": data.preferred_date,
         "travellers": data.travellers,
+        # Admission consultancy fields
+        "target_college": data.target_college,
+        "target_college_id": data.target_college_id,
+        "course_fee": data.course_fee,
+        "admission_year": data.admission_year,
+        "commission_pct": data.commission_pct,
         "remarks": data.remarks or "",
         "organization_id": org_id,
         "created_by": current_user["id"],
@@ -3108,6 +3126,85 @@ async def impersonate_org_admin(org_id: str, response: Response, current_user: d
         },
         "expires_in": 1800,
     }
+
+
+# ==================== Colleges (Admission Consultancy Industry) ====================
+class CollegeCreate(BaseModel):
+    name: str
+    city: Optional[str] = None
+    state: Optional[str] = None
+    type: Optional[str] = None  # e.g. "Government" / "Private" / "Deemed"
+    courses_offered: Optional[List[str]] = None  # list of course names
+    notes: Optional[str] = None
+
+
+@api_router.get("/colleges")
+async def list_colleges(current_user: dict = Depends(get_current_user)):
+    """List all colleges saved by the current organization."""
+    org_id = ObjectId(current_user["organization_id"])
+    rows = await db.colleges.find({"organization_id": org_id, "active": {"$ne": False}}).sort("name", 1).to_list(500)
+    for r in rows:
+        r["_id"] = str(r["_id"])
+        r["id"] = r["_id"]
+        r.pop("organization_id", None)
+    return rows
+
+
+@api_router.post("/colleges")
+async def create_college(data: CollegeCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only managers and admins can add colleges")
+    org_id = ObjectId(current_user["organization_id"])
+    name = (data.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="College name is required")
+    # Prevent duplicates within the same org (case-insensitive)
+    existing = await db.colleges.find_one({"organization_id": org_id, "name": {"$regex": f"^{name}$", "$options": "i"}})
+    if existing:
+        raise HTTPException(status_code=409, detail=f"College '{name}' already exists")
+    doc = {
+        "name": name,
+        "city": (data.city or "").strip() or None,
+        "state": (data.state or "").strip() or None,
+        "type": (data.type or "").strip() or None,
+        "courses_offered": data.courses_offered or [],
+        "notes": (data.notes or "").strip() or None,
+        "active": True,
+        "organization_id": org_id,
+        "created_by": current_user["id"],
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = await db.colleges.insert_one(doc)
+    doc["_id"] = str(result.inserted_id)
+    doc["id"] = doc["_id"]
+    doc.pop("organization_id", None)
+    return doc
+
+
+@api_router.put("/colleges/{college_id}")
+async def update_college(college_id: str, data: CollegeCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only managers and admins can edit colleges")
+    org_id = ObjectId(current_user["organization_id"])
+    cid = safe_object_id(college_id, "college_id")
+    update = {k: v for k, v in data.model_dump().items() if v is not None}
+    res = await db.colleges.update_one({"_id": cid, "organization_id": org_id}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="College not found")
+    return {"message": "College updated"}
+
+
+@api_router.delete("/colleges/{college_id}")
+async def delete_college(college_id: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ("super_admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can delete colleges")
+    org_id = ObjectId(current_user["organization_id"])
+    cid = safe_object_id(college_id, "college_id")
+    # Soft-delete (mark inactive)
+    res = await db.colleges.update_one({"_id": cid, "organization_id": org_id}, {"$set": {"active": False}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="College not found")
+    return {"message": "College deleted"}
 
 
 # ==================== Razorpay: Public Config + Payment Links + Webhook ====================

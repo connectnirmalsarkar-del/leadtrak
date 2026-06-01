@@ -175,6 +175,28 @@ INDUSTRY_CONFIG = {
         ],
         "default_pipeline_stages": ["Inquiry", "Trial Booked", "Trial Done", "Joined", "Active", "Renewed"],
     },
+    "admission_consultancy": {
+        "label": "Admission Consultancy",
+        "icon": "Award",
+        "tagline": "Counsel students into colleges & universities for commission",
+        "terms": {
+            "lead": "Student", "leads": "Students",
+            "contact": "Student", "contacts": "Students",
+            "conversion": "Admission Confirmed", "conversions": "Admissions Confirmed",
+            "offering": "Target College", "offerings": "Target Colleges",
+            "conversion_verb": "Admitted",
+            "conversion_action": "Confirm Admission",
+            "pipeline": "Admission Pipeline",
+            "revenue_label": "Commission Earned",
+        },
+        "default_sources": ["Walk-in", "Reference", "Facebook Ad", "Education Fair", "College Tie-up", "Direct Inquiry", "WhatsApp"],
+        "default_lead_statuses": [
+            "New Inquiry", "Counseling Booked", "Counseling Done", "Application Submitted",
+            "Documents Pending", "Fee Payment", "Admission Confirmed",
+            "Not Interested", "Lost"
+        ],
+        "default_pipeline_stages": ["Inquiry", "Counseling", "Application", "Fee Payment", "Confirmed"],
+    },
     "generic": {
         "label": "Generic Sales",
         "icon": "Briefcase",
@@ -211,6 +233,15 @@ DEFAULT_SERVICES = {
         {"name": "PGDM", "category": "Master's", "base_price": 300000, "min_price": 275000},
         {"name": "MCA", "category": "Master's", "base_price": 180000, "min_price": 160000},
         {"name": "BTech CSE", "category": "Bachelor's", "base_price": 200000, "min_price": 180000},
+    ],
+    "admission_consultancy": [
+        {"name": "MBBS", "category": "Medical", "base_price": 1500000, "min_price": 1200000},
+        {"name": "BDS", "category": "Medical", "base_price": 800000, "min_price": 600000},
+        {"name": "BTech CSE", "category": "Engineering", "base_price": 350000, "min_price": 280000},
+        {"name": "BTech Mechanical", "category": "Engineering", "base_price": 280000, "min_price": 220000},
+        {"name": "MBA", "category": "Management", "base_price": 600000, "min_price": 450000},
+        {"name": "BBA", "category": "Management", "base_price": 250000, "min_price": 180000},
+        {"name": "BA LLB", "category": "Law", "base_price": 200000, "min_price": 150000},
     ],
     "it_software": [
         {"name": "Website Development", "category": "Web", "base_price": 50000, "min_price": 35000},
@@ -288,6 +319,12 @@ def get_lead_statuses(industry: str) -> list:
 INDUSTRY_WIDGET_FIELDS = {
     "education": [
         {"name": "course_interested", "label": "Course Interested In", "type": "service-select", "required": False, "placeholder": "e.g. B.Tech CSE, MBA, NEET Prep"},
+    ],
+    "admission_consultancy": [
+        {"name": "course_interested", "label": "Course Aspiring For", "type": "service-select", "required": False, "placeholder": "e.g. MBBS, MBA, Engineering"},
+        {"name": "target_college", "label": "Preferred College / University", "type": "college-select", "required": False, "placeholder": "Pick a college"},
+        {"name": "course_fee", "label": "Course Fee Quoted (₹)", "type": "number", "required": False, "placeholder": "200000"},
+        {"name": "admission_year", "label": "Admission Year / Intake", "type": "text", "required": False, "placeholder": "2026 or Fall 2026"},
     ],
     "it_software": [
         {"name": "company_name", "label": "Company Name", "type": "text", "required": False, "placeholder": "Your organization"},
