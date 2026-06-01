@@ -3802,6 +3802,98 @@ async def migrate_invalid_lead_statuses(current_user: dict = Depends(get_current
     }
 
 
+@api_router.post("/platform/wipe-org-data")
+async def platform_wipe_org_data(
+    org_name: str,
+    confirm: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """⚠️ DESTRUCTIVE — Super Admin only one-time wipe of all lead-related data
+    for an organization matched by name (case-insensitive, exact match).
+
+    Deletes from collections:
+      - leads
+      - followups
+      - admissions
+      - demos
+      - lead_events
+      - call_logs
+      - duplicate_dismissals (lead-scoped)
+      - whatsapp_messages (lead-scoped)
+      - notifications (lead-scoped)
+
+    Does NOT touch: organizations, users, services, sources, billing/invoices, integrations.
+
+    Safety:
+      - super_admin role check
+      - explicit `confirm` token must equal `YES_DELETE_<UPPERCASE_ORG_NAME>`
+        e.g. for Ncriptech the token is `YES_DELETE_NCRIPTECH`
+      - matches org by case-insensitive exact name; rejects if zero or >1 match.
+    """
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+
+    norm = (org_name or "").strip()
+    if not norm:
+        raise HTTPException(status_code=400, detail="org_name is required")
+
+    expected_token = f"YES_DELETE_{norm.upper().replace(' ', '_')}"
+    if confirm != expected_token:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Confirmation token mismatch. Expected exactly: {expected_token}",
+        )
+
+    # Find org by case-insensitive EXACT name match
+    matches = await db.organizations.find(
+        {"name": {"$regex": f"^{re.escape(norm)}$", "$options": "i"}}
+    ).to_list(10)
+    if len(matches) == 0:
+        raise HTTPException(status_code=404, detail=f"No organization found with name '{norm}'")
+    if len(matches) > 1:
+        ids = [str(m["_id"]) for m in matches]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Multiple organizations match '{norm}': {ids}. Be more specific.",
+        )
+    org = matches[0]
+    org_id = org["_id"]
+    org_label = org.get("name", str(org_id))
+
+    # Collect lead IDs (string + ObjectId variants) so we can also wipe scoped child docs
+    lead_ids_str: List[str] = []
+    lead_ids_oid: List[ObjectId] = []
+    async for ld in db.leads.find({"organization_id": org_id}, {"_id": 1}):
+        lead_ids_oid.append(ld["_id"])
+        lead_ids_str.append(str(ld["_id"]))
+
+    counts = {}
+    # Org-scoped collections (delete by organization_id)
+    for col_name in ("leads", "followups", "admissions", "demos", "lead_events", "call_logs"):
+        res = await db[col_name].delete_many({"organization_id": org_id})
+        counts[col_name] = res.deleted_count
+
+    # Lead-scoped collections (delete by lead_id IN the wiped lead list)
+    if lead_ids_str or lead_ids_oid:
+        lead_filter = {"lead_id": {"$in": lead_ids_str + lead_ids_oid}}
+        for col_name in ("duplicate_dismissals", "whatsapp_messages"):
+            res = await db[col_name].delete_many(lead_filter)
+            counts[col_name] = res.deleted_count
+        # Notifications can reference lead_id too — only delete lead-related ones
+        notif_filter = {"organization_id": org_id, "data.lead_id": {"$in": lead_ids_str}}
+        res = await db.notifications.delete_many(notif_filter)
+        counts["notifications"] = res.deleted_count
+    else:
+        counts.update({"duplicate_dismissals": 0, "whatsapp_messages": 0, "notifications": 0})
+
+    return {
+        "message": f"Wiped all lead data for '{org_label}' (id={org_id})",
+        "organization_name": org_label,
+        "organization_id": str(org_id),
+        "deleted_counts": counts,
+    }
+
+
 @api_router.post("/platform/manual-payment")
 async def platform_manual_payment(data: ManualPaymentRequest, current_user: dict = Depends(get_current_user)):
     """Super Admin: manually mark an offline payment (Cash / Cheque / Bank Transfer)."""
