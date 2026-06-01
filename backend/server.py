@@ -1344,6 +1344,18 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
 
     # Auto round-robin if no assignee specified
     assignee = data.assigned_to
+    if assignee:
+        # Safety: only counselors/telecallers can hold leads. Reject attempts to
+        # assign to managers/admins (which would cause "lead assigned to you"
+        # notifications to land in the wrong inbox).
+        assignee_user = await db.users.find_one({"_id": ObjectId(assignee)})
+        if not assignee_user:
+            raise HTTPException(status_code=400, detail="Assigned user not found")
+        if assignee_user.get("role") not in ("counselor", "telecaller"):
+            raise HTTPException(
+                status_code=400,
+                detail="Leads can only be assigned to counselors or telecallers."
+            )
     if not assignee:
         assignee = await pick_round_robin_assignee(org_id)
 
@@ -1590,6 +1602,18 @@ async def update_lead(lead_id: str, data: LeadUpdate, current_user: dict = Depen
     if not current:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    # Safety: never let an admin/manager become an "assigned_to" via Edit
+    if update_data.get("assigned_to"):
+        new_aid = update_data["assigned_to"]
+        new_user = await db.users.find_one({"_id": ObjectId(new_aid)})
+        if not new_user:
+            raise HTTPException(status_code=400, detail="Assignee not found")
+        if new_user.get("role") not in ("counselor", "telecaller"):
+            raise HTTPException(
+                status_code=400,
+                detail="Leads can only be assigned to counselors or telecallers."
+            )
+
     result = await db.leads.update_one(
         {"_id": lid, "organization_id": org_id},
         {"$set": update_data}
@@ -1703,6 +1727,11 @@ async def transfer_lead(lead_id: str, data: LeadTransfer, current_user: dict = D
     new_assignee = await db.users.find_one({"_id": new_aid, "organization_id": org_id})
     if not new_assignee:
         raise HTTPException(status_code=400, detail="New assignee not found in your organization")
+    if new_assignee.get("role") not in ("counselor", "telecaller"):
+        raise HTTPException(
+            status_code=400,
+            detail="Leads can only be transferred to counselors or telecallers."
+        )
 
     previous_assignee_id = lead.get("assigned_to")
     previous_assignee = None

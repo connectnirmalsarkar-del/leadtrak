@@ -707,11 +707,14 @@ export default function LeadsPage() {
               <div className="space-y-2">
                 <Label>Assigned To</Label>
                 <Select value={newLead.assigned_to} onValueChange={(v) => setNewLead({...newLead, assigned_to: v})}>
-                  <SelectTrigger data-testid="lead-assigned-select"><SelectValue placeholder="Select user" /></SelectTrigger>
+                  <SelectTrigger data-testid="lead-assigned-select"><SelectValue placeholder="Auto-assign (round robin)" /></SelectTrigger>
                   <SelectContent>
-                    {users.map(u => <SelectItem key={u._id} value={u._id}>{u.name} ({u.role})</SelectItem>)}
+                    {users
+                      .filter((u) => ['counselor', 'telecaller'].includes(u.role))
+                      .map(u => <SelectItem key={u._id} value={u._id}>{u.name} ({u.role})</SelectItem>)}
                   </SelectContent>
                 </Select>
+                <p className="text-[10px] text-slate-500">Leave empty to auto-assign via round-robin</p>
               </div>
               <div className="space-y-2 col-span-2">
                 <Label>Temperature</Label>
@@ -1097,7 +1100,7 @@ export default function LeadsPage() {
                 <SelectTrigger data-testid="transfer-to-select"><SelectValue placeholder="Select team member" /></SelectTrigger>
                 <SelectContent>
                   {users
-                    .filter((u) => u._id !== selectedLead?.assigned_to)
+                    .filter((u) => u._id !== selectedLead?.assigned_to && ['counselor', 'telecaller'].includes(u.role))
                     .map((u) => (
                       <SelectItem key={u._id} value={u._id} data-testid={`transfer-option-${u._id}`}>
                         {u.name} <span className="text-slate-400">({u.role.replace('_', ' ')})</span>
