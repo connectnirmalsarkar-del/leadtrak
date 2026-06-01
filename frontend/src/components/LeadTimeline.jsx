@@ -13,7 +13,9 @@ import {
   Mic,
   Video,
   CheckCircle2,
+  Send,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const formatDate = (iso) => {
   const d = new Date(iso);
@@ -161,6 +163,9 @@ const EventBody = ({ event }) => {
 export default function LeadTimeline({ leadId, refreshKey }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [comment, setComment] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [innerRefreshKey, setInnerRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!leadId) return;
@@ -170,7 +175,51 @@ export default function LeadTimeline({ leadId, refreshKey }) {
       .then(({ data }) => setEvents(data))
       .catch(() => setEvents([]))
       .finally(() => setLoading(false));
-  }, [leadId, refreshKey]);
+  }, [leadId, refreshKey, innerRefreshKey]);
+
+  const handlePost = async () => {
+    const text = comment.trim();
+    if (!text) return;
+    setPosting(true);
+    try {
+      await axios.post(`${API}/leads/${leadId}/comments`, { note: text });
+      toast.success('Comment posted');
+      setComment('');
+      setInnerRefreshKey((k) => k + 1);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to post comment');
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const Composer = (
+    <div className="border border-slate-200 rounded-lg p-3 mb-5 bg-slate-50/40" data-testid="comment-composer">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center gap-1.5">
+        <StickyNote className="w-3 h-3" /> Add comment to timeline
+      </p>
+      <textarea
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        placeholder="Write an instruction or note for the team handling this lead…"
+        className="w-full text-sm border border-slate-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 min-h-[60px] resize-y"
+        rows={2}
+        maxLength={2000}
+        data-testid="comment-input"
+      />
+      <div className="flex items-center justify-between mt-2">
+        <span className="text-[10px] text-slate-400">{comment.length}/2000 · The assigned counselor gets notified</span>
+        <button
+          onClick={handlePost}
+          disabled={posting || !comment.trim()}
+          className="inline-flex items-center gap-1.5 bg-violet-700 hover:bg-violet-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-xs font-semibold px-3 py-1.5 rounded-md transition-colors"
+          data-testid="post-comment-btn"
+        >
+          <Send className="w-3 h-3" /> {posting ? 'Posting…' : 'Post'}
+        </button>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return <div className="py-8 text-center text-sm text-slate-400" data-testid="timeline-loading">Loading timeline…</div>;
@@ -178,15 +227,19 @@ export default function LeadTimeline({ leadId, refreshKey }) {
 
   if (events.length === 0) {
     return (
-      <div className="py-10 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg" data-testid="timeline-empty">
-        <CircleDot className="w-6 h-6 mx-auto mb-2 text-slate-300" />
-        No activity yet. Events will appear here as work happens on this lead.
-      </div>
+      <>
+        {Composer}
+        <div className="py-10 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg" data-testid="timeline-empty">
+          <CircleDot className="w-6 h-6 mx-auto mb-2 text-slate-300" />
+          No activity yet. Events will appear here as work happens on this lead.
+        </div>
+      </>
     );
   }
 
   return (
     <div className="space-y-0" data-testid="lead-timeline">
+      {Composer}
       {events.map((e, idx) => {
         const meta = EVENT_META[e.event_type] || { icon: CircleDot, color: 'slate', title: e.event_type };
         const Icon = meta.icon;

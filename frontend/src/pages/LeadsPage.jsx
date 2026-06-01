@@ -138,6 +138,22 @@ export default function LeadsPage() {
     fetchStates();
   }, [filterStatus, search]);
 
+  // Deep-link: open a specific lead from notification or report drill-down
+  useEffect(() => {
+    if (leads.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const wantId = params.get('leadId');
+    const wantTab = params.get('tab');
+    if (!wantId) return;
+    const lead = leads.find((l) => l._id === wantId);
+    if (lead) {
+      setSelectedLead(lead);
+      if (wantTab) setActiveTab(wantTab);
+      // Clean the URL so a refresh doesn't keep re-opening
+      window.history.replaceState({}, '', '/leads');
+    }
+  }, [leads]);
+
   const [states, setStates] = useState([]);
   const [citiesForState, setCitiesForState] = useState([]);
 

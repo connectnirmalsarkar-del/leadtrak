@@ -147,6 +147,9 @@ export default function DashboardLayout({ children }) {
       navigate('/leads');
     } else if (notif.type === 'task_assigned') {
       navigate('/tasks');
+    } else if (notif.type === 'lead_comment') {
+      // Deep-link to the lead's detail view (Leads page reads ?leadId from URL)
+      navigate(notif.lead_id ? `/leads?leadId=${notif.lead_id}` : '/leads');
     }
   };
 

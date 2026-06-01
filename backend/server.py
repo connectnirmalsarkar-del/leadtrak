@@ -1590,7 +1590,93 @@ async def get_lead_timeline(lead_id: str, current_user: dict = Depends(get_curre
             e["created_at"] = e["created_at"].isoformat()
     return events
 
-    return events
+
+# ==================== Lead Comments (note_added in timeline) ====================
+class LeadCommentCreate(BaseModel):
+    note: str
+    notify_assignee: bool = True  # send notification to the assigned counselor
+
+
+@api_router.post("/leads/{lead_id}/comments")
+async def add_lead_comment(lead_id: str, data: LeadCommentCreate, current_user: dict = Depends(get_current_user)):
+    """Add an internal comment on a lead's timeline.
+
+    Use case: Manager/Admin commenting on a counselor's lead ("Please follow up after EMI offer
+    discussion", "This lead requires senior intervention", etc.). The assigned counselor sees
+    the comment in the lead timeline AND in their notifications panel.
+    """
+    note = (data.note or "").strip()
+    if not note:
+        raise HTTPException(status_code=400, detail="Comment cannot be empty")
+    if len(note) > 2000:
+        raise HTTPException(status_code=400, detail="Comment is too long (max 2000 chars)")
+
+    org_id = ObjectId(current_user["organization_id"])
+    lid = safe_object_id(lead_id, "lead_id")
+    lead = await db.leads.find_one({"_id": lid, "organization_id": org_id}, {"name": 1, "assigned_to": 1})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Counselors/telecallers may only comment on leads assigned to them
+    if current_user["role"] in ("counselor", "telecaller") and lead.get("assigned_to") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You can only comment on leads assigned to you")
+
+    await log_lead_event(
+        lid,
+        "note_added",
+        {"note": note, "from_role": current_user.get("role")},
+        current_user,
+        org_id,
+    )
+
+    # Notify the assigned counselor if the commenter is someone else
+    if data.notify_assignee and lead.get("assigned_to") and lead["assigned_to"] != current_user["id"]:
+        await db.notifications.insert_one({
+            "user_id": lead["assigned_to"],
+            "message": f"{current_user.get('name')} commented on lead '{lead.get('name')}': {note[:120]}{'…' if len(note) > 120 else ''}",
+            "type": "lead_comment",
+            "lead_id": str(lid),
+            "read": False,
+            "organization_id": org_id,
+            "created_at": datetime.now(timezone.utc),
+        })
+
+    return {"message": "Comment added", "lead_id": str(lid)}
+
+
+@api_router.get("/reports/caller-leads/{user_id}")
+async def report_caller_leads(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Drill-down: every lead currently assigned to the given counselor/telecaller/manager.
+    Used by the Reports page so managers can review a specific caller's full pipeline.
+    """
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only managers and admins can view caller leads")
+    org_id = ObjectId(current_user["organization_id"])
+    # Validate target user exists in same org
+    target_uid = safe_object_id(user_id, "user_id")
+    target = await db.users.find_one({"_id": target_uid, "organization_id": org_id}, {"name": 1, "role": 1, "email": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found in your organization")
+
+    leads = await db.leads.find(
+        {"organization_id": org_id, "assigned_to": str(target_uid)},
+        {
+            "name": 1, "mobile": 1, "email": 1, "status": 1, "lead_id": 1,
+            "source": 1, "temperature": 1, "created_at": 1, "updated_at": 1,
+        },
+    ).sort("created_at", -1).to_list(500)
+
+    for lead in leads:
+        lead["_id"] = str(lead["_id"])
+        for k in ("created_at", "updated_at"):
+            if isinstance(lead.get(k), datetime):
+                lead[k] = lead[k].isoformat()
+
+    return {
+        "user": {"id": str(target_uid), "name": target.get("name"), "role": target.get("role"), "email": target.get("email")},
+        "leads": leads,
+        "total": len(leads),
+    }
 
 
 # ==================== Demos (Phase 8) ====================

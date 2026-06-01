@@ -3,7 +3,7 @@ import axios from 'axios';
 import { API } from '@/context/AuthContext';
 import {
   Download, IndianRupee, Users, TrendingUp, Target, Trophy, Activity, UserCheck,
-  ArrowUpRight, ArrowDownRight, Phone, Award, Layers,
+  ArrowUpRight, ArrowDownRight, Phone, Award, Layers, X, MessageSquare, Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { useNavigate } from 'react-router-dom';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
@@ -42,6 +44,7 @@ const StatCard = ({ icon: Icon, label, value, sublabel, color = 'violet' }) => {
 };
 
 export default function ReportsPage() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState('overview');
   const [summary, setSummary] = useState(null);
   const [callerRows, setCallerRows] = useState([]);
@@ -49,6 +52,25 @@ export default function ReportsPage() {
   const [callerSearch, setCallerSearch] = useState('');
   const [callerRoleFilter, setCallerRoleFilter] = useState('all');
   const [callerSort, setCallerSort] = useState('converted');
+
+  // Drill-down: caller leads dialog
+  const [drillCaller, setDrillCaller] = useState(null); // { id, name }
+  const [drillLeads, setDrillLeads] = useState([]);
+  const [drillLoading, setDrillLoading] = useState(false);
+
+  const openCallerDrill = async (userId, name) => {
+    setDrillCaller({ id: userId, name });
+    setDrillLeads([]);
+    setDrillLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/reports/caller-leads/${userId}`);
+      setDrillLeads(data.leads || []);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not load leads for this caller');
+    } finally {
+      setDrillLoading(false);
+    }
+  };
 
   const load = async () => {
     try {
@@ -281,7 +303,14 @@ export default function ReportsPage() {
                             {idx + 1}
                           </span>
                         )}
-                        {r.name}
+                        <button
+                          onClick={() => openCallerDrill(r.user_id, r.name)}
+                          className="text-violet-700 hover:text-violet-900 hover:underline text-left"
+                          data-testid={`caller-drill-${r.user_id}`}
+                          title="Click to see all leads assigned to this caller"
+                        >
+                          {r.name}
+                        </button>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -388,6 +417,76 @@ export default function ReportsPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* ============== CALLER LEADS DRILL-DOWN ============== */}
+      <Dialog open={!!drillCaller} onOpenChange={(o) => { if (!o) { setDrillCaller(null); setDrillLeads([]); } }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col" data-testid="caller-leads-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-violet-600" />
+              Leads assigned to {drillCaller?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Click any lead to open its 360° timeline and add a comment for {drillCaller?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto">
+            {drillLoading ? (
+              <div className="py-12 text-center text-sm text-slate-400">Loading leads…</div>
+            ) : drillLeads.length === 0 ? (
+              <div className="py-12 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg">
+                No leads currently assigned to this user.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Lead</TableHead>
+                    <TableHead>Mobile</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Temp.</TableHead>
+                    <TableHead className="text-right">Open</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {drillLeads.map((l) => (
+                    <TableRow key={l._id} data-testid={`drill-lead-${l._id}`}>
+                      <TableCell className="font-medium text-slate-900">{l.name}</TableCell>
+                      <TableCell className="text-xs text-slate-600 font-mono">{l.mobile}</TableCell>
+                      <TableCell className="text-xs text-slate-500">{l.source || '—'}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[10px]">{l.status || 'New'}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`text-[10px] capitalize ${
+                          l.temperature === 'hot' ? 'bg-red-50 text-red-700 border-red-200' :
+                          l.temperature === 'warm' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                          'bg-slate-50 text-slate-600 border-slate-200'
+                        }`}>{l.temperature || '—'}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => navigate(`/leads?leadId=${l._id}&tab=timeline`)}
+                          data-testid={`open-comment-${l._id}`}
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 mr-1" /> Comment
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+          <DialogFooter className="pt-2 border-t border-slate-100">
+            <span className="text-xs text-slate-500 mr-auto">{drillLeads.length} lead{drillLeads.length !== 1 ? 's' : ''}</span>
+            <Button variant="ghost" onClick={() => { setDrillCaller(null); setDrillLeads([]); }}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
