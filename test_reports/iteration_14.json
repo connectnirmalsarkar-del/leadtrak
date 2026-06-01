@@ -1,0 +1,68 @@
+{
+  "summary": "Iteration 14 — Comprehensive end-to-end health check after multiple feature additions (pagination, avatar upload, call-flow statuses, direct-pay signup, industry-aware sidebar, PWA badge, password eye toggle, caller self-assign, RBAC tightening). Backend pytest: 30/32 PASSED, 1 SKIPPED (industry widget field check is verified inline via lead-create response), 1 FAILED (empty-name validation missing on POST /api/leads). Frontend smoke: login eye-toggle works, direct-pay register banner + CTA render correctly with '₹3,538.82' and 'Create account & pay', sidebar shows 'Counselling' for Education industry, Add Lead dialog opens with all 15 statuses, Subscription page loads Plans/Invoices, Profile page exposes 3 password fields. Logout button is inside a dropdown menu (couldn't auto-click without nav, not a defect).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/leads",
+        "issue": "Empty name (\"name\": \"\") is accepted and a lead is created with name='' — review request explicitly states 'Backend rejects empty name (Pydantic)'. Pydantic model is not enforcing min_length>=1 / strip+validate on name. Frontend toast guards it but backend MUST too (curl bypass possible).",
+        "priority": "HIGH"
+      },
+      {
+        "endpoint": "GET /api/leads (list + detail) and GET /api/users",
+        "issue": "Response includes raw MongoDB ObjectId field '_id' AND no canonical 'id' field. /api/auth/login does normalize to 'id', but listing endpoints expose '_id'. Violates code-review rule 'MongoDB ObjectId — Always exclude mongodb objectId _id'. Frontends compensate by reading _id || lead_id.",
+        "priority": "MEDIUM"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/industries/{key}",
+        "issue": "Public industry config endpoint does not include the inline widget field definitions (company_name/designation). Frontend probably relies on the post-login /api/auth/me payload or hard-coded mapping. If admins want to fetch widget schema before signup, this endpoint should expose `widget_fields` (company_name, designation for it_software)."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Topbar/profile",
+        "issues": [
+          "Stale-auth-context issue from iteration 13 still applies — after PUT /api/users/me or avatar upload, topbar avatar/name do not refresh until full re-login. (Not retested this iteration but unfixed per main agent action items.)"
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration14_health_check.py",
+    "/app/test_reports/pytest/iteration_14.xml"
+  ],
+  "action_items": [
+    "Enforce non-empty `name` on POST /api/leads via Pydantic (e.g., constr(strip_whitespace=True, min_length=1) or @validator stripping then asserting len>0). Same for PUT /api/leads/{id}.",
+    "Strip MongoDB `_id` from all list/detail responses (or rename to `id` consistently). At minimum exclude `_id` from /api/leads, /api/leads/{id}, /api/users, /api/followups items.",
+    "Refresh useAuth user context after PUT /api/users/me + avatar upload/delete (carryover from iter 13).",
+    "Optional: surface industry widget fields in /api/industries/{key}.features so frontend never hard-codes company_name/designation."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py is still 5000+ lines — split into modules (auth, leads, users, billing, uploads, locations, industry).",
+    "Lead-assignment RBAC is implemented correctly on both POST and PUT — verified 400 with 'Leads can only be assigned to counselors or telecallers'.",
+    "Counselor self-add: backend correctly self-assigns + suppresses 'assigned to you' notification — verified.",
+    "Counselor RBAC scoping on /api/leads, /api/dashboard/stats, /api/followups — verified.",
+    "Industry feature flags (demos / demo_label / admissions) returned correctly for all 8 industries via /api/industries/{key} — verified.",
+    "Razorpay LIVE key returned by /api/razorpay/config (rzp_live_*) — verified.",
+    "City/state endpoints accessible to counselor role (36 states, 186 WB cities) — verified.",
+    "Login + register + profile have correct data-testid='*-password-input-toggle' on all eye-toggle buttons — verified."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration14_health_check.py (new)"
+  ],
+  "success_rate": {
+    "backend": "94% (30/32 passed, 1 skipped, 1 real failure)",
+    "frontend": "~90% (all critical flows render; direct-pay banner + CTA confirmed, eye toggles work, sidebar industry-aware)"
+  },
+  "test_credentials": "From /app/memory/test_credentials.md — Super Admin admin@educationcrm.com / Admin@123; Org Admin orgadmin@demo.com / Demo@123; Manager manager@demo.com / Demo@123; Counselor counselor@demo.com / Demo@123; Telecaller telecaller@demo.com / Demo@123.",
+  "seed_data_creation": "Created handful of TEST_HC_* leads via pytest (random mobile numbers per run to avoid 409 duplicate-mobile collisions). All cleaned up via DELETE /api/leads/{_id}. No persistent test data left.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Auth, RBAC, pagination, industry config, locations, badge, subscription, Razorpay LIVE key — all green. Real bug: backend accepts empty `name` on lead create — needs Pydantic constraint. Secondary: `_id` leak in /api/leads and /api/users responses. Frontend stale-auth from iter 13 still open. UI smoke is happy-path only; no deep flow tests (drill-down columns for IT Software, Excel export columns, InvoiceDialog content) ran in browser this iteration — backend endpoints exist but per-industry org switching wasn't done. Direct-pay register page banner + CTA + plan toggle verified visually.",
+  "rca of the issue": "Empty-name accepted: the LeadCreate Pydantic model likely uses `name: str` without `Field(..., min_length=1)` or a strip_whitespace validator. Mitigation: change to `name: constr(strip_whitespace=True, min_length=1)` (or pydantic v2 `Annotated[str, StringConstraints(min_length=1, strip_whitespace=True)]`). _id leak: GET endpoints serialize the raw mongo document; add `{'_id': 0}` projection or pop('_id', None) before returning. Frontend hot-fix: continue to read `_id || lead_id` until backend cleanup."
+}
