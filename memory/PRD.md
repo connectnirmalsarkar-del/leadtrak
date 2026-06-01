@@ -738,3 +738,43 @@ Earlier the only feedback after a successful subscription payment was a toast no
 POST https://leadtrak.in/api/platform/migrate-invalid-lead-statuses
 (Super admin cookie auth)
 ```
+
+---
+
+## Custom Lead Status Configuration (Feb 2026)
+
+**Request:** Enterprise-grade lead status customization — admin can add/edit/reorder/remove the status list from Settings instead of being locked to industry defaults.
+
+**Implementation:**
+
+### Backend (`/app/backend/server.py`)
+- New helper `get_effective_lead_statuses(org_id)` — returns org's custom `lead_statuses` field if set, else industry defaults.
+- `validate_lead_status_for_org()` now uses the effective list — custom statuses are accepted automatically across all endpoints (LeadCreate, LeadUpdate, log-call, followup-complete, demo-complete).
+- `/auth/login` and `get_current_user` now serve the effective list to the frontend.
+- Three new endpoints:
+  - `GET /api/organization/lead-statuses` — returns `{industry, industry_defaults, custom, is_custom, effective}` for the Settings UI.
+  - `PUT /api/organization/lead-statuses` — admin saves custom list. Validates: max 64 chars per status; de-dupe; **safety net** blocks removal of any status currently in use by an existing lead (returns explicit error listing missing in-use statuses).
+  - `POST /api/organization/lead-statuses/reset` — clears the custom override → reverts to industry defaults. Same safety net.
+
+### Frontend (`/app/frontend/src/pages/SettingsPage.jsx`)
+- New "Lead Statuses" tab (4th tab) with `ListChecks` icon.
+- UI features:
+  - Industry badge + "Custom" / "Industry Default" indicator pill.
+  - Add status input (with Enter-to-add, max 64 chars).
+  - Numbered list with each row showing: position number, status name, ↑/↓ reorder buttons, 🗑 remove button.
+  - "Save" and "Reset to defaults" buttons (Reset disabled when already on defaults).
+  - Help panel explaining behaviour, safety net, single-source-of-truth.
+- Auto-refreshes the auth user on save so all other open tabs see the new list immediately.
+
+**SW cache:** bumped to `leadtrak-v60-custom-lead-statuses`.
+
+**Verified end-to-end:**
+- ✅ Org Admin (Bright Future) Settings → Lead Statuses tab → 16 industry-default education statuses pre-loaded.
+- ✅ Added "Aamar Custom Status" → list grew to 17, reordered to position 15 via up arrows, saved.
+- ✅ "Custom" badge appeared.
+- ✅ Counselor's `/auth/me` immediately returned the new 17-item list with "Aamar Custom Status" at position 15.
+- ✅ `PUT /api/leads/{id}` with `{status: "Aamar Custom Status"}` → 200 success (validation passed against custom list).
+- ✅ Safety net: tried to save a smaller list missing "Admission Done" (in-use) → 400 with clear error.
+- ✅ Reset cleared the custom override successfully.
+
+**Result:** Every industry-default list + any user-added custom statuses now flow through a single source of truth. Future industries can be onboarded without code changes by configuring the list per organization.

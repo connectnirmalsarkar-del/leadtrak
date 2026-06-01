@@ -137,7 +137,11 @@ async def get_current_user(request: Request) -> dict:
         user["industry"] = industry_key
         user["organization_name"] = org_name
         user["terminology"] = get_terms(industry_key)
-        user["lead_statuses"] = get_lead_statuses(industry_key)
+        # Effective list = org's custom override (if any) else industry defaults
+        if org_id:
+            user["lead_statuses"] = await get_effective_lead_statuses(org_id)
+        else:
+            user["lead_statuses"] = get_lead_statuses(industry_key)
         user["features"] = get_features(industry_key)
         return user
     except jwt.ExpiredSignatureError:
@@ -471,15 +475,39 @@ async def _get_industry_for_org(org_id: ObjectId) -> str:
     return (org or {}).get("industry", "education")
 
 
+async def get_effective_lead_statuses(org_id: ObjectId) -> List[str]:
+    """Return the org's CUSTOM lead_statuses if the admin has configured a
+    non-empty list — else fall back to the industry's default list. Single
+    source of truth for every form (Lead, Call Log, Follow-up, Demo).
+    """
+    org = await db.organizations.find_one(
+        {"_id": org_id},
+        {"industry": 1, "lead_statuses": 1},
+    ) or {}
+    custom = org.get("lead_statuses")
+    if isinstance(custom, list) and len(custom) > 0:
+        # Strip + de-dupe while preserving order
+        seen = set()
+        cleaned = []
+        for s in custom:
+            v = (s or "").strip()
+            if v and v not in seen:
+                cleaned.append(v)
+                seen.add(v)
+        if cleaned:
+            return cleaned
+    return get_lead_statuses(org.get("industry") or "education")
+
+
 async def validate_lead_status_for_org(org_id: ObjectId, new_status: str) -> str:
-    """Raise HTTP 400 if `new_status` is not part of the org's industry status list.
+    """Raise HTTP 400 if `new_status` is not part of the org's effective status list.
     Returns the (trimmed) status string on success.
     """
     if new_status is None:
         return new_status
-    industry = await _get_industry_for_org(org_id)
-    valid = get_lead_statuses(industry)
+    valid = await get_effective_lead_statuses(org_id)
     if new_status not in valid:
+        industry = await _get_industry_for_org(org_id)
         raise HTTPException(
             status_code=400,
             detail=f"Invalid lead status '{new_status}' for {industry} industry. Allowed: {', '.join(valid)}",
@@ -1051,7 +1079,7 @@ async def login(data: LoginRequest, request: Request, response: Response):
         # Include industry-derived data so the frontend has everything it
         # needs to render the dashboard correctly on the first paint (no
         # need to wait for a follow-up /auth/me call).
-        "lead_statuses": get_lead_statuses(industry),
+        "lead_statuses": (await get_effective_lead_statuses(org_id)) if org_id else get_lead_statuses(industry),
         "features": get_features(industry),
     }
 
@@ -3081,6 +3109,116 @@ async def update_organization(data: OrganizationUpdate, current_user: dict = Dep
         raise HTTPException(status_code=404, detail="Organization not found")
     
     return {"message": "Organization updated successfully"}
+
+
+# ==================== Lead Status Management (Admin Customization) ====================
+class LeadStatusesUpdate(BaseModel):
+    statuses: List[str]
+
+
+@api_router.get("/organization/lead-statuses")
+async def get_org_lead_statuses(current_user: dict = Depends(get_current_user)):
+    """Return the org's current EFFECTIVE lead-status list (custom override
+    if set, else industry defaults) along with metadata so the Settings UI
+    can show both lists side-by-side.
+    """
+    org_id = ObjectId(current_user["organization_id"])
+    org = await db.organizations.find_one(
+        {"_id": org_id},
+        {"industry": 1, "lead_statuses": 1},
+    ) or {}
+    industry = org.get("industry") or "education"
+    industry_defaults = get_lead_statuses(industry)
+    custom = org.get("lead_statuses")
+    is_custom = isinstance(custom, list) and len(custom) > 0
+    effective = await get_effective_lead_statuses(org_id)
+    return {
+        "industry": industry,
+        "industry_defaults": industry_defaults,
+        "custom": custom if is_custom else None,
+        "is_custom": is_custom,
+        "effective": effective,
+    }
+
+
+@api_router.put("/organization/lead-statuses")
+async def update_org_lead_statuses(data: LeadStatusesUpdate, current_user: dict = Depends(get_current_user)):
+    """Org admin / super admin: save the org's CUSTOM lead-status list. Saving
+    an empty list resets to industry defaults (same as /reset endpoint).
+
+    Safety net: every existing in-use status (i.e. statuses currently on any
+    of the org's leads) must remain in the new list — else we'd orphan rows.
+    Returns the list of in-use statuses missing from the proposed list when
+    the validation fails so the UI can show a clear error.
+    """
+    if current_user["role"] not in ("super_admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Strip + de-dupe while preserving order
+    seen = set()
+    cleaned: List[str] = []
+    for s in data.statuses:
+        v = (s or "").strip()
+        if not v:
+            continue
+        if len(v) > 64:
+            raise HTTPException(status_code=400, detail=f"Status '{v[:20]}…' is too long (max 64 chars)")
+        if v in seen:
+            continue
+        cleaned.append(v)
+        seen.add(v)
+
+    org_id = ObjectId(current_user["organization_id"])
+
+    if not cleaned:
+        # Empty → reset to industry defaults
+        await db.organizations.update_one({"_id": org_id}, {"$unset": {"lead_statuses": ""}})
+        return {"message": "Lead statuses reset to industry defaults", "is_custom": False}
+
+    # Validation: every currently in-use status must remain in the new list
+    in_use = await db.leads.distinct("status", {"organization_id": org_id})
+    missing = [s for s in in_use if s and s not in seen]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Cannot remove status(es) currently in use: {', '.join(missing)}. "
+                f"Move those leads to a different status first, or keep these in the list."
+            ),
+        )
+
+    await db.organizations.update_one(
+        {"_id": org_id},
+        {"$set": {"lead_statuses": cleaned}},
+    )
+    return {"message": "Lead statuses updated", "is_custom": True, "count": len(cleaned)}
+
+
+@api_router.post("/organization/lead-statuses/reset")
+async def reset_org_lead_statuses(current_user: dict = Depends(get_current_user)):
+    """Clear the custom override → revert to industry defaults. Same safety
+    net as PUT: blocked if any lead is on a status not present in the
+    industry defaults.
+    """
+    if current_user["role"] not in ("super_admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    org_id = ObjectId(current_user["organization_id"])
+    industry = await _get_industry_for_org(org_id)
+    industry_defaults = set(get_lead_statuses(industry))
+    in_use = await db.leads.distinct("status", {"organization_id": org_id})
+    missing = [s for s in in_use if s and s not in industry_defaults]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Cannot reset — lead(s) currently use custom status(es): {', '.join(missing)}. "
+                f"Move those leads to industry-default statuses first."
+            ),
+        )
+
+    await db.organizations.update_one({"_id": org_id}, {"$unset": {"lead_statuses": ""}})
+    return {"message": "Lead statuses reset to industry defaults", "is_custom": False}
 
 
 # ==================== Organization Logo Upload (Cloudinary) ====================
