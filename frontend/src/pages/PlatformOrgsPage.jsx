@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Plus, Users, UserPlus, Trash2, PauseCircle, PlayCircle,
-  IndianRupee, Hourglass, ShoppingCart, Wallet, CalendarPlus, Link2, Copy, ExternalLink, UserCog, FileText,
+  IndianRupee, Hourglass, ShoppingCart, Wallet, CalendarPlus, Link2, Copy, ExternalLink, UserCog, FileText, Database, AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -87,6 +87,79 @@ export default function PlatformOrgsPage() {
   const [linkResult, setLinkResult] = useState(null); // { short_url, amount, expires_at, ... }
   const [linkLoading, setLinkLoading] = useState(false);
   const [razorpayConfigured, setRazorpayConfigured] = useState(true); // assume yes until checked
+
+  // Wipe data dialog (Super Admin destructive section-wise delete)
+  const [wipeDialog, setWipeDialog] = useState(null); // { id, name }
+  const [wipeCounts, setWipeCounts] = useState(null); // { leads, followups, ... }
+  const [wipeSections, setWipeSections] = useState({}); // {leads: true, followups: false, ...}
+  const [wipeConfirmName, setWipeConfirmName] = useState('');
+  const [wipeAck, setWipeAck] = useState(false);
+  const [wipeLoading, setWipeLoading] = useState(false);
+
+  const openWipeDialog = async (org) => {
+    setWipeDialog({ id: org.id, name: org.name });
+    setWipeCounts(null);
+    setWipeSections({ leads: false, followups: false, admissions: false, demos: false, call_logs: false, whatsapp: false, notifications: false, all: false });
+    setWipeConfirmName('');
+    setWipeAck(false);
+    try {
+      const { data } = await axios.get(`${API}/platform/organizations/${org.id}/data-counts`);
+      setWipeCounts(data.counts);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not load data counts');
+    }
+  };
+
+  const toggleSection = (key) => {
+    setWipeSections((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      // "all" implies every section; flipping all toggles all others
+      if (key === 'all' && next.all) {
+        return { leads: true, followups: true, admissions: true, demos: true, call_logs: true, whatsapp: true, notifications: true, all: true };
+      }
+      if (key === 'all' && !next.all) {
+        return { leads: false, followups: false, admissions: false, demos: false, call_logs: false, whatsapp: false, notifications: false, all: false };
+      }
+      // Any individual toggle off → all=false; everything on → all=true
+      const others = ['leads','followups','admissions','demos','call_logs','whatsapp','notifications'];
+      const allOn = others.every((k) => next[k]);
+      next.all = allOn;
+      return next;
+    });
+  };
+
+  const executeWipe = async () => {
+    if (!wipeDialog) return;
+    const chosen = Object.entries(wipeSections).filter(([k, v]) => v && k !== 'all').map(([k]) => k);
+    const isAll = wipeSections.all;
+    if (!isAll && chosen.length === 0) {
+      toast.error('Pick at least one section to wipe');
+      return;
+    }
+    if (wipeConfirmName.trim() !== wipeDialog.name) {
+      toast.error('Type the organization name exactly to confirm');
+      return;
+    }
+    if (!wipeAck) {
+      toast.error('Tick the acknowledgement checkbox');
+      return;
+    }
+    const token = `YES_DELETE_${wipeDialog.id.toUpperCase().replace(/\s/g, '_')}`;
+    const sectionsParam = isAll ? 'all' : chosen.join(',');
+    setWipeLoading(true);
+    try {
+      const params = new URLSearchParams({ org_id: wipeDialog.id, confirm: token, sections: sectionsParam });
+      const { data } = await axios.post(`${API}/platform/wipe-org-data?${params.toString()}`);
+      const deletedTotal = Object.values(data.deleted_counts || {}).reduce((a, b) => a + b, 0);
+      toast.success(`Wiped ${deletedTotal} record(s) from ${data.organization_name}`);
+      setWipeDialog(null);
+      await fetchOrgs();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Wipe failed');
+    } finally {
+      setWipeLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (user && user.role !== 'super_admin') {
@@ -502,6 +575,9 @@ export default function PlatformOrgsPage() {
                         </button>
                         <button onClick={() => toggleStatus(o.id)} className="text-slate-400 hover:text-violet-700" title={o.status === 'suspended' ? 'Activate' : 'Suspend'} data-testid={`toggle-${o.id}`}>
                           {o.status === 'suspended' ? <PlayCircle className="w-4 h-4" /> : <PauseCircle className="w-4 h-4" />}
+                        </button>
+                        <button onClick={() => openWipeDialog(o)} className="text-slate-400 hover:text-orange-600" title="Wipe tenant data (section-wise)" data-testid={`wipe-data-${o.id}`}>
+                          <Database className="w-4 h-4" />
                         </button>
                         <button onClick={() => handleDelete(o.id, o.name)} className="text-slate-400 hover:text-red-600" title="Delete" data-testid={`delete-org-${o.id}`}>
                           <Trash2 className="w-4 h-4" />
@@ -919,6 +995,112 @@ export default function PlatformOrgsPage() {
       </Dialog>
 
       <InvoiceDialog invoice={invoice} open={invoiceOpen} onClose={() => setInvoiceOpen(false)} />
+
+      {/* ========== Wipe Tenant Data Dialog (Super Admin) ========== */}
+      <Dialog open={!!wipeDialog} onOpenChange={(open) => !open && setWipeDialog(null)}>
+        <DialogContent className="max-w-xl" data-testid="wipe-data-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-700">
+              <AlertTriangle className="w-5 h-5" />
+              Wipe Tenant Data
+            </DialogTitle>
+            <DialogDescription>
+              Permanently delete selected data sections for <strong className="text-slate-900">{wipeDialog?.name}</strong>.
+              Org, users, services, billing & integrations remain untouched.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Section checkboxes */}
+          <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+            {[
+              { key: 'leads', label: 'Leads (also clears Lead Timeline / Events)' },
+              { key: 'followups', label: 'Follow-ups' },
+              { key: 'admissions', label: 'Admissions / Deals' },
+              { key: 'demos', label: 'Demos / Counselling sessions' },
+              { key: 'call_logs', label: 'Call Logs (+ lead events)' },
+              { key: 'whatsapp', label: 'WhatsApp Messages' },
+              { key: 'notifications', label: 'Notifications' },
+            ].map(({ key, label }) => (
+              <label key={key} className="flex items-center justify-between gap-3 px-3 py-2 rounded-md border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                <div className="flex items-center gap-2 min-w-0">
+                  <input
+                    type="checkbox"
+                    checked={!!wipeSections[key]}
+                    onChange={() => toggleSection(key)}
+                    disabled={wipeLoading}
+                    className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                    data-testid={`wipe-section-${key}`}
+                  />
+                  <span className="text-sm text-slate-800">{label}</span>
+                </div>
+                {wipeCounts && (
+                  <span className="text-xs font-mono text-slate-500 shrink-0">
+                    {key === 'whatsapp' ? wipeCounts.whatsapp_messages : (wipeCounts[key] ?? 0)} row(s)
+                  </span>
+                )}
+              </label>
+            ))}
+            <label className="flex items-center justify-between gap-3 px-3 py-2 rounded-md border-2 border-rose-200 bg-rose-50/50 hover:bg-rose-50 cursor-pointer">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={!!wipeSections.all}
+                  onChange={() => toggleSection('all')}
+                  disabled={wipeLoading}
+                  className="rounded border-rose-400 text-rose-600 focus:ring-rose-500"
+                  data-testid="wipe-section-all"
+                />
+                <span className="text-sm font-semibold text-rose-800">
+                  Full wipe (all of the above + duplicate dismissals)
+                </span>
+              </div>
+            </label>
+          </div>
+
+          {/* Confirmation */}
+          <div className="space-y-3 pt-2 border-t border-slate-200">
+            <div>
+              <Label className="text-xs">Type the org name to confirm</Label>
+              <Input
+                value={wipeConfirmName}
+                onChange={(e) => setWipeConfirmName(e.target.value)}
+                placeholder={wipeDialog?.name}
+                disabled={wipeLoading}
+                data-testid="wipe-confirm-name-input"
+              />
+            </div>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={wipeAck}
+                onChange={(e) => setWipeAck(e.target.checked)}
+                disabled={wipeLoading}
+                className="rounded border-slate-300 text-rose-600 focus:ring-rose-500 mt-0.5"
+                data-testid="wipe-ack-checkbox"
+              />
+              <span className="text-xs text-slate-700">
+                I understand this is <strong className="text-rose-700">irreversible</strong> and will permanently
+                delete the selected data. An audit log entry will be created.
+              </span>
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWipeDialog(null)} disabled={wipeLoading} data-testid="wipe-cancel-btn">
+              Cancel
+            </Button>
+            <Button
+              onClick={executeWipe}
+              disabled={wipeLoading || wipeConfirmName.trim() !== wipeDialog?.name || !wipeAck}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              data-testid="wipe-execute-btn"
+            >
+              <Trash2 className="w-4 h-4 mr-1.5" />
+              {wipeLoading ? 'Wiping…' : 'Wipe Selected Data'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

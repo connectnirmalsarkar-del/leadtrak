@@ -839,3 +839,34 @@ Mapping:
 SW cache `v61` → `v62-industry-aware-book-demo-button`.
 
 **Verified (Playwright):** Counselor login (Education industry) → Lead Detail panel → button reads **"Book Counselling"** ✅
+
+---
+
+## Super Admin Tenant Data Wipe — Section-wise (Feb 2026)
+
+**Request:** Super Admin panel-e tenant data delete-er option chai — granular section-wise selection (Leads / Followups / Admissions / Demos / Call Logs / WhatsApp / Notifications / Full wipe).
+
+**Implementation:**
+
+### Backend (`/app/backend/server.py`)
+- Extended `POST /api/platform/wipe-org-data` with new `sections` query param (comma-separated). Allowed values: `leads`, `followups`, `admissions`, `demos`, `call_logs`, `whatsapp`, `notifications`, `all`. Default = `all` (backwards compat).
+- Each section maps to one or more collections; wiping `leads` also wipes `lead_events` to avoid orphaned timeline.
+- Added `GET /api/platform/organizations/{org_id}/data-counts` — returns per-section row counts for the preview UI.
+- Every wipe creates an entry in `platform_audit_logs` collection with actor email, org id/name, sections wiped, deleted counts, timestamp.
+
+### Frontend (`/app/frontend/src/pages/PlatformOrgsPage.jsx`)
+- Added `Database` icon button in each org row's action column (between Suspend and Delete).
+- New `WipeDataDialog` with:
+  - 7 individual section checkboxes + row count per section
+  - "Full wipe" checkbox at bottom (red highlight) — auto-syncs with all individual ones
+  - "Type org name to confirm" input
+  - "I understand this is irreversible" acknowledgement checkbox + audit log notice
+  - Cancel + "Wipe Selected Data" button (disabled until both confirmations satisfied)
+- Auto refresh counts on open via `/data-counts` endpoint.
+
+**SW cache:** bumped to `leadtrak-v65-tenant-wipe-data-ui`.
+
+**Verified end-to-end:**
+- ✅ `POST /platform/wipe-org-data?sections=invalid` → 400 with helpful "Allowed: ..." message.
+- ✅ `GET /platform/organizations/{id}/data-counts` returns per-section counts.
+- ✅ UI flow: Super Admin → Platform Orgs → Database icon → modal opens with counts → tick "Demos" only → type org name → tick ack → "Wipe Selected Data" → toast success → re-opening modal shows Demos: 0 row(s) (was 1), other sections unchanged. Audit log entry created.

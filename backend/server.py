@@ -3807,24 +3807,26 @@ async def platform_wipe_org_data(
     confirm: str,
     org_name: Optional[str] = None,
     org_id: Optional[str] = None,
+    sections: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
-    """⚠️ DESTRUCTIVE — Super Admin only one-time wipe of all lead-related data
-    for an organization. Pass EITHER `org_name` (case-insensitive exact match,
-    rejected if non-unique) OR `org_id` (precise targeting, recommended when
-    name is non-unique on production).
+    """⚠️ DESTRUCTIVE — Super Admin only. Wipe selected data sections for an org.
 
-    Deletes from collections:
-      - leads, followups, admissions, demos, lead_events, call_logs
-      - duplicate_dismissals, whatsapp_messages (lead-scoped)
-      - notifications (lead-scoped)
-
-    Does NOT touch: organizations, users, services, sources, billing/invoices, integrations.
-
-    Safety:
-      - super_admin role check
-      - explicit `confirm` token must equal `YES_DELETE_<UPPER_TARGET>` where
-        TARGET is `org_id` (when provided) else `org_name` (uppercase, spaces→_).
+    Args:
+      org_name / org_id: target org (one of them required)
+      sections: comma-separated list of sections to wipe. Each section maps to
+                one or more collections. Allowed values:
+                  leads          → leads collection
+                  followups      → followups
+                  admissions     → admissions
+                  demos          → demos
+                  call_logs      → call_logs + lead_events
+                  whatsapp       → whatsapp_messages
+                  notifications  → notifications (lead-scoped)
+                  all            → everything above + duplicate_dismissals
+                If omitted, defaults to `all` (backwards compat).
+      confirm: must equal `YES_DELETE_<UPPER_TARGET>` (TARGET = org_id when
+               provided else org_name uppercase, spaces→_).
     """
     if current_user["role"] != "super_admin":
         raise HTTPException(status_code=403, detail="Super admin only")
@@ -3867,7 +3869,26 @@ async def platform_wipe_org_data(
     org_oid = org["_id"]
     org_label = org.get("name", str(org_oid))
 
-    # Collect lead IDs (string + ObjectId variants) so we can also wipe scoped child docs
+    # Parse sections
+    requested = set()
+    if sections:
+        for s in sections.split(","):
+            s = s.strip().lower()
+            if s:
+                requested.add(s)
+    if not requested:
+        requested.add("all")
+
+    ALLOWED = {"leads", "followups", "admissions", "demos", "call_logs", "whatsapp", "notifications", "all"}
+    invalid = requested - ALLOWED
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid section(s): {', '.join(invalid)}. Allowed: {', '.join(sorted(ALLOWED))}",
+        )
+
+    # Always pre-collect lead ids so we can wipe lead-scoped child docs even
+    # if we don't delete the leads themselves (e.g. user only wants demos cleared).
     lead_ids_str: List[str] = []
     lead_ids_oid: List[ObjectId] = []
     async for ld in db.leads.find({"organization_id": org_oid}, {"_id": 1}):
@@ -3875,28 +3896,97 @@ async def platform_wipe_org_data(
         lead_ids_str.append(str(ld["_id"]))
 
     counts = {}
-    # Org-scoped collections (delete by organization_id)
-    for col_name in ("leads", "followups", "admissions", "demos", "lead_events", "call_logs"):
-        res = await db[col_name].delete_many({"organization_id": org_oid})
-        counts[col_name] = res.deleted_count
+    wipe_all = "all" in requested
 
-    # Lead-scoped collections (delete by lead_id IN the wiped lead list)
-    if lead_ids_str or lead_ids_oid:
+    # Org-scoped collections
+    org_filter = {"organization_id": org_oid}
+
+    if wipe_all or "leads" in requested:
+        # When wiping leads, also wipe lead_events to avoid orphaned timeline
+        res = await db.leads.delete_many(org_filter)
+        counts["leads"] = res.deleted_count
+        res = await db.lead_events.delete_many(org_filter)
+        counts["lead_events"] = res.deleted_count
+    if wipe_all or "followups" in requested:
+        res = await db.followups.delete_many(org_filter)
+        counts["followups"] = res.deleted_count
+    if wipe_all or "admissions" in requested:
+        res = await db.admissions.delete_many(org_filter)
+        counts["admissions"] = res.deleted_count
+    if wipe_all or "demos" in requested:
+        res = await db.demos.delete_many(org_filter)
+        counts["demos"] = res.deleted_count
+    if wipe_all or "call_logs" in requested:
+        res = await db.call_logs.delete_many(org_filter)
+        counts["call_logs"] = res.deleted_count
+        # If leads weren't wiped above, also reset lead_events here
+        if "lead_events" not in counts:
+            res = await db.lead_events.delete_many(org_filter)
+            counts["lead_events"] = res.deleted_count
+
+    # Lead-scoped child collections
+    if (wipe_all or "whatsapp" in requested) and (lead_ids_str or lead_ids_oid):
         lead_filter = {"lead_id": {"$in": lead_ids_str + lead_ids_oid}}
-        for col_name in ("duplicate_dismissals", "whatsapp_messages"):
-            res = await db[col_name].delete_many(lead_filter)
-            counts[col_name] = res.deleted_count
-        notif_filter = {"organization_id": org_oid, "data.lead_id": {"$in": lead_ids_str}}
+        res = await db.whatsapp_messages.delete_many(lead_filter)
+        counts["whatsapp_messages"] = res.deleted_count
+    if (wipe_all or "notifications" in requested):
+        notif_filter = {"organization_id": org_oid}
+        if lead_ids_str:
+            notif_filter["data.lead_id"] = {"$in": lead_ids_str}
         res = await db.notifications.delete_many(notif_filter)
         counts["notifications"] = res.deleted_count
-    else:
-        counts.update({"duplicate_dismissals": 0, "whatsapp_messages": 0, "notifications": 0})
+    if wipe_all and (lead_ids_str or lead_ids_oid):
+        lead_filter = {"lead_id": {"$in": lead_ids_str + lead_ids_oid}}
+        res = await db.duplicate_dismissals.delete_many(lead_filter)
+        counts["duplicate_dismissals"] = res.deleted_count
+
+    # Audit log
+    await db.platform_audit_logs.insert_one({
+        "action": "wipe_org_data",
+        "actor_id": current_user["id"],
+        "actor_email": current_user.get("email"),
+        "organization_id": org_oid,
+        "organization_name": org_label,
+        "sections": sorted(list(requested)),
+        "deleted_counts": counts,
+        "timestamp": datetime.now(timezone.utc),
+    })
 
     return {
-        "message": f"Wiped all lead data for '{org_label}' (id={org_oid})",
+        "message": f"Wiped data for '{org_label}' (id={org_oid}). Sections: {', '.join(sorted(requested))}",
         "organization_name": org_label,
         "organization_id": str(org_oid),
+        "sections": sorted(list(requested)),
         "deleted_counts": counts,
+    }
+
+
+@api_router.get("/platform/organizations/{org_id}/data-counts")
+async def platform_org_data_counts(org_id: str, current_user: dict = Depends(get_current_user)):
+    """Super Admin: returns per-section row counts so the wipe modal can show
+    a preview like 'This will delete: 10 leads, 4 followups, ...'."""
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    oid = safe_object_id(org_id, "org_id")
+    org = await db.organizations.find_one({"_id": oid}, {"name": 1})
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    f = {"organization_id": oid}
+    lead_ids = [str(ld["_id"]) async for ld in db.leads.find(f, {"_id": 1})]
+    lead_filter = {"lead_id": {"$in": lead_ids}} if lead_ids else {"lead_id": "__none__"}
+    return {
+        "organization_id": org_id,
+        "organization_name": org.get("name"),
+        "counts": {
+            "leads": await db.leads.count_documents(f),
+            "followups": await db.followups.count_documents(f),
+            "admissions": await db.admissions.count_documents(f),
+            "demos": await db.demos.count_documents(f),
+            "call_logs": await db.call_logs.count_documents(f),
+            "lead_events": await db.lead_events.count_documents(f),
+            "whatsapp_messages": await db.whatsapp_messages.count_documents(lead_filter),
+            "notifications": await db.notifications.count_documents({"organization_id": oid}),
+        },
     }
 
 
