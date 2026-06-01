@@ -1304,12 +1304,33 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
             "user_id": assignee,
             "message": f"New lead '{data.name}' has been assigned to you",
             "type": "lead_assigned",
+            "lead_id": str(result.inserted_id),
             "read": False,
             "organization_id": org_id,
             "created_at": datetime.now(timezone.utc)
         })
 
     return lead_doc
+
+@api_router.get("/leads/my/new-count")
+async def my_new_leads_count(current_user: dict = Depends(get_current_user)):
+    """How many leads are currently assigned to me but still in 'New' status (never touched).
+    Used by the sidebar Leads badge so the counselor immediately knows new work has arrived.
+    """
+    org_id = ObjectId(current_user["organization_id"])
+    if current_user["role"] in ("counselor", "telecaller"):
+        # Counselor / telecaller — only their own assigned leads
+        query = {"organization_id": org_id, "assigned_to": current_user["id"], "status": "New"}
+    elif current_user["role"] == "manager":
+        # Manager sees New + Unassigned in the whole org
+        query = {"organization_id": org_id, "status": "New"}
+    elif current_user["role"] in ("org_admin", "super_admin"):
+        query = {"organization_id": org_id, "status": "New"}
+    else:
+        return {"count": 0}
+    count = await db.leads.count_documents(query)
+    return {"count": count}
+
 
 @api_router.get("/leads")
 async def get_leads(
@@ -1500,6 +1521,7 @@ async def assign_lead(lead_id: str, assigned_to: str, current_user: dict = Depen
         "user_id": assigned_to,
         "message": f"Lead '{(lead or {}).get('name', '')}' has been assigned to you",
         "type": "lead_assigned",
+        "lead_id": lead_id,
         "read": False,
         "organization_id": org_id,
         "created_at": datetime.now(timezone.utc)
@@ -1558,6 +1580,7 @@ async def transfer_lead(lead_id: str, data: LeadTransfer, current_user: dict = D
         "user_id": data.new_assignee_id,
         "message": f"Lead '{lead['name']}' has been transferred to you by {current_user['name']}",
         "type": "lead_transferred",
+        "lead_id": lead_id,
         "read": False,
         "organization_id": org_id,
         "created_at": datetime.now(timezone.utc),
@@ -4021,6 +4044,7 @@ async def _ingest_external_lead(
             "user_id": assignee,
             "message": f"New lead '{name}' from {source} assigned to you",
             "type": "lead_assigned",
+            "lead_id": lead_id_str,
             "read": False,
             "organization_id": org_id,
             "created_at": datetime.now(timezone.utc),
@@ -4734,6 +4758,7 @@ async def import_leads_csv(file: UploadFile = File(...), current_user: dict = De
                     "user_id": assignee,
                     "message": f"New lead '{name}' has been assigned to you (CSV import)",
                     "type": "lead_assigned",
+                    "lead_id": str(inserted.inserted_id),
                     "read": False,
                     "organization_id": org_id,
                     "created_at": datetime.now(timezone.utc),

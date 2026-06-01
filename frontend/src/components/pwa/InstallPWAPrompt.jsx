@@ -4,23 +4,36 @@ import { API, useAuth } from '@/context/AuthContext';
 import { Download, X, Smartphone, Share, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const DISMISS_KEY = 'leadtrak_pwa_dismissed_v1';
-const DISMISS_DAYS = 7;
+const DISMISS_KEY = 'leadtrak_pwa_dismissed_v2';
+const DISMISS_DAYS = 30;
 
-// Detect iOS Safari (Apple doesn't fire beforeinstallprompt)
+// Detect TRUE iOS Safari only (not Mac desktop with touch support)
 const isIos = () => {
   const ua = window.navigator.userAgent.toLowerCase();
-  return /iphone|ipad|ipod/.test(ua) || (ua.includes('macintosh') && 'ontouchend' in document);
+  if (/iphone|ipad|ipod/.test(ua)) return true;
+  // iPadOS 13+ reports as Macintosh — disambiguate by maxTouchPoints
+  if (ua.includes('macintosh') && navigator.maxTouchPoints > 1) return true;
+  return false;
 };
+
 const isInStandalone = () =>
   window.matchMedia('(display-mode: standalone)').matches ||
   window.navigator.standalone === true;
+
+const isDismissedRecently = () => {
+  try {
+    const ts = parseInt(localStorage.getItem(DISMISS_KEY) || '0', 10);
+    if (!ts || Number.isNaN(ts)) return false;
+    return Date.now() - ts < DISMISS_DAYS * 24 * 60 * 60 * 1000;
+  } catch (e) {
+    return false;
+  }
+};
 
 export default function InstallPWAPrompt() {
   const { user } = useAuth();
   const [installEvent, setInstallEvent] = useState(null);
   const [show, setShow] = useState(false);
-  const [orgName, setOrgName] = useState('your CRM');
   const [iosMode, setIosMode] = useState(false);
 
   // Swap the manifest <link> to point at the tenant-aware backend endpoint once logged in.
@@ -32,67 +45,68 @@ export default function InstallPWAPrompt() {
       link.setAttribute('href', `${apiBase}/api/pwa/manifest`);
       link.setAttribute('crossorigin', 'use-credentials');
     }
-    // Update theme-color from /auth/me terminology
     axios.get(`${API}/organization/settings`).then(({ data }) => {
       const branding = data?.branding || {};
       const color = branding.primary_color || '#7C3AED';
       let themeMeta = document.querySelector('meta[name="theme-color"]');
       if (themeMeta) themeMeta.setAttribute('content', color);
-      if (data?.name) setOrgName(data.name);
     }).catch(() => {});
   }, [user]);
 
   // Listen for the beforeinstallprompt event (Chromium / Edge / Samsung Internet)
   useEffect(() => {
+    if (isInStandalone()) return; // Already installed
+    if (isDismissedRecently()) return; // User said no within 30 days
+
     const handler = (e) => {
       e.preventDefault();
       setInstallEvent(e);
-      const dismissed = localStorage.getItem(DISMISS_KEY);
-      if (dismissed) {
-        const ts = parseInt(dismissed, 10);
-        if (!isNaN(ts) && Date.now() - ts < DISMISS_DAYS * 24 * 60 * 60 * 1000) return;
-      }
-      setShow(true);
+      if (!isDismissedRecently()) setShow(true);
     };
     window.addEventListener('beforeinstallprompt', handler);
 
-    // iOS Safari: no beforeinstallprompt — auto-show our custom instructions card
-    if (!isInStandalone() && isIos()) {
-      const dismissed = localStorage.getItem(DISMISS_KEY);
-      const recentlyDismissed = dismissed && (Date.now() - parseInt(dismissed, 10) < DISMISS_DAYS * 24 * 60 * 60 * 1000);
-      if (!recentlyDismissed && user) {
-        setIosMode(true);
-        setShow(true);
-      }
+    // iOS Safari only — show manual instructions card
+    if (isIos() && user) {
+      setIosMode(true);
+      setShow(true);
     }
+
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, [user]);
 
   const handleInstall = async () => {
     if (!installEvent) return;
-    await installEvent.prompt();
-    const choice = await installEvent.userChoice;
-    if (choice.outcome === 'accepted') {
+    try {
+      await installEvent.prompt();
+      const choice = await installEvent.userChoice;
+      if (choice.outcome === 'accepted') {
+        // User accepted — hide and don't ask again for 30 days
+        localStorage.setItem(DISMISS_KEY, String(Date.now()));
+      }
+    } catch (e) {
+      // user closed the system prompt — still hide our card
+    } finally {
       setShow(false);
       setInstallEvent(null);
     }
   };
 
   const dismiss = () => {
-    localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch (e) { /* ignore */ }
     setShow(false);
+    setInstallEvent(null);
   };
 
   if (!show) return null;
 
   return (
     <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 sm:w-96 z-[200]" data-testid="pwa-install-prompt">
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xl shadow-slate-200/50 p-4 flex items-start gap-3">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xl shadow-slate-200/50 p-4 flex items-start gap-3 relative">
         <div className="w-10 h-10 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center flex-shrink-0">
           <Smartphone className="w-5 h-5" />
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-sm text-slate-900" style={{ fontFamily: 'Sora' }}>Install {orgName}</p>
+        <div className="flex-1 min-w-0 pr-6">
+          <p className="font-bold text-sm text-slate-900" style={{ fontFamily: 'Sora' }}>Install Leadtrak</p>
           {iosMode ? (
             <>
               <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
@@ -116,7 +130,13 @@ export default function InstallPWAPrompt() {
             </>
           )}
         </div>
-        <button onClick={dismiss} className="text-slate-300 hover:text-slate-500" aria-label="Close">
+        <button
+          onClick={dismiss}
+          className="absolute top-2 right-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1.5 rounded-md transition-colors"
+          aria-label="Close install prompt"
+          data-testid="pwa-close-btn"
+          type="button"
+        >
           <X className="w-4 h-4" />
         </button>
       </div>

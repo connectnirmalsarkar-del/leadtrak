@@ -83,6 +83,7 @@ export default function DashboardLayout({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [subscription, setSubscription] = useState(null);
+  const [newLeadsCount, setNewLeadsCount] = useState(0);
   const knownNotifIdsRef = useRef(new Set());
   const isFirstLoadRef = useRef(true);
 
@@ -110,10 +111,13 @@ export default function DashboardLayout({ children }) {
         if (!isFirstLoadRef.current) {
           const fresh = data.filter((n) => !knownNotifIdsRef.current.has(n._id) && !n.read);
           fresh.slice(0, 3).forEach((n) => {
-            toast(n.message, {
-              description: n.type === 'lead_assigned' ? 'New lead assigned' : 'New notification',
-              icon: '🔔',
-            });
+            const description = {
+              lead_assigned: 'New lead assigned',
+              lead_transferred: 'Lead transferred to you',
+              lead_comment: 'New comment on your lead',
+              task_assigned: 'New task assigned',
+            }[n.type] || 'New notification';
+            toast(n.message, { description, icon: '🔔' });
           });
         }
         knownNotifIdsRef.current = new Set(data.map((n) => n._id));
@@ -127,6 +131,22 @@ export default function DashboardLayout({ children }) {
     const interval = setInterval(fetchNotifs, 15000); // 15-sec near-real-time polling
     return () => clearInterval(interval);
   }, [user]);
+
+  // Poll "new leads to call" count (assigned + status==New) every 30 sec
+  useEffect(() => {
+    if (!user) return;
+    const fetchNewLeads = async () => {
+      try {
+        const { data } = await axios.get(`${API}/leads/my/new-count`);
+        setNewLeadsCount(data.count || 0);
+      } catch (e) {
+        // silent
+      }
+    };
+    fetchNewLeads();
+    const id = setInterval(fetchNewLeads, 30000);
+    return () => clearInterval(id);
+  }, [user, location.pathname]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -143,12 +163,12 @@ export default function DashboardLayout({ children }) {
     setShowNotifPanel(false);
     if (notif.type === 'ticket_status' || notif.type === 'ticket_reply') {
       navigate('/support');
-    } else if (notif.type === 'lead_assigned') {
-      navigate('/leads');
+    } else if (notif.type === 'lead_assigned' || notif.type === 'lead_transferred') {
+      // Deep-link to specific lead if backend included lead_id, else open Leads list
+      navigate(notif.lead_id ? `/leads?leadId=${notif.lead_id}` : '/leads');
     } else if (notif.type === 'task_assigned') {
       navigate('/tasks');
     } else if (notif.type === 'lead_comment') {
-      // Deep-link to the lead's detail view (Leads page reads ?leadId from URL)
       navigate(notif.lead_id ? `/leads?leadId=${notif.lead_id}` : '/leads');
     }
   };
@@ -202,6 +222,7 @@ export default function DashboardLayout({ children }) {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
             const labelText = item.labelKey ? (t[item.labelKey] || item.fallback) : item.label;
+            const showBadge = item.path === '/leads' && newLeadsCount > 0;
             return (
               <NavLink
                 key={item.path}
@@ -211,7 +232,12 @@ export default function DashboardLayout({ children }) {
                 data-testid={item.testId}
               >
                 <Icon className="w-4 h-4" />
-                <span className="text-sm">{labelText}</span>
+                <span className="text-sm flex-1">{labelText}</span>
+                {showBadge && (
+                  <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center" data-testid="new-leads-badge">
+                    {newLeadsCount > 99 ? '99+' : newLeadsCount}
+                  </span>
+                )}
               </NavLink>
             );
           })}
