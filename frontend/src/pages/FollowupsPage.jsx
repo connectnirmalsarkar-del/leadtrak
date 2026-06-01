@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API } from '@/context/AuthContext';
-import { Calendar, Phone, MessageSquare, CheckCircle2, Clock, AlertCircle, Mic } from 'lucide-react';
+import { Calendar, Phone, MessageSquare, CheckCircle2, Clock, AlertCircle, Mic, User, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
@@ -15,8 +15,20 @@ const FollowupCard = ({ followup, onComplete, type }) => {
     <div className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors" data-testid={`followup-card-${followup._id}`}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <p className="font-medium text-slate-900">{followup.lead_name || 'Lead'}</p>
+            {followup.created_by_name && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 text-[11px] rounded-md" data-testid={`followup-creator-${followup._id}`} title="Created by">
+                <User className="w-3 h-3" />
+                {followup.created_by_name}
+              </span>
+            )}
+            {followup.voice_recording_url && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-violet-50 text-violet-700 text-[11px] rounded-md border border-violet-200" data-testid={`followup-voice-badge-${followup._id}`}>
+                <Mic className="w-3 h-3" />
+                Voice
+              </span>
+            )}
             {type === 'missed' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-700 text-xs rounded-md border border-red-200">
                 <AlertCircle className="w-3 h-3" />
@@ -85,6 +97,7 @@ const FollowupCard = ({ followup, onComplete, type }) => {
 export default function FollowupsPage() {
   const [followups, setFollowups] = useState({ today: [], upcoming: [], missed: [] });
   const [activeTab, setActiveTab] = useState('today');
+  const [voiceOnly, setVoiceOnly] = useState(false);
 
   useEffect(() => {
     fetchAll();
@@ -117,58 +130,75 @@ export default function FollowupsPage() {
     }
   };
 
+  const applyVoiceFilter = (list) => voiceOnly ? list.filter((f) => !!f.voice_recording_url) : list;
+  const todayList = applyVoiceFilter(followups.today);
+  const upcomingList = applyVoiceFilter(followups.upcoming);
+  const missedList = applyVoiceFilter(followups.missed);
+  const voiceCount = (followups.today.concat(followups.upcoming, followups.missed)).filter((f) => !!f.voice_recording_url).length;
+
   return (
     <div className="space-y-6" data-testid="followups-page">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Engagement</p>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Follow-ups</h1>
-        <p className="text-sm text-slate-600 mt-1">Stay on top of every prospect interaction.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">Engagement</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900" style={{fontFamily: 'Sora'}}>Follow-ups</h1>
+          <p className="text-sm text-slate-600 mt-1">Stay on top of every prospect interaction.</p>
+        </div>
+        <button
+          onClick={() => setVoiceOnly((v) => !v)}
+          className={`inline-flex items-center gap-2 px-3 py-2 rounded-md border text-sm transition-colors ${voiceOnly ? 'bg-violet-700 text-white border-violet-700' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}
+          data-testid="voice-only-toggle"
+          title="Show only follow-ups that include a voice note"
+        >
+          <Filter className="w-3.5 h-3.5" />
+          Voice notes ({voiceCount})
+        </button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-slate-100">
           <TabsTrigger value="today" data-testid="tab-today">
-            Today ({followups.today.length})
+            Today ({todayList.length})
           </TabsTrigger>
           <TabsTrigger value="upcoming" data-testid="tab-upcoming">
-            Upcoming ({followups.upcoming.length})
+            Upcoming ({upcomingList.length})
           </TabsTrigger>
           <TabsTrigger value="missed" data-testid="tab-missed">
-            Missed ({followups.missed.length})
+            Missed ({missedList.length})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="today" className="space-y-3 mt-4">
-          {followups.today.length === 0 ? (
+          {todayList.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-md p-12 text-center text-slate-500">
-              No follow-ups scheduled for today
+              {voiceOnly ? 'No follow-ups with voice notes today' : 'No follow-ups scheduled for today'}
             </div>
           ) : (
-            followups.today.map((fu) => (
+            todayList.map((fu) => (
               <FollowupCard key={fu._id} followup={fu} onComplete={handleComplete} type="today" />
             ))
           )}
         </TabsContent>
 
         <TabsContent value="upcoming" className="space-y-3 mt-4">
-          {followups.upcoming.length === 0 ? (
+          {upcomingList.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-md p-12 text-center text-slate-500">
-              No upcoming follow-ups
+              {voiceOnly ? 'No upcoming follow-ups with voice notes' : 'No upcoming follow-ups'}
             </div>
           ) : (
-            followups.upcoming.map((fu) => (
+            upcomingList.map((fu) => (
               <FollowupCard key={fu._id} followup={fu} onComplete={handleComplete} type="upcoming" />
             ))
           )}
         </TabsContent>
 
         <TabsContent value="missed" className="space-y-3 mt-4">
-          {followups.missed.length === 0 ? (
+          {missedList.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-md p-12 text-center text-slate-500">
-              No missed follow-ups
+              {voiceOnly ? 'No missed follow-ups with voice notes' : 'No missed follow-ups'}
             </div>
           ) : (
-            followups.missed.map((fu) => (
+            missedList.map((fu) => (
               <FollowupCard key={fu._id} followup={fu} onComplete={handleComplete} type="missed" />
             ))
           )}
