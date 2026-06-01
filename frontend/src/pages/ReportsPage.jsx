@@ -300,13 +300,14 @@ export default function ReportsPage() {
                   <TableRow key={r.user_id} data-testid={`caller-row-${r.user_id}`}>
                     <TableCell className="font-medium text-slate-900">
                       <div className="flex items-center gap-2.5">
-                        {idx < 3 && callerSort === 'converted' && (
-                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                            idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-slate-200 text-slate-700' : 'bg-orange-100 text-orange-700'
-                          }`}>
-                            {idx + 1}
-                          </span>
-                        )}
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                          idx === 0 ? 'bg-amber-100 text-amber-700'
+                          : idx === 1 ? 'bg-slate-200 text-slate-700'
+                          : idx === 2 ? 'bg-orange-100 text-orange-700'
+                          : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {idx + 1}
+                        </span>
                         <button
                           onClick={() => openCallerDrill(r.user_id, r.name)}
                           className="text-violet-700 hover:text-violet-900 hover:underline text-left"
