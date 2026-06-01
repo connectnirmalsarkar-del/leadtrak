@@ -844,7 +844,9 @@ export default function LeadsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <Badge variant="outline" className={`${statusBadgeClass(lead.status)} whitespace-nowrap`}>{lead.status}</Badge>
+                    <Badge variant="outline" className={`${statusBadgeClass(lead.status)} whitespace-nowrap inline-flex`}>
+                      <span className="whitespace-nowrap">{lead.status}</span>
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-sm text-slate-500 whitespace-nowrap">
                     {new Date(lead.created_at).toLocaleDateString()}
