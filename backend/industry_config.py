@@ -32,7 +32,7 @@ INDUSTRY_CONFIG = {
         "default_lead_statuses": [
             "New", "Contacted", "Phone Not Received", "Not Reachable", "Wrong Number",
             "Interested", "Counseling Scheduled", "Counseling Done",
-            "Application Sent", "Documents Pending", "Fee Discussion", "Admitted",
+            "Application Sent", "Documents Pending", "Fee Discussion", "Admitted", "Admission Done",
             "Not Interested", "Dropped", "Lost"
         ],
         "default_pipeline_stages": ["New Inquiry", "Counseling", "Documentation", "Fee Payment", "Enrolled"],
@@ -189,7 +189,7 @@ INDUSTRY_CONFIG = {
         "default_sources": ["Website", "Instagram", "Walk-in", "Referral", "Google Ad", "WhatsApp"],
         "default_lead_statuses": [
             "New", "Phone Not Received", "Not Reachable", "Wrong Number",
-            "Trial Booked", "Trial Done", "Member",
+            "Trial Booked", "Trial Done", "Member", "Joined",
             "Renewal Due", "Renewed", "Churned", "Lost"
         ],
         "default_pipeline_stages": ["Inquiry", "Trial Booked", "Trial Done", "Joined", "Active", "Renewed"],

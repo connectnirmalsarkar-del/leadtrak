@@ -688,3 +688,53 @@ Earlier the only feedback after a successful subscription payment was a toast no
 1. Before record → dropdown shows "Demo — Ananya Banerjee · Admission Done" ✅
 2. Record admission for that lead → submit succeeds, Total Admissions = 1.
 3. Re-open Record dialog → dropdown is empty with "No leads at 'Admission Done' status…" message ✅
+
+---
+
+## Industry-Aware Status Consistency — Single Source of Truth (Feb 2026)
+
+**Request:** "ONNO FORM THEKE STATUS UPDATE HOLE LEAD FORM E STATUS BLANK HOTYA JACCHE" — followup/demo completion was writing hardcoded generic statuses ("Negotiation", "Converted", "Qualified") that didn't exist in the org's industry status list, making the Lead form dropdown render blank on re-open.
+
+**Root cause:**
+- `FollowupsPage.jsx` had `const STATUS_OPTIONS = ['New','Contacted','Qualified','Interested','Negotiation','Converted','Lost']` hardcoded — ignored `user.lead_statuses`.
+- `DemosPage.jsx` demo outcome auto-mapped "interested"→"Interested" and "not_interested"→"Lost" without checking if those statuses existed in the org's industry list.
+- No backend validation — any string could be saved to `leads.status`.
+- `CONVERSION_STATUS_BY_INDUSTRY["education"]="Admission Done"` but `industry_config` education `default_lead_statuses` had "Admitted" not "Admission Done" (mismatch). Same for fitness ("Joined" vs "Member").
+
+**Full fix implemented:**
+
+### Backend (`/app/backend/server.py`)
+1. New helper `validate_lead_status_for_org(org_id, status)` — looks up org's industry → checks status in `get_lead_statuses(industry)` → raises 400 with helpful "Allowed: …" message.
+2. Wired into 4 endpoints:
+   - `POST /api/leads` (create)
+   - `PUT /api/leads/{id}` (update)
+   - `POST /api/leads/{id}/log-call` (log call status change)
+   - `POST /api/followups/{id}/complete` (followup completion)
+   - `POST /api/demos/{id}/complete` (demo completion)
+3. Refactored demo completion to be industry-aware:
+   - New `DemoComplete.lead_status` optional field — if provided, validated + used directly.
+   - Else falls back to new `DEMO_OUTCOME_TO_LEAD_STATUS` per-industry mapping (10 industries pre-mapped using statuses that actually exist in each industry's list).
+   - Reschedule / No Show → no status change.
+4. New endpoint `POST /api/platform/migrate-invalid-lead-statuses` (super-admin only) — scans all leads, maps any out-of-list status to a sensible target (industry's conversion_status for "Converted/Won/Admission Done"; else "Contacted"). Idempotent.
+
+### Industry Config (`/app/backend/industry_config.py`)
+- Education `default_lead_statuses`: added "Admission Done" so it matches `CONVERSION_STATUS_BY_INDUSTRY`.
+- Fitness `default_lead_statuses`: added "Joined" so it matches `CONVERSION_STATUS_BY_INDUSTRY`.
+
+### Frontend
+- `FollowupsPage.jsx` — removed hardcoded `STATUS_OPTIONS`, now pulls from `user.lead_statuses` (same source as LeadsPage).
+- `DemosPage.jsx` — added "Set lead status to (optional)" dropdown using `user.lead_statuses` with "Auto (based on outcome)" default. Sends `lead_status` field on `/demos/{id}/complete`.
+- SW cache bumped to `leadtrak-v59-industry-aware-status-consistency`.
+
+**Verified:**
+- ✅ Education industry: Log Call dropdown shows all 16 industry-specific statuses (New, Contacted, Phone Not Received, …, Admission Done, …, Lost) — identical to Lead form dropdown.
+- ✅ PUT /api/leads with invalid status "Negotiation" → 400 with allowed-list error.
+- ✅ PUT /api/leads with valid "Interested" → 200 success.
+- ✅ Lead with "Admission Done" status now renders correctly in the Lead Detail status dropdown (no more blank).
+- ✅ Migration endpoint executed cleanly (1 lead found + fixed during initial test).
+
+**Production deploy reminder:** Run migration AFTER deploy via:
+```
+POST https://leadtrak.in/api/platform/migrate-invalid-lead-statuses
+(Super admin cookie auth)
+```

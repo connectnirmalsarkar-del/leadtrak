@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { API } from '@/context/AuthContext';
+import { API, useAuth } from '@/context/AuthContext';
 import { Calendar, Phone, MessageSquare, CheckCircle2, Clock, AlertCircle, Mic, User, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -116,9 +116,15 @@ const FollowupCard = ({ followup, onComplete, type }) => {
   );
 };
 
-const STATUS_OPTIONS = ['New', 'Contacted', 'Qualified', 'Interested', 'Negotiation', 'Converted', 'Lost'];
+const STATUS_OPTIONS_FALLBACK = ['New', 'Contacted', 'Interested', 'Follow-up', 'Admission Done', 'Not Interested', 'Lost'];
 
 function CompleteFollowupDialog({ followup, open, onOpenChange, onDone }) {
+  const { user } = useAuth();
+  // Industry-specific status list pulled from /auth/me — same source of truth
+  // as LeadsPage so a status set here always appears in the Lead form dropdown.
+  const STATUS_OPTIONS = (user && Array.isArray(user.lead_statuses) && user.lead_statuses.length > 0)
+    ? user.lead_statuses
+    : (user ? STATUS_OPTIONS_FALLBACK : []);
   const [summary, setSummary] = useState('');
   const [voice, setVoice] = useState(null);
   const [newStatus, setNewStatus] = useState('');

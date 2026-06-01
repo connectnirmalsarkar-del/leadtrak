@@ -26,10 +26,14 @@ export default function DemosPage() {
   const { user } = useAuth();
   const demoLabel = user?.features?.demo_label || 'Demos';
   const demoLabelSingular = demoLabel.endsWith('s') ? demoLabel.slice(0, -1) : demoLabel;
+  // Industry-aware lead status list (single source of truth)
+  const LEAD_STATUS_OPTIONS = (user && Array.isArray(user.lead_statuses) && user.lead_statuses.length > 0)
+    ? user.lead_statuses
+    : [];
   const [demos, setDemos] = useState([]);
   const [scope, setScope] = useState('mine');
   const [activeDemo, setActiveDemo] = useState(null);
-  const [completeForm, setCompleteForm] = useState({ outcome: 'interested', feedback: '', recording_url: '' });
+  const [completeForm, setCompleteForm] = useState({ outcome: 'interested', feedback: '', recording_url: '', lead_status: '' });
 
   const fetchDemos = async () => {
     try {
@@ -44,7 +48,7 @@ export default function DemosPage() {
 
   const openComplete = (demo) => {
     setActiveDemo(demo);
-    setCompleteForm({ outcome: 'interested', feedback: '', recording_url: '' });
+    setCompleteForm({ outcome: 'interested', feedback: '', recording_url: '', lead_status: '' });
   };
 
   const submitComplete = async () => {
@@ -144,12 +148,33 @@ export default function DemosPage() {
               <Select value={completeForm.outcome} onValueChange={(v) => setCompleteForm({ ...completeForm, outcome: v })}>
                 <SelectTrigger data-testid="demo-outcome-select"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="interested">Interested — moves lead to Interested</SelectItem>
-                  <SelectItem value="not_interested">Not interested — moves lead to Lost</SelectItem>
+                  <SelectItem value="interested">Interested</SelectItem>
+                  <SelectItem value="not_interested">Not interested</SelectItem>
                   <SelectItem value="reschedule">Reschedule</SelectItem>
                   <SelectItem value="no_show">No show</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-[11px] text-slate-500">
+                The lead status will auto-update based on outcome (industry-specific). Override below if needed.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Set lead status to (optional)</Label>
+              <Select
+                value={completeForm.lead_status || '__auto__'}
+                onValueChange={(v) => setCompleteForm({ ...completeForm, lead_status: v === '__auto__' ? '' : v })}
+              >
+                <SelectTrigger data-testid="demo-lead-status-select"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__auto__">Auto (based on outcome)</SelectItem>
+                  {LEAD_STATUS_OPTIONS.map((s) => (
+                    <SelectItem key={s} value={s} data-testid={`demo-lead-status-option-${s}`}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-slate-500">
+                Pick any status from your industry's pipeline. Leave on "Auto" to use the default mapping.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Feedback / notes</Label>

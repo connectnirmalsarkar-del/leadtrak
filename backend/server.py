@@ -376,6 +376,9 @@ class DemoComplete(BaseModel):
     outcome: str                 # interested | not_interested | reschedule | no_show
     feedback: Optional[str] = ""
     recording_url: Optional[str] = ""
+    # Optional explicit lead status to set after demo (must be in industry's allowed list).
+    # If not provided, falls back to DEMO_OUTCOME_TO_LEAD_STATUS mapping for the org's industry.
+    lead_status: Optional[str] = None
 
 class FollowupComplete(BaseModel):
     summary: str
@@ -455,6 +458,55 @@ CONVERSION_STATUS_BY_INDUSTRY = {
 def get_conversion_status(industry: str) -> str:
     """Industry-specific status name set when a lead converts to admission/deal."""
     return CONVERSION_STATUS_BY_INDUSTRY.get(industry, "Admission Done")
+
+
+# ==================== Status Validation (Single Source of Truth) ====================
+# Every place that mutates a lead's status MUST funnel through validate_lead_status_for_org
+# so we never end up with values like "Negotiation" / "Converted" / "Qualified" stored on
+# a lead whose industry doesn't list that status (which then makes the dropdown go BLANK
+# when the lead form is re-opened).
+
+async def _get_industry_for_org(org_id: ObjectId) -> str:
+    org = await db.organizations.find_one({"_id": org_id}, {"industry": 1})
+    return (org or {}).get("industry", "education")
+
+
+async def validate_lead_status_for_org(org_id: ObjectId, new_status: str) -> str:
+    """Raise HTTP 400 if `new_status` is not part of the org's industry status list.
+    Returns the (trimmed) status string on success.
+    """
+    if new_status is None:
+        return new_status
+    industry = await _get_industry_for_org(org_id)
+    valid = get_lead_statuses(industry)
+    if new_status not in valid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid lead status '{new_status}' for {industry} industry. Allowed: {', '.join(valid)}",
+        )
+    return new_status
+
+
+# Mapping of demo outcome → industry-specific lead status to auto-set when
+# the user does NOT explicitly choose a status on demo completion. These all
+# point at statuses that actually exist in the respective industry's list
+# (validated against industry_config.default_lead_statuses).
+DEMO_OUTCOME_TO_LEAD_STATUS = {
+    "education": {"interested": "Interested", "not_interested": "Not Interested"},
+    "it_software": {"interested": "Demo Done", "not_interested": "Lost"},
+    "real_estate": {"interested": "Site Visited", "not_interested": "Lost"},
+    "healthcare": {"interested": "Consulted", "not_interested": "Lost"},
+    "insurance": {"interested": "Quote Sent", "not_interested": "Lost"},
+    "travel": {"interested": "Quote Sent", "not_interested": "Lost"},
+    "retail": {"interested": "Contacted", "not_interested": "Lost"},
+    "fitness": {"interested": "Trial Done", "not_interested": "Lost"},
+    "admission_consultancy": {"interested": "Counseling Done", "not_interested": "Not Interested"},
+    "generic": {"interested": "Qualified", "not_interested": "Lost"},
+}
+
+
+def get_demo_outcome_status(industry: str, outcome: str) -> Optional[str]:
+    return DEMO_OUTCOME_TO_LEAD_STATUS.get(industry, {}).get(outcome)
 
 
 GST_RATE = 0.18  # 18% GST applied on all subscription invoices (India)
@@ -1333,6 +1385,10 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
 
     org_id = ObjectId(current_user["organization_id"])
 
+    # Validate lead status against industry's allowed list (single source of truth)
+    if data.status and data.status != "New":
+        await validate_lead_status_for_org(org_id, data.status)
+
     # Validate WhatsApp number (strict +91XXXXXXXXXX) — falls back to mobile if blank
     wa_number = _normalize_whatsapp_number(data.whatsapp_number) if data.whatsapp_number else None
 
@@ -1648,6 +1704,10 @@ async def update_lead(lead_id: str, data: LeadUpdate, current_user: dict = Depen
     if not current:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    # Validate lead status against industry's allowed list (single source of truth)
+    if "status" in update_data and update_data["status"] != current.get("status"):
+        await validate_lead_status_for_org(org_id, update_data["status"])
+
     # Safety: never let an admin/manager become an "assigned_to" via Edit
     if update_data.get("assigned_to"):
         new_aid = update_data["assigned_to"]
@@ -1946,6 +2006,8 @@ async def log_call(lead_id: str, data: LogCallRequest, current_user: dict = Depe
     if no_connect and not effective_status:
         effective_status = "Not Reachable"
     if effective_status and effective_status != lead.get("status"):
+        # Validate against industry's allowed status list (single source of truth)
+        await validate_lead_status_for_org(org_id, effective_status)
         old_status = lead.get("status")
         await db.leads.update_one({"_id": lid}, {"$set": {"status": effective_status}})
         ev_type = "lead_lost" if effective_status == "Lost" else "status_changed"
@@ -2279,13 +2341,27 @@ async def complete_demo(demo_id: str, data: DemoComplete, current_user: dict = D
         current_user, org_id,
     )
 
-    # Auto-update lead status based on demo outcome
-    if data.outcome == "interested":
-        await db.leads.update_one({"_id": lid}, {"$set": {"status": "Interested"}})
-        await log_lead_event(lid, "status_changed", {"from": demo.get("lead_status", "—"), "to": "Interested"}, current_user, org_id)
-    elif data.outcome == "not_interested":
-        await db.leads.update_one({"_id": lid}, {"$set": {"status": "Lost"}})
-        await log_lead_event(lid, "lead_lost", {"from": "—", "to": "Lost", "reason": "Demo: not interested"}, current_user, org_id)
+    # Auto-update lead status — preference order:
+    #   1) Explicit `lead_status` from caller (validated against industry list)
+    #   2) Industry-specific fallback for the demo outcome (DEMO_OUTCOME_TO_LEAD_STATUS)
+    #   3) No status change (e.g. reschedule / no_show with no fallback)
+    industry = await _get_industry_for_org(org_id)
+    target_lead_status = None
+    if data.lead_status:
+        await validate_lead_status_for_org(org_id, data.lead_status)
+        target_lead_status = data.lead_status
+    else:
+        target_lead_status = get_demo_outcome_status(industry, data.outcome)
+
+    if target_lead_status:
+        old_lead_status = (await db.leads.find_one({"_id": lid}, {"status": 1}) or {}).get("status")
+        await db.leads.update_one({"_id": lid}, {"$set": {"status": target_lead_status}})
+        ev_type = "lead_lost" if target_lead_status == "Lost" else "status_changed"
+        await log_lead_event(
+            lid, ev_type,
+            {"from": old_lead_status or "—", "to": target_lead_status, "reason": f"Demo: {data.outcome}"},
+            current_user, org_id,
+        )
 
     return {"message": "Demo completed", "status": new_status}
 
@@ -2336,6 +2412,8 @@ async def complete_followup(followup_id: str, data: FollowupComplete, current_us
 
     # Status change
     if data.new_status and data.new_status != lead.get("status"):
+        # Validate against industry's allowed status list (single source of truth)
+        await validate_lead_status_for_org(org_id, data.new_status)
         old_status = lead.get("status")
         await db.leads.update_one({"_id": lid}, {"$set": {"status": data.new_status}})
         event_type = "lead_lost" if data.new_status == "Lost" else "status_changed"
@@ -3511,6 +3589,77 @@ async def migrate_conversion_statuses(current_user: dict = Depends(get_current_u
     return {
         "message": "Migration complete",
         "organizations_updated": len(report),
+        "details": report,
+    }
+
+
+@api_router.post("/platform/migrate-invalid-lead-statuses")
+async def migrate_invalid_lead_statuses(current_user: dict = Depends(get_current_user)):
+    """One-time migration: scan every lead in every org and fix any `status`
+    value that's NOT in the org's industry's `default_lead_statuses` list.
+
+    Why: historically Follow-up completion / Demo completion forms wrote
+    hardcoded generic statuses ("Negotiation", "Converted", "Qualified")
+    onto leads even when the org's industry didn't list those — which made
+    the Lead form's status dropdown show BLANK on re-open.
+
+    Mapping rules per invalid status:
+      - "Converted" / "Closed Won" / "Won" → industry's conversion_status
+      - "Negotiation" → keep if industry has it, else → "Contacted"
+      - "Qualified" / "Qualifying" → keep if industry has it, else → "Contacted"
+      - "Interested" → keep if industry has it, else → "Contacted"
+      - anything else → "Contacted" (universal fallback present in every industry)
+
+    Idempotent — safe to re-run. Super admin only. Returns counts per org.
+    """
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+
+    report = {}
+    total_fixed = 0
+    async for org in db.organizations.find({}, {"_id": 1, "industry": 1, "name": 1}):
+        industry = org.get("industry", "education")
+        valid_statuses = set(get_lead_statuses(industry))
+        if not valid_statuses:
+            continue
+        conv = get_conversion_status(industry)
+        org_fixes = []
+        async for lead in db.leads.find(
+            {"organization_id": org["_id"]},
+            {"_id": 1, "status": 1, "name": 1, "lead_id": 1},
+        ):
+            cur = lead.get("status")
+            if cur in valid_statuses:
+                continue
+            # Decide target
+            if cur in ("Converted", "Closed Won", "Won", "Admission Done", "Admitted") and conv in valid_statuses:
+                target = conv
+            elif cur == "Interested" and "Interested" in valid_statuses:
+                target = "Interested"
+            elif "Contacted" in valid_statuses:
+                target = "Contacted"
+            elif "New" in valid_statuses:
+                target = "New"
+            else:
+                # Last resort — first non-terminal status in the industry list
+                target = next(iter(valid_statuses))
+            await db.leads.update_one(
+                {"_id": lead["_id"]},
+                {"$set": {"status": target}},
+            )
+            org_fixes.append({"lead_id": lead.get("lead_id") or str(lead["_id"]), "from": cur, "to": target})
+            total_fixed += 1
+        if org_fixes:
+            report[org.get("name", str(org["_id"]))] = {
+                "industry": industry,
+                "fixed_count": len(org_fixes),
+                "samples": org_fixes[:5],
+            }
+
+    return {
+        "message": "Lead status migration complete",
+        "organizations_with_fixes": len(report),
+        "leads_fixed": total_fixed,
         "details": report,
     }
 
