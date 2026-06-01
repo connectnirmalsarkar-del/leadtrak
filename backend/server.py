@@ -2838,11 +2838,13 @@ async def pwa_manifest(current_user: dict = Depends(get_current_user)):
         "scope": "/",
         "display": "standalone",
         "orientation": "portrait",
-        "background_color": "#F8FAFC",
+        "background_color": "#000000",
         "theme_color": primary_color,
         "icons": [
-            {"src": logo_url or "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-            {"src": logo_url or "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+            {"src": logo_url or "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": logo_url or "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": logo_url or "/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+            {"src": logo_url or "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
         ],
         "categories": ["business", "productivity"],
         "shortcuts": [
