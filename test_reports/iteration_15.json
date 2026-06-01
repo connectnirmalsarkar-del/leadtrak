@@ -1,0 +1,58 @@
+{
+  "summary": "Iteration 15 — Industry-aware lead status mgmt, custom statuses, industry-aware dashboard widgets, and industry-aware Book Demo label. Backend pytest 20/20 PASSED covering items 1-16 (login payload shape, org lead-statuses GET/PUT/RESET incl in-use protection, lead create/update/log-call/followup-complete/demo-complete status validation, super-admin migration endpoint, dashboard funnel/leaderboard/activity-feed, regression on /admissions and /leads). Frontend smoke confirmed: education industry dashboard funnel labels (New/Contacted/Interested/Enrolled) and activity-feed wording ('created lead', 'recorded admission for'), Settings → 'Lead Statuses' tab present, Lead detail panel renders 'Book Counselling' (industry-aware demo_label) for counselor login, Admissions page renders Record Admission CTA. All review-request items verified end-to-end. Safe to deploy from backend correctness standpoint.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Onboarding setup wizard modal",
+        "issues": [
+          "Setup wizard 'Connect a lead source' (step 4 of 5) modal auto-opens on Dashboard and Admissions pages and obscures the underlying widgets. Has a dismiss button but pops every navigation — consider remembering 'Skip' state per session so first-time users aren't blocked from inspecting dashboards."
+        ]
+      },
+      {
+        "screen": "Static assets (network)",
+        "issues": [
+          "Multiple 404 errors observed on console for missing static resources (likely PWA manifest icons / favicons). Not blocking but visible in browser devtools — clean up to avoid noise."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration15_industry_statuses.py",
+    "/app/test_reports/pytest/iteration_15.xml"
+  ],
+  "action_items": [
+    "Optional: persist 'Skip setup guide' per-user so the onboarding modal does not re-pop on every page navigation.",
+    "Optional: silence 404s for missing static assets (manifest icons / favicons).",
+    "Carry-over from iteration 14 (not in this scope): enforce non-empty name on POST/PUT /api/leads at the Pydantic level was already added (LeadCreate has min_length=1 on name + mobile + course_interested), verified during this run."
+  ],
+  "critical_code_review_comments": [
+    "validate_lead_status_for_org is correctly funneled through all 5 mutation paths: create_lead, update_lead, log_call, complete_followup (new_status), complete_demo (lead_status). Verified by tests that each returns 400 for 'Negotiation' (not in education list) and 200 for 'Interested'.",
+    "Org lead-statuses PUT correctly rejects removal of in-use statuses with helpful error listing the missing status (verified 400 + 'Admission Done' in response body).",
+    "Reset endpoint has same safety net (rejects when leads sit on custom statuses missing from defaults).",
+    "Dashboard funnel returns industry-aware stages with both display 'stage' and 'raw_stage' — frontend can use raw_stage for drill-down navigation.",
+    "Leaderboard now uses admissions collection count (created_by) instead of leads.status='Admission Done' — more accurate as it ties to authoritative admission records.",
+    "Activity-feed phrasing is industry-aware: 'created lead X' and 'recorded admission for X' (verified live). Will say 'closed deal for' for IT software, 'booked' for real estate, etc.",
+    "Migration endpoint /platform/migrate-invalid-lead-statuses is idempotent (verified by re-running and getting 200 both times).",
+    "/api/auth/login returns flat user payload with lead_statuses + features.demo_label='Counselling' for education. Frontend can directly read user.lead_statuses to populate dropdowns and user.features.demo_label for the Book Demo button.",
+    "/app/backend/server.py still 6700+ lines — split recommendation from iter 14 still open."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration15_industry_statuses.py (new, 20 tests)"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 passed)",
+    "frontend": "~95% (all targeted smoke checks pass: funnel labels, activity feed wording, Book Counselling label, Lead Statuses tab visible)"
+  },
+  "test_credentials": "From /app/memory/test_credentials.md — Super Admin admin@educationcrm.com / Admin@123; Org Admin orgadmin@demo.com / Demo@123; Counselor counselor@demo.com / Demo@123; all working.",
+  "seed_data_creation": "Created handful of TEST_IT15_* leads via pytest (random mobile per run). Followups/demos created and completed. Org lead-status custom override was set then reset back to defaults at end of test class so org state is clean.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Industry-aware lead-status pipeline is solid end-to-end. The validate_lead_status_for_org guard is correctly enforced on /leads (POST + PUT), /leads/{id}/log-call, /followups/{id}/complete (new_status), /demos/{id}/complete (lead_status). PUT /organization/lead-statuses correctly blocks removal of in-use statuses. RESET correctly blocks if leads sit on non-default statuses. Dashboard funnel/leaderboard/activity-feed are industry-aware. Frontend Settings has the new Lead Statuses tab. Counselor sees 'Book Counselling' label. Admissions filtering by industry conversion status is implemented client-side (couldn't deep-test without opening the Record Admission dialog and reading the Lead dropdown — main agent can self-verify by opening that dialog). App is safe to deploy to https://leadtrak.in from backend correctness perspective. Twilio/Resend remain MOCKED per design — not retested.",
+  "rca of the issue": "No issues found this iteration."
+}
