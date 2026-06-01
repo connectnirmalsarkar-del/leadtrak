@@ -1,21 +1,37 @@
 // Leadtrak Service Worker
-const CACHE_NAME = 'leadtrak-v4-ios-pwa';
+// IMPORTANT: Bump CACHE_NAME on every release to force the browser to fetch fresh CSS/JS
+const CACHE_NAME = 'leadtrak-v6-mobile-fix';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS).catch(() => {}))
   );
+  // Activate this worker immediately, skipping the "waiting" phase
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    (async () => {
+      // Delete every old cache (anything not matching current CACHE_NAME)
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)));
+      // Take control of all open tabs immediately
+      await self.clients.claim();
+      // Tell every client a new version is active so it can reload once
+      const clientsList = await self.clients.matchAll({ type: 'window' });
+      clientsList.forEach((client) => {
+        client.postMessage({ type: 'SW_UPDATED', cache: CACHE_NAME });
+      });
+    })()
   );
-  self.clients.claim();
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', (event) => {
@@ -26,8 +42,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first for HTML / navigation
-  if (event.request.mode === 'navigate') {
+  // Network-first for HTML / navigation so the app shell always updates
+  if (event.request.mode === 'navigate' || event.request.destination === 'document') {
     event.respondWith(
       fetch(event.request)
         .then((res) => {
@@ -40,7 +56,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for everything else (static assets, fonts)
+  // Network-first for JS/CSS bundles so new builds load immediately
+  if (
+    event.request.destination === 'script' ||
+    event.request.destination === 'style' ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.css')
+  ) {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res && res.status === 200 && res.type === 'basic') {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(event.request, clone)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Cache-first for everything else (images, fonts)
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;

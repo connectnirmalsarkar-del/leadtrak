@@ -307,3 +307,17 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - `/app/backend/server.py` (1888 lines) — split into routers (auth, tickets, leads, etc.) when bandwidth permits.
 - `ticket_no` generation via `count_documents` — switch to atomic counter to avoid race-condition duplicates.
 - `PUT /api/support-tickets/{tid}/status` — add enum validation for status field.
+
+
+---
+
+## 2026-06-01 — PWA Service Worker Cache-Busting Fix
+**Issue:** After deploying mobile-responsive CSS fixes (landing logo, leads dialog grids, reports tabs, settings grids) to production (https://leadtrak.in), users on phones did not see the new layout. Root cause: the existing PWA service worker (`leadtrak-v4-ios-pwa`) was cache-first for ALL non-navigation requests, so cached old JS/CSS chunks were served and the registered SW never refreshed because its file URL was unchanged across deploys.
+
+**Files changed:**
+- `/app/frontend/public/service-worker.js` — bumped `CACHE_NAME` to `leadtrak-v6-mobile-fix`; added network-first strategy for `.js`/`.css` and `script`/`style` destinations; activate handler now posts `SW_UPDATED` to every open client.
+- `/app/frontend/public/index.html` — registration script now calls `reg.update()` on every load, listens for `updatefound`, sends `SKIP_WAITING`, and triggers a one-shot `window.location.reload()` on `controllerchange` / `SW_UPDATED` so the new bundle is picked up automatically without manual cache clearing.
+
+**Verified in preview (390×844 mobile viewport):** landing, leads, reports, settings — all have `documentElement.scrollWidth === 390`, no horizontal scroll, no overlapping grids.
+
+**Deploy note:** Going forward, any production deploy that touches CSS/JS only needs the CACHE_NAME bumped to invalidate stale bundles for already-installed PWAs.
