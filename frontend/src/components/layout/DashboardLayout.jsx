@@ -274,6 +274,25 @@ export default function DashboardLayout({ children }) {
 
       {/* Main Content */}
       <div className="lg:ml-64">
+        {/* Impersonation banner — Super Admin acting AS a tenant user */}
+        {user?.impersonating && (
+          <div className="bg-amber-500 text-amber-950 px-4 py-2 text-sm font-medium flex items-center justify-between gap-3 sticky top-0 z-30" data-testid="impersonation-banner">
+            <div className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+              <span>Impersonating <strong>{user.email}</strong> · {user.organization_name}</span>
+            </div>
+            <button
+              onClick={async () => {
+                await axios.post(`${API}/auth/logout`).catch(() => {});
+                window.location.href = '/login';
+              }}
+              className="bg-amber-950 text-amber-50 hover:bg-amber-900 px-3 py-1 rounded text-xs font-semibold"
+              data-testid="exit-impersonation-btn"
+            >
+              Exit Impersonation
+            </button>
+          </div>
+        )}
         {/* Topbar */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-20">
           <div className="flex items-center gap-4">

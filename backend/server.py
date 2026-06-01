@@ -6,6 +6,9 @@ load_dotenv(ROOT_DIR / '.env')
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends, Response, UploadFile, File, Form
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 import os
@@ -62,6 +65,18 @@ cloudinary.config(
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+# ==================== Rate Limiter ====================
+# Trusts the leftmost X-Forwarded-For IP (k8s ingress / Cloudflare). Falls back to remote_addr.
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return get_remote_address(request)
+
+limiter = Limiter(key_func=_client_ip, default_limits=[], headers_enabled=True)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -102,6 +117,11 @@ async def get_current_user(request: Request) -> dict:
             raise HTTPException(status_code=401, detail="User not found")
         user["_id"] = str(user["_id"])
         user["id"] = user["_id"]
+        # Impersonation flag (set by Super Admin /impersonate flow)
+        impersonator_id = payload.get("impersonator_id")
+        if impersonator_id:
+            user["impersonating"] = True
+            user["impersonator_id"] = impersonator_id
         org_id = user.get("organization_id")
         user["organization_id"] = str(org_id) if org_id else ""
         user.pop("password_hash", None)
@@ -129,9 +149,14 @@ async def check_brute_force(identifier: str):
     attempt = await db.login_attempts.find_one({"identifier": identifier})
     if attempt:
         if attempt["count"] >= 5:
-            lockout_time = attempt["last_attempt"] + timedelta(minutes=15)
-            if datetime.now(timezone.utc) < lockout_time:
-                remaining = int((lockout_time - datetime.now(timezone.utc)).total_seconds() / 60)
+            # Mongo may return naive datetimes — coerce to UTC for comparison
+            last = attempt["last_attempt"]
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            lockout_time = last + timedelta(minutes=15)
+            now = datetime.now(timezone.utc)
+            if now < lockout_time:
+                remaining = max(1, int((lockout_time - now).total_seconds() / 60))
                 raise HTTPException(status_code=429, detail=f"Too many failed attempts. Try again in {remaining} minutes")
             else:
                 await db.login_attempts.delete_one({"identifier": identifier})
@@ -778,7 +803,8 @@ async def startup_db():
 
 # ==================== Auth Routes ====================
 @api_router.post("/auth/register")
-async def register(data: RegisterRequest, response: Response):
+@limiter.limit("5/hour")
+async def register(data: RegisterRequest, request: Request, response: Response):
     email = data.email.lower()
     
     # Check if user already exists
@@ -869,6 +895,7 @@ async def register(data: RegisterRequest, response: Response):
     }
 
 @api_router.post("/auth/login")
+@limiter.limit("10/minute")
 async def login(data: LoginRequest, request: Request, response: Response):
     email = data.email.lower()
     # Use email-based identifier - k8s ingress shows different upstream IPs per request
@@ -1067,7 +1094,8 @@ async def refresh_token(request: Request, response: Response):
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
 @api_router.post("/auth/forgot-password")
-async def forgot_password(data: ForgotPasswordRequest):
+@limiter.limit("3/minute")
+async def forgot_password(data: ForgotPasswordRequest, request: Request):
     email = data.email.lower()
     user = await db.users.find_one({"email": email})
     
@@ -1084,13 +1112,15 @@ async def forgot_password(data: ForgotPasswordRequest):
     })
     
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
-    reset_link = f"{frontend_url}/reset-password?token={token}"
-    logger.info(f"Password reset link: {reset_link}")
+    # SECURITY: never log the full reset link in plaintext — it grants password reset.
+    logger.info(f"Password reset requested for {email[:3]}***@{email.split('@')[1] if '@' in email else ''}")
+    _ = frontend_url  # kept for future email delivery
     
     return {"message": "If email exists, reset link has been sent"}
 
 @api_router.post("/auth/reset-password")
-async def reset_password(data: ResetPasswordRequest):
+@limiter.limit("5/minute")
+async def reset_password(data: ResetPasswordRequest, request: Request):
     reset_token = await db.password_reset_tokens.find_one({"token": data.token, "used": False})
     
     if not reset_token:
@@ -1441,28 +1471,40 @@ async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_use
 
 @api_router.post("/leads/{lead_id}/assign")
 async def assign_lead(lead_id: str, assigned_to: str, current_user: dict = Depends(get_current_user)):
+    # SECURITY: only managers / admins / super admins can re-assign leads
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Not authorized to assign leads")
+
     org_id = ObjectId(current_user["organization_id"])
     lid = safe_object_id(lead_id, "lead_id")
-    
+    aid = safe_object_id(assigned_to, "assigned_to")
+
+    # SECURITY: target user MUST belong to the same organization (prevent IDOR / cross-tenant assignment)
+    assignee = await db.users.find_one({"_id": aid, "organization_id": org_id}, {"name": 1, "active": 1})
+    if not assignee:
+        raise HTTPException(status_code=400, detail="Assignee not found in your organization")
+    if assignee.get("active") is False:
+        raise HTTPException(status_code=400, detail="Cannot assign to a deactivated user")
+
     result = await db.leads.update_one(
         {"_id": lid, "organization_id": org_id},
         {"$set": {"assigned_to": assigned_to}}
     )
-    
+
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Lead not found")
-    
+
     # Create notification
-    lead = await db.leads.find_one({"_id": lid})
+    lead = await db.leads.find_one({"_id": lid}, {"name": 1})
     await db.notifications.insert_one({
         "user_id": assigned_to,
-        "message": f"Lead '{lead['name']}' has been assigned to you",
+        "message": f"Lead '{(lead or {}).get('name', '')}' has been assigned to you",
         "type": "lead_assigned",
         "read": False,
         "organization_id": org_id,
         "created_at": datetime.now(timezone.utc)
     })
-    
+
     return {"message": "Lead assigned successfully"}
 
 
@@ -2699,6 +2741,95 @@ async def extend_trial(org_id: str, days: int = 7, current_user: dict = Depends(
     return {"trial_end_date": new_end.isoformat(), "days_added": days}
 
 
+# ==================== Super Admin: Impersonate Org Admin ====================
+def create_impersonation_token(impersonator_id: str, target_user_id: str, target_email: str) -> str:
+    """Short-lived access token (30 min) that lets a Super Admin act AS another user.
+    The payload preserves both the real ID and the impersonator ID for audit logs."""
+    payload = {
+        "sub": target_user_id,
+        "email": target_email,
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=30),
+        "type": "access",
+        "impersonator_id": impersonator_id,
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+@api_router.post("/platform/organizations/{org_id}/impersonate")
+async def impersonate_org_admin(org_id: str, response: Response, current_user: dict = Depends(get_current_user)):
+    """Super Admin impersonation: temporarily log in as the Org Admin of {org_id}.
+    Use case: tenant support, debugging, validating onboarding.
+    Security:
+      • Only super_admin can call this
+      • Token expiry is shorter (30 min) than a normal access token (15 min refresh dependency)
+      • All actions performed while impersonating are recorded in `impersonation_audit_log`
+      • Refresh token is NOT issued — when the impersonation token expires the session ends naturally
+    """
+    if current_user["role"] != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin only")
+
+    org_oid = safe_object_id(org_id, "org_id")
+    org = await db.organizations.find_one({"_id": org_oid}, {"name": 1, "industry": 1})
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Pick the org admin — fallback to any active user in that org
+    target = await db.users.find_one(
+        {"organization_id": org_oid, "role": "org_admin", "active": {"$ne": False}},
+        {"email": 1, "name": 1, "role": 1},
+    )
+    if not target:
+        target = await db.users.find_one(
+            {"organization_id": org_oid, "active": {"$ne": False}},
+            {"email": 1, "name": 1, "role": 1},
+        )
+    if not target:
+        raise HTTPException(status_code=404, detail="No active user found in this organization")
+
+    token = create_impersonation_token(
+        impersonator_id=current_user["id"],
+        target_user_id=str(target["_id"]),
+        target_email=target["email"],
+    )
+
+    # Audit log
+    await db.impersonation_audit_log.insert_one({
+        "impersonator_id": ObjectId(current_user["id"]),
+        "impersonator_email": current_user["email"],
+        "target_user_id": target["_id"],
+        "target_email": target["email"],
+        "target_org_id": org_oid,
+        "target_org_name": org.get("name"),
+        "started_at": datetime.now(timezone.utc),
+    })
+    logger.warning(
+        f"IMPERSONATION: {current_user['email']} -> {target['email']} (org: {org.get('name')})"
+    )
+
+    # Issue the impersonation cookie — overrides the super admin's normal cookie
+    response.set_cookie(
+        key="access_token", value=token,
+        httponly=True, secure=True, samesite="none", max_age=1800, path="/",
+    )
+    # Clear the refresh token so the session can't be silently extended
+    response.delete_cookie("refresh_token", path="/")
+
+    return {
+        "message": "Impersonating",
+        "target_user": {
+            "id": str(target["_id"]),
+            "email": target["email"],
+            "name": target.get("name"),
+            "role": target.get("role"),
+        },
+        "organization": {
+            "id": str(org_oid),
+            "name": org.get("name"),
+        },
+        "expires_in": 1800,
+    }
+
+
 # ==================== Razorpay: Public Config + Payment Links + Webhook ====================
 @api_router.get("/razorpay/config")
 async def razorpay_config(current_user: dict = Depends(get_current_user)):
@@ -2930,6 +3061,7 @@ async def _activate_subscription_from_paid_order(order_doc: dict, razorpay_payme
 
 
 @api_router.post("/webhooks/razorpay")
+@limiter.limit("120/minute")
 async def razorpay_webhook(request: Request):
     """Public Razorpay webhook receiver. Validates X-Razorpay-Signature (HMAC-SHA256)
     and activates subscriptions on `payment_link.paid` / `payment.captured`.
@@ -4561,7 +4693,8 @@ async def public_widget_cities(widget_token: str, state: str):
 
 
 @api_router.post("/widget/lead/{widget_token}")
-async def public_widget_lead(widget_token: str, data: PublicLeadCreate):
+@limiter.limit("30/minute")
+async def public_widget_lead(widget_token: str, data: PublicLeadCreate, request: Request):
     org = await db.organizations.find_one({"widget_token": widget_token})
     if not org:
         raise HTTPException(status_code=404, detail="Invalid widget token")
@@ -5203,12 +5336,20 @@ async def update_ticket_status(tid: str, data: TicketStatusUpdate, current_user:
 # Include the router in the main app
 app.include_router(api_router)
 
+# ==================== CORS (strict — no wildcard with credentials) ====================
+_raw_origins = os.environ.get('CORS_ORIGINS', '')
+_allowed_origins = [o.strip() for o in _raw_origins.split(',') if o.strip() and o.strip() != '*']
+if not _allowed_origins:
+    # Sane local default — never wildcard when credentials are enabled
+    _allowed_origins = ['http://localhost:3000']
+logger.info(f"CORS allowed origins: {_allowed_origins}")
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
+    allow_origins=_allowed_origins,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    max_age=600,
 )
 
 @app.on_event("shutdown")

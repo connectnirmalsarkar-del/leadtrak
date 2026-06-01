@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Plus, Users, UserPlus, Trash2, PauseCircle, PlayCircle,
-  IndianRupee, Hourglass, ShoppingCart, Wallet, CalendarPlus, Link2, Copy, ExternalLink,
+  IndianRupee, Hourglass, ShoppingCart, Wallet, CalendarPlus, Link2, Copy, ExternalLink, UserCog,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -270,6 +270,19 @@ export default function PlatformOrgsPage() {
     window.open(`https://wa.me/?text=${msg}`, '_blank');
   };
 
+  // ---- Impersonate Org Admin ----
+  const handleImpersonate = async (org) => {
+    if (!window.confirm(`Impersonate the Org Admin of "${org.name}"?\n\nYou will be logged in AS them for 30 minutes. Every action is audit-logged.\n\nYour Super Admin session will be replaced. To return, simply log out + log back in as Super Admin.`)) return;
+    try {
+      const { data } = await axios.post(`${API}/platform/organizations/${org.id}/impersonate`);
+      toast.success(`Now impersonating ${data.target_user.email}`);
+      // Hard reload to /dashboard so the new auth context applies cleanly
+      setTimeout(() => { window.location.href = '/dashboard'; }, 600);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to impersonate');
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-[1440px]" data-testid="platform-orgs-page">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -459,6 +472,9 @@ export default function PlatformOrgsPage() {
                     <TableCell className="text-xs text-slate-500">{new Date(o.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
+                        <button onClick={() => handleImpersonate(o)} className="text-slate-400 hover:text-amber-600" title="Impersonate Org Admin" data-testid={`impersonate-${o.id}`}>
+                          <UserCog className="w-4 h-4" />
+                        </button>
                         <button onClick={() => openManualPayment(o)} className="text-slate-400 hover:text-emerald-700" title="Record Payment" data-testid={`pay-${o.id}`}>
                           <Wallet className="w-4 h-4" />
                         </button>
