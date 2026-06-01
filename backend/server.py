@@ -2819,6 +2819,40 @@ async def platform_delete_city(city_id: str, current_user: dict = Depends(get_cu
 
 
 
+# ==================== PWA: Tenant-aware Manifest ====================
+@api_router.get("/pwa/manifest")
+async def pwa_manifest(current_user: dict = Depends(get_current_user)):
+    """Per-tenant Web App Manifest — installs as the org's branded PWA."""
+    org_id = ObjectId(current_user["organization_id"])
+    org = await db.organizations.find_one({"_id": org_id}, {"name": 1, "branding": 1, "industry": 1})
+    org_name = (org or {}).get("name", "Leadtrak")
+    branding = (org or {}).get("branding") or {}
+    primary_color = branding.get("primary_color") or "#7C3AED"
+    logo_url = branding.get("logo_url") or ""
+    short_name = org_name[:12] if len(org_name) > 12 else org_name
+    return {
+        "name": f"{org_name} CRM",
+        "short_name": short_name,
+        "description": f"{org_name} — powered by Leadtrak CRM",
+        "start_url": "/dashboard",
+        "scope": "/",
+        "display": "standalone",
+        "orientation": "portrait",
+        "background_color": "#F8FAFC",
+        "theme_color": primary_color,
+        "icons": [
+            {"src": logo_url or "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": logo_url or "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+        ],
+        "categories": ["business", "productivity"],
+        "shortcuts": [
+            {"name": "Add Lead", "url": "/leads"},
+            {"name": "Dashboard", "url": "/dashboard"},
+            {"name": "Reports", "url": "/reports"},
+        ],
+    }
+
+
 # ==================== Onboarding Wizard ====================
 ONBOARDING_STEPS = [
     "welcome",     # 0 — confirm industry / branding (auto-done on signup)

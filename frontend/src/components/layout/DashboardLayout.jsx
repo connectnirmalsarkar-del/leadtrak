@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useTerminology } from '@/lib/terminology';
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard';
+import InstallPWAPrompt from '@/components/pwa/InstallPWAPrompt';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -401,9 +402,10 @@ export default function DashboardLayout({ children }) {
         </header>
 
         {/* Page Content */}
-        <main className="p-6">{children}</main>
+        <main className="p-3 sm:p-6 max-w-full overflow-x-hidden">{children}</main>
       </div>
       <OnboardingWizard />
+      <InstallPWAPrompt />
     </div>
   );
 }
