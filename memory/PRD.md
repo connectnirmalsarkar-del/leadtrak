@@ -813,3 +813,29 @@ POST https://leadtrak.in/api/platform/migrate-invalid-lead-statuses
 - ✅ `/api/dashboard/leaderboard` returns avatar_url + conversion_label="Admission" per user.
 - ✅ `/api/dashboard/activity-feed` returns "created lead NIRMAL" (industry-aware lead label).
 - ✅ Dashboard screenshot confirms: Lead Funnel labels correct, Top Performers shows real initials avatar with "ADMI" label, Recent Activity uses correct wording.
+
+---
+
+## Industry-Aware "Book Demo" button (Feb 2026)
+
+**Request:** Lead form-e "Book Demo" button hardcoded chilo — Real Estate-e "Book Site Visit", Admission Consultancy / Education-e "Book Counselling" dekhabe; industry-wise different.
+
+**Fix:** Used `user.features.demo_label` (already industry-aware in `industry_config.py`) + singularization helper.
+
+Mapping:
+- education → **Book Counselling**
+- it_software → **Book Demo**
+- real_estate → **Book Site Visit**
+- healthcare → **Book Consultation**
+- fitness → **Book Trial Session**
+- admission_consultancy → **Book Counselling**
+- generic → **Book Demo**
+
+**Files updated:**
+- `/app/frontend/src/pages/LeadsPage.jsx` — main Lead Detail panel button.
+- `/app/frontend/src/components/BookDemoDialog.jsx` — dialog title, presenter label, link label, submit button.
+- `/app/frontend/src/pages/FollowupsPage.jsx` — "What's next? → Book Demo" option in completion dialog.
+
+SW cache `v61` → `v62-industry-aware-book-demo-button`.
+
+**Verified (Playwright):** Counselor login (Education industry) → Lead Detail panel → button reads **"Book Counselling"** ✅

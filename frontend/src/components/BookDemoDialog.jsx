@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { API } from '@/context/AuthContext';
+import { API, useAuth } from '@/context/AuthContext';
 import { Video, MessageSquare, Mail, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,11 @@ import { toast } from 'sonner';
  *   onBooked: (demo) => void   // called after successful book — { share.whatsapp, share.mailto, ... }
  */
 export default function BookDemoDialog({ open, onOpenChange, lead, users = [], onBooked }) {
+  const { user } = useAuth();
+  // Industry-aware label: Book Demo / Book Counselling / Book Site Visit / Book Consultation / Book Trial Session
+  const demoLabelRaw = user?.features?.demo_label || 'Demo';
+  const demoLabelSingular = demoLabelRaw.endsWith('s') ? demoLabelRaw.slice(0, -1) : demoLabelRaw;
+  const bookDemoLabel = `Book ${demoLabelSingular}`;
   const [form, setForm] = useState({
     demo_owner_id: '',
     scheduled_date: new Date().toISOString().split('T')[0],
@@ -76,17 +81,17 @@ export default function BookDemoDialog({ open, onOpenChange, lead, users = [], o
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Video className="w-5 h-5 text-violet-600" />
-            Book Demo {lead && <span className="text-sm font-normal text-slate-500">for {lead.name}</span>}
+            {bookDemoLabel} {lead && <span className="text-sm font-normal text-slate-500">for {lead.name}</span>}
           </DialogTitle>
           <DialogDescription>
-            Schedule a demo with the right team member. Once booked, share the invite via WhatsApp or email in one click.
+            Schedule a {demoLabelSingular.toLowerCase()} with the right team member. Once booked, share the invite via WhatsApp or email in one click.
           </DialogDescription>
         </DialogHeader>
 
         {!savedDemo ? (
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Demo presenter *</Label>
+              <Label>{demoLabelSingular} presenter *</Label>
               <Select value={form.demo_owner_id} onValueChange={(v) => setForm({ ...form, demo_owner_id: v })}>
                 <SelectTrigger data-testid="demo-owner-select">
                   <SelectValue placeholder="Pick team member to present" />
@@ -121,7 +126,7 @@ export default function BookDemoDialog({ open, onOpenChange, lead, users = [], o
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Demo link {form.demo_mode === 'Online' && '*'}</Label>
+              <Label>{demoLabelSingular} link {form.demo_mode === 'Online' && '*'}</Label>
               <Input
                 value={form.demo_link}
                 onChange={(e) => setForm({ ...form, demo_link: e.target.value })}
@@ -194,7 +199,7 @@ export default function BookDemoDialog({ open, onOpenChange, lead, users = [], o
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
               <Button onClick={submit} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="book-demo-submit-btn">
                 <Send className="w-4 h-4 mr-1.5" />
-                Book demo
+                {bookDemoLabel}
               </Button>
             </>
           ) : (

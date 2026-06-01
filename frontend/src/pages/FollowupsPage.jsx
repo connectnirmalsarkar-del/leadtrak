@@ -220,7 +220,7 @@ function CompleteFollowupDialog({ followup, open, onOpenChange, onDone }) {
               <SelectContent>
                 <SelectItem value="none">Nothing — done for now</SelectItem>
                 <SelectItem value="next_followup">Schedule another follow-up</SelectItem>
-                <SelectItem value="book_demo">Book a demo (go to Demos page)</SelectItem>
+                <SelectItem value="book_demo">{`Book ${(user?.features?.demo_label || 'Demo').replace(/s$/,'')} (go to ${user?.features?.demo_label || 'Demos'} page)`}</SelectItem>
                 <SelectItem value="convert">Mark lead converted</SelectItem>
                 <SelectItem value="lost">Mark lead lost</SelectItem>
               </SelectContent>

@@ -104,6 +104,10 @@ export default function LeadsPage() {
   // Show industry-specific columns on the leads table (Company shown only
   // for IT Software industry to keep the table compact for everyone else).
   const showCompanyCol = (user?.industry === 'it_software');
+  // Industry-aware "Book Demo" → "Book Counselling" / "Book Site Visit" / etc.
+  const demoLabelRaw = user?.features?.demo_label || 'Demo';
+  const demoLabelSingular = demoLabelRaw.endsWith('s') ? demoLabelRaw.slice(0, -1) : demoLabelRaw;
+  const bookDemoLabel = `Book ${demoLabelSingular}`;
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [services, setServices] = useState([]);
@@ -996,7 +1000,7 @@ export default function LeadsPage() {
                     </Button>
                     <Button variant="outline" className="flex-1 min-w-[120px] border-violet-200 text-violet-700 hover:bg-violet-50" onClick={() => setShowDemoDialog(true)} data-testid="book-demo-btn">
                       <Video className="w-4 h-4 mr-2" />
-                      Book Demo
+                      {bookDemoLabel}
                     </Button>
                   </div>
 
