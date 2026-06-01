@@ -980,27 +980,28 @@ export default function LeadsPage() {
                   {/* Quick Actions */}
                   <div className="flex gap-2 flex-wrap">
                     <Button
-                      className="flex-1 min-w-[120px] bg-emerald-600 hover:bg-emerald-700 text-white"
+                      className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white px-3"
+                      title="WhatsApp"
+                      aria-label="WhatsApp"
                       onClick={() => {
                         const waNum = (selectedLead.whatsapp_number || selectedLead.mobile || '').replace(/\D/g, '');
                         window.open(`https://wa.me/${waNum}`, '_blank');
                       }}
                       data-testid="whatsapp-lead-btn"
                     >
-                      <MessageSquare className="w-4 h-4 mr-2" />
-                      WhatsApp
+                      <MessageSquare className="w-4 h-4" />
                     </Button>
-                    <Button className="flex-1 min-w-[120px] bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setShowLogCallDialog(true)} data-testid="log-call-btn">
+                    <Button className="flex-1 min-w-[110px] bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setShowLogCallDialog(true)} data-testid="log-call-btn">
                       <Phone className="w-4 h-4 mr-2" />
                       Log Call
                     </Button>
-                    <Button variant="outline" className="flex-1 min-w-[120px]" onClick={() => setShowFollowupDialog(true)} data-testid="add-followup-btn">
+                    <Button variant="outline" className="flex-1 min-w-[110px]" onClick={() => setShowFollowupDialog(true)} data-testid="add-followup-btn">
                       <Clock className="w-4 h-4 mr-2" />
                       Schedule
                     </Button>
-                    <Button variant="outline" className="flex-1 min-w-[120px] border-violet-200 text-violet-700 hover:bg-violet-50" onClick={() => setShowDemoDialog(true)} data-testid="book-demo-btn">
-                      <Video className="w-4 h-4 mr-2" />
-                      {bookDemoLabel}
+                    <Button variant="outline" className="flex-1 min-w-[170px] border-violet-200 text-violet-700 hover:bg-violet-50" onClick={() => setShowDemoDialog(true)} data-testid="book-demo-btn">
+                      <Video className="w-4 h-4 mr-2 shrink-0" />
+                      <span className="whitespace-nowrap">{bookDemoLabel}</span>
                     </Button>
                   </div>
 
