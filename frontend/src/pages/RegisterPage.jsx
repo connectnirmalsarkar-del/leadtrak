@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import axios from 'axios';
 import { useAuth, formatApiErrorDetail, API } from '@/context/AuthContext';
@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Star,
   Shield,
+  CreditCard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,9 +28,35 @@ const BENEFITS = [
 
 const CUSTOMER_LOGOS = ['APEX', 'BRIGHT', 'TECHFLOW', 'SKYLINE', 'PULSE', 'GOFIT'];
 
+const RAZORPAY_SCRIPT = 'https://checkout.razorpay.com/v1/checkout.js';
+function loadRazorpayScript() {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const existing = document.querySelector(`script[src="${RAZORPAY_SCRIPT}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true));
+      existing.addEventListener('error', () => resolve(false));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = RAZORPAY_SCRIPT;
+    s.async = true;
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
+}
+
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Read plan/cycle from ?plan=growth&cycle=monthly&pay=1
+  const planParam = (searchParams.get('plan') || '').toLowerCase();
+  const cycleParam = searchParams.get('cycle') === 'annual' ? 'annual' : 'monthly';
+  const directPay = searchParams.get('pay') === '1' && !!planParam;
+
   const [form, setForm] = useState({
     name: '',
     organization_name: '',
@@ -39,23 +66,111 @@ export default function RegisterPage() {
   });
   const [industries, setIndustries] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [paying, setPaying] = useState(false);
   const [error, setError] = useState('');
+  const [plans, setPlans] = useState([]);
+  const [rzpConfig, setRzpConfig] = useState({ configured: false, key_id: '' });
 
   useEffect(() => {
-    axios
-      .get(`${API}/industries`)
-      .then(({ data }) => setIndustries(data))
-      .catch(() => setIndustries([]));
+    axios.get(`${API}/industries`).then(({ data }) => setIndustries(data)).catch(() => setIndustries([]));
+    axios.get(`${API}/subscription-plans`).then(({ data }) => setPlans(data || [])).catch(() => setPlans([]));
+    axios.get(`${API}/razorpay/public-config`).then(({ data }) => setRzpConfig(data)).catch(() => setRzpConfig({ configured: false, key_id: '' }));
   }, []);
+
+  const selectedPlan = plans.find((p) => p.name?.toLowerCase() === planParam);
+  const planPriceMonthly = selectedPlan ? (cycleParam === 'monthly' ? selectedPlan.price_monthly : Math.round(selectedPlan.price_annual / 12)) : 0;
+  const planGstMonthly = selectedPlan ? (cycleParam === 'monthly'
+    ? (selectedPlan.gst_monthly ?? Math.round(selectedPlan.price_monthly * 0.18 * 100) / 100)
+    : Math.round((selectedPlan.gst_annual ?? selectedPlan.price_annual * 0.18) / 12 * 100) / 100
+  ) : 0;
+  const planTotalPerMonth = Math.round((planPriceMonthly + planGstMonthly) * 100) / 100;
+  const planTotalChargeable = selectedPlan ? (cycleParam === 'monthly'
+    ? (selectedPlan.total_monthly ?? Math.round((selectedPlan.price_monthly + (selectedPlan.gst_monthly ?? selectedPlan.price_monthly * 0.18)) * 100) / 100)
+    : (selectedPlan.total_annual ?? Math.round(selectedPlan.price_annual * 1.18))
+  ) : 0;
+
+  const runRazorpayCheckout = async (user) => {
+    if (!selectedPlan || !rzpConfig.configured) {
+      // Fallback — go to dashboard (trial active)
+      navigate('/dashboard');
+      return;
+    }
+    setPaying(true);
+    try {
+      const ok = await loadRazorpayScript();
+      if (!ok) {
+        toast.error('Could not load Razorpay. You can pay later from the Subscription page.');
+        navigate('/subscription');
+        return;
+      }
+      const { data: order } = await axios.post(`${API}/subscriptions/create-order`, {
+        plan_id: selectedPlan.id || selectedPlan._id,
+        billing_cycle: cycleParam,
+      });
+      const options = {
+        key: rzpConfig.key_id,
+        amount: order.amount,
+        currency: order.currency || 'INR',
+        order_id: order.order_id,
+        name: 'Leadtrak',
+        description: `${selectedPlan.name} · ${cycleParam === 'annual' ? 'Annual' : 'Monthly'} · incl. 18% GST`,
+        image: '/icon-512.png',
+        prefill: {
+          name: user?.name || form.name,
+          email: user?.email || form.email,
+          contact: '',
+        },
+        theme: { color: '#7C3AED' },
+        handler: async (response) => {
+          try {
+            await axios.post(`${API}/subscriptions/verify`, {
+              payment_id: response.razorpay_payment_id,
+              order_id: response.razorpay_order_id,
+              signature: response.razorpay_signature,
+            });
+            toast.success(`Payment successful — ${selectedPlan.name} plan activated!`);
+            setTimeout(() => navigate('/dashboard'), 1000);
+          } catch (e) {
+            toast.error(e.response?.data?.detail || 'Payment verification failed. You can retry from Subscription page.');
+            setTimeout(() => navigate('/subscription'), 1500);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setPaying(false);
+            toast.info('Payment cancelled — you can pay later from Subscription page. Your 14-day trial is active.');
+            setTimeout(() => navigate('/dashboard'), 1500);
+          },
+        },
+      };
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', (resp) => {
+        toast.error(resp?.error?.description || 'Payment failed — you can retry anytime from Subscription page.');
+        setPaying(false);
+        setTimeout(() => navigate('/subscription'), 1500);
+      });
+      rzp.open();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not start payment. Your trial is active.');
+      navigate('/dashboard');
+    } finally {
+      setTimeout(() => setPaying(false), 3000);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await register(form.email, form.password, form.name, form.organization_name, form.industry);
-      toast.success('Welcome! Your workspace is ready.');
-      navigate('/dashboard');
+      const user = await register(form.email, form.password, form.name, form.organization_name, form.industry);
+      if (directPay && selectedPlan) {
+        toast.success('Account created — opening payment…');
+        await runRazorpayCheckout(user);
+      } else {
+        toast.success('Welcome! Your workspace is ready.');
+        navigate('/dashboard');
+      }
     } catch (err) {
       const msg = formatApiErrorDetail(err.response?.data?.detail) || err.message;
       setError(msg);
@@ -64,6 +179,10 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+  const ctaText = directPay && selectedPlan
+    ? (loading ? 'Creating account…' : paying ? 'Opening payment…' : `Create account & pay ₹${planTotalChargeable.toLocaleString('en-IN')}`)
+    : (loading ? 'Creating account...' : 'Create my account');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50/50 relative overflow-hidden">
@@ -95,7 +214,7 @@ export default function RegisterPage() {
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-violet-100 border border-violet-200 rounded-full mb-3">
             <Sparkles className="w-3 h-3 text-violet-700" />
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-700">
-              Book a Free Demo
+              {directPay ? 'Activate plan' : 'Book a Free Demo'}
             </span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 leading-[1.1]" style={{ fontFamily: 'Sora' }}>
@@ -122,7 +241,7 @@ export default function RegisterPage() {
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-100 border border-violet-200 rounded-full mb-5">
                 <Sparkles className="w-3.5 h-3.5 text-violet-700" />
                 <span className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-700">
-                  Book a Free Demo
+                  {directPay ? 'Activate plan' : 'Book a Free Demo'}
                 </span>
               </div>
               <h1 className="text-4xl sm:text-5xl xl:text-6xl font-bold tracking-tight text-slate-900 leading-[1.05]" style={{ fontFamily: 'Sora' }}>
@@ -239,16 +358,48 @@ export default function RegisterPage() {
             transition={{ duration: 0.7, delay: 0.2 }}
             className="order-1 lg:order-2 lg:sticky lg:top-24"
           >
+            {/* Plan banner (only shown when ?plan=... is set) */}
+            {directPay && selectedPlan && (
+              <div className="mb-4 p-4 sm:p-5 bg-gradient-to-br from-violet-700 to-violet-900 text-white rounded-2xl shadow-lg shadow-violet-200" data-testid="selected-plan-banner">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-200 mb-1">Selected Plan</p>
+                    <p className="text-xl font-bold" style={{ fontFamily: 'Sora' }} data-testid="selected-plan-name">
+                      {selectedPlan.name} · {cycleParam === 'annual' ? 'Annual' : 'Monthly'}
+                    </p>
+                    <p className="text-xs text-violet-200 mt-0.5">
+                      ₹{planPriceMonthly.toLocaleString('en-IN')}/mo + 18% GST ₹{planGstMonthly.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-200">{cycleParam === 'annual' ? 'Billed annually' : 'Billed monthly'}</p>
+                    <p className="text-2xl font-bold" style={{ fontFamily: 'Sora' }} data-testid="selected-plan-total">
+                      ₹{planTotalChargeable.toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-[10px] text-violet-200">incl. GST</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/15 text-[11px] text-violet-100">
+                  <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Cancel anytime</span>
+                  <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Skip trial, activate now</span>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl shadow-violet-100/50 p-6 sm:p-8 lg:p-10">
               <div className="mb-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-2">
                   Get started
                 </p>
                 <h2 className="text-2xl xl:text-3xl font-bold text-slate-900 tracking-tight" style={{ fontFamily: 'Sora' }}>
-                  Start your free 14-day trial
+                  {directPay && selectedPlan
+                    ? `Activate ${selectedPlan.name} today`
+                    : 'Start your free 14-day trial'}
                 </h2>
                 <p className="text-sm text-slate-600 mt-2">
-                  No credit card. Setup in 5 minutes.
+                  {directPay && selectedPlan
+                    ? 'Create your account and pay securely via Razorpay. Setup in 5 minutes.'
+                    : 'No credit card. Setup in 5 minutes.'}
                 </p>
               </div>
 
@@ -344,12 +495,24 @@ export default function RegisterPage() {
                 <Button
                   type="submit"
                   className="w-full h-12 bg-violet-700 hover:bg-violet-800 text-white shadow-lg shadow-violet-200 font-semibold text-base"
-                  disabled={loading}
+                  disabled={loading || paying}
                   data-testid="register-submit-btn"
                 >
-                  {loading ? 'Creating account...' : 'Create my account'}
-                  {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
+                  {directPay && selectedPlan && !loading && !paying && <CreditCard className="w-4 h-4 mr-2" />}
+                  {ctaText}
+                  {!directPay && !loading && <ArrowRight className="w-4 h-4 ml-2" />}
                 </Button>
+
+                {directPay && selectedPlan && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/register')}
+                    className="w-full text-xs text-slate-500 hover:text-violet-700 underline-offset-2 hover:underline"
+                    data-testid="switch-to-trial-link"
+                  >
+                    Or start a 14-day free trial instead
+                  </button>
+                )}
 
                 <div className="space-y-2 pt-2">
                   {[

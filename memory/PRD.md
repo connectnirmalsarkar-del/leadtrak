@@ -499,3 +499,30 @@ Added 3 telecaller-friendly statuses to every industry's `default_lead_statuses`
 
 **Verified:** `/api/auth/me` for the Education-industry Super Admin now returns the 3 new statuses in `lead_statuses[]`. Status dropdown on `/leads` shows them positioned right after Contacted with proper badge colors.
 
+---
+
+## 2026-06-01 — Direct-Pay Signup Flow (Landing → Razorpay) ✅
+
+Built a friction-less paid-signup path so visitors who already want to buy can skip the trial flow and pay immediately right after creating their account.
+
+**Flow:**
+1. Landing page pricing section now has Monthly/Annual toggle + each plan card shows **"Buy {Name} now"** primary CTA and **"Or start a 14-day free trial"** secondary link.
+2. "Buy" CTA navigates to `/register?plan=<name>&cycle=<monthly|annual>&pay=1`.
+3. Register page reads query params, fetches plan details via the public `/api/subscription-plans` endpoint, and shows a violet "Selected Plan" banner with price + GST + total. Hero badge flips to "ACTIVATE PLAN".
+4. CTA button changes to **"Create account & pay ₹{total}"** (with credit-card icon). Secondary "Or start a 14-day free trial instead" link.
+5. On submit: account is created → user gets logged in (cookies set) → Razorpay checkout opens automatically → on success, calls `/api/subscriptions/verify` which flips org from `trial` to `active` with proper `subscription_end_date`.
+6. If user dismisses or payment fails → graceful fallback to `/dashboard` with 14-day trial still active OR `/subscription` page to retry. Toast informs the user.
+
+**Backend changes:**
+- New endpoint `GET /api/razorpay/public-config` — unauthenticated version of `/razorpay/config` so the Register page can pre-fetch the Razorpay Key ID before login. Key ID is a public identifier; safe to expose. Secret never sent.
+
+**Frontend changes:**
+- `LandingPage.jsx` — added `billingCycle` state, Monthly/Annual toggle, dynamic price computation, dual CTA buttons per plan card.
+- `RegisterPage.jsx` — rewritten with `useSearchParams`, dynamic plan banner, two-mode CTA, Razorpay script loader, full checkout handler (success → /dashboard, dismiss → /dashboard with trial, failure → /subscription).
+- `service-worker.js` — `CACHE_NAME` bumped to `leadtrak-v29-direct-pay`.
+
+**Verified:** Smoke screenshots confirm both flows render correctly:
+- `?plan=growth&cycle=monthly&pay=1` → "Activate Growth today" + Plan banner + "Create account & pay ₹3,538.82" button
+- Bare `/register` → unchanged "Start your free 14-day trial" flow
+- Landing pricing now shows toggle + dual CTAs per plan
+

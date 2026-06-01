@@ -47,6 +47,7 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [wordIndex, setWordIndex] = useState(0);
   const [activeIndustry, setActiveIndustry] = useState('education');
+  const [billingCycle, setBillingCycle] = useState('monthly');
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -592,20 +593,41 @@ export default function LandingPage() {
 
       {/* Pricing */}
       <section id="pricing" className="max-w-7xl mx-auto px-6 py-24">
-        <div className="text-center max-w-2xl mx-auto mb-16">
+        <div className="text-center max-w-2xl mx-auto mb-10">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700 mb-3">Pricing</p>
           <h2 className="text-2xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 mb-4" style={{ fontFamily: 'Sora' }}>
             Plans that scale with you
           </h2>
-          <p className="text-lg text-slate-600">No hidden fees. Switch plans anytime.</p>
+          <p className="text-lg text-slate-600">No hidden fees. Switch plans anytime. All prices include 18% GST on checkout.</p>
+        </div>
+
+        {/* Monthly / Annual toggle */}
+        <div className="flex items-center justify-center gap-2 bg-slate-100 p-1 rounded-md w-fit mx-auto mb-12">
+          <button
+            onClick={() => setBillingCycle('monthly')}
+            className={`px-4 py-1.5 text-sm rounded-md transition-colors ${billingCycle === 'monthly' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-600'}`}
+            data-testid="landing-billing-monthly"
+          >
+            Monthly
+          </button>
+          <button
+            onClick={() => setBillingCycle('annual')}
+            className={`px-4 py-1.5 text-sm rounded-md transition-colors ${billingCycle === 'annual' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-600'}`}
+            data-testid="landing-billing-annual"
+          >
+            Annual <span className="text-xs text-emerald-600 ml-1">Save 17%</span>
+          </button>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {[
-            { name: 'Starter', price: '₹999', desc: 'Small teams getting started', features: ['5 Users', '1,000 Leads', 'Basic Reports', 'Email Support'], popular: false },
-            { name: 'Growth', price: '₹2,999', desc: 'Growing companies & SMBs', features: ['20 Users', '5,000 Leads', 'Advanced Reports', 'WhatsApp', 'Priority Support'], popular: true },
-            { name: 'Enterprise', price: '₹9,999', desc: 'Large orgs & multi-branch', features: ['Unlimited Users', 'Unlimited Leads', 'Custom Reports', 'All Integrations', '24/7 Support'], popular: false },
-          ].map((plan, i) => (
+            { name: 'Starter', monthly: 999, annual: 9999, desc: 'Small teams getting started', features: ['5 Users', '1,000 Leads', 'Basic Reports', 'Email Support'], popular: false },
+            { name: 'Growth', monthly: 2999, annual: 29999, desc: 'Growing companies & SMBs', features: ['20 Users', '5,000 Leads', 'Advanced Reports', 'WhatsApp', 'Priority Support'], popular: true },
+            { name: 'Enterprise', monthly: 9999, annual: 99999, desc: 'Large orgs & multi-branch', features: ['Unlimited Users', 'Unlimited Leads', 'Custom Reports', 'All Integrations', '24/7 Support'], popular: false },
+          ].map((plan, i) => {
+            const isMonthly = billingCycle === 'monthly';
+            const displayPrice = isMonthly ? plan.monthly : Math.round(plan.annual / 12);
+            return (
             <motion.div
               key={i}
               initial={{ opacity: 0, y: 20 }}
@@ -629,9 +651,14 @@ export default function LandingPage() {
               <p className={`text-sm mb-6 ${plan.popular ? 'text-violet-200' : 'text-slate-600'}`}>{plan.desc}</p>
               <div className="mb-6">
                 <span className={`text-5xl font-bold ${plan.popular ? 'text-white' : 'text-slate-900'}`} style={{ fontFamily: 'Sora' }}>
-                  {plan.price}
+                  ₹{displayPrice.toLocaleString('en-IN')}
                 </span>
                 <span className={`text-sm ml-1 ${plan.popular ? 'text-violet-200' : 'text-slate-500'}`}>/mo</span>
+                {!isMonthly && (
+                  <p className={`text-xs mt-2 ${plan.popular ? 'text-violet-200' : 'text-slate-500'}`}>
+                    Billed annually ₹{plan.annual.toLocaleString('en-IN')}
+                  </p>
+                )}
               </div>
               <ul className="space-y-3 mb-8">
                 {plan.features.map((feat, j) => (
@@ -642,14 +669,22 @@ export default function LandingPage() {
                 ))}
               </ul>
               <Button
-                className={`w-full h-11 ${plan.popular ? 'bg-white text-violet-700 hover:bg-violet-50' : 'bg-violet-700 hover:bg-violet-800 text-white'}`}
-                onClick={() => navigate('/register')}
-                data-testid={`plan-${plan.name.toLowerCase()}-cta`}
+                className={`w-full h-11 mb-2 ${plan.popular ? 'bg-white text-violet-700 hover:bg-violet-50' : 'bg-violet-700 hover:bg-violet-800 text-white'}`}
+                onClick={() => navigate(`/register?plan=${plan.name.toLowerCase()}&cycle=${billingCycle}&pay=1`)}
+                data-testid={`plan-${plan.name.toLowerCase()}-buy-cta`}
               >
-                Start free trial
+                Buy {plan.name} now
               </Button>
+              <button
+                onClick={() => navigate('/register')}
+                className={`w-full text-xs underline-offset-2 hover:underline ${plan.popular ? 'text-violet-200' : 'text-slate-500'}`}
+                data-testid={`plan-${plan.name.toLowerCase()}-trial-cta`}
+              >
+                Or start a 14-day free trial
+              </button>
             </motion.div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

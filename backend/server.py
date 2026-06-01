@@ -3442,6 +3442,18 @@ async def razorpay_config(current_user: dict = Depends(get_current_user)):
     }
 
 
+@api_router.get("/razorpay/public-config")
+async def razorpay_public_config():
+    """Public (no-auth) version used by the Register page before login.
+    Same response shape as /razorpay/config but accessible to anonymous visitors
+    so the landing/register pages can pre-load the Razorpay key for one-click
+    paid signup. The Key ID is a public identifier (safe to expose)."""
+    return {
+        "configured": _razorpay_configured(),
+        "key_id": RAZORPAY_KEY_ID if _razorpay_configured() else "",
+    }
+
+
 class PaymentLinkRequest(BaseModel):
     plan_id: str
     billing_cycle: str  # "monthly" | "annual"
