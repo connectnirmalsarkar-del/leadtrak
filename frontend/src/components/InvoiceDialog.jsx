@@ -104,7 +104,7 @@ export default function InvoiceDialog({ invoice, open, onClose, justPaid = false
             </div>
             <div className="flex-1 min-w-[200px]">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 mb-1">Billed by</p>
-              <p className="text-sm font-semibold text-slate-900">Leadtrak (Emergent Labs)</p>
+              <p className="text-sm font-semibold text-slate-900">Leadtrak</p>
               <p className="text-xs text-slate-600">India</p>
             </div>
           </div>
