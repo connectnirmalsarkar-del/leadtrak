@@ -1906,16 +1906,18 @@ async def complete_followup(followup_id: str, data: FollowupComplete, current_us
         update_doc["voice_recording_duration"] = data.voice_recording_duration
     await db.followups.update_one({"_id": fid}, {"$set": update_doc})
 
-    # Log the completion as a follow-up event in the timeline
+    # Log the completion as a SEPARATE event (different from 'followup_added' which is when it was scheduled)
     await log_lead_event(
-        lid, "followup_added",
+        lid, "followup_completed",
         {
-            "remarks": data.summary,
-            "completed": True,
+            "followup_id": str(fid),
+            "scheduled_remarks": fu.get("remarks"),
+            "outcome_summary": data.summary,
             "followup_date": fu.get("followup_date"),
             "followup_time": fu.get("followup_time"),
             "voice_recording_url": data.voice_recording_url,
             "voice_recording_duration": data.voice_recording_duration,
+            "next_action": data.next_action,
         },
         current_user, org_id,
     )

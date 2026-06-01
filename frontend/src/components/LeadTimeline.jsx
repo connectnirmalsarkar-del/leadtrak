@@ -14,6 +14,8 @@ import {
   Video,
   CheckCircle2,
   Send,
+  Calendar,
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -27,8 +29,10 @@ const EVENT_META = {
   status_changed: { icon: RefreshCw, color: 'blue', title: 'Status changed' },
   assigned: { icon: UserPlus, color: 'indigo', title: 'Assigned' },
   transferred: { icon: ArrowRightLeft, color: 'amber', title: 'Transferred' },
-  followup_added: { icon: Phone, color: 'sky', title: 'Follow-up logged' },
-  note_added: { icon: StickyNote, color: 'slate', title: 'Note added' },
+  followup_added: { icon: Calendar, color: 'sky', title: 'Follow-up scheduled' },
+  followup_completed: { icon: CheckCircle2, color: 'emerald', title: 'Follow-up completed' },
+  followup_missed: { icon: AlertCircle, color: 'amber', title: 'Follow-up missed' },
+  note_added: { icon: StickyNote, color: 'slate', title: 'Comment' },
   demo_scheduled: { icon: Video, color: 'fuchsia', title: 'Demo scheduled' },
   demo_completed: { icon: CheckCircle2, color: 'teal', title: 'Demo completed' },
   admission_recorded: { icon: Trophy, color: 'emerald', title: 'Converted' },
@@ -83,22 +87,44 @@ const EventBody = ({ event }) => {
       );
     case 'followup_added':
       return (
-        <div className="space-y-2">
-          <p className="text-sm text-slate-700">{p.remarks}</p>
-          <p className="text-xs text-slate-500">
-            Scheduled for {p.followup_date} {p.followup_time}
-            {p.next_followup ? ` · next on ${p.next_followup}` : ''}
+        <div className="space-y-1.5">
+          {p.remarks && (
+            <p className="text-sm text-slate-700"><span className="text-[10px] uppercase tracking-wider text-slate-400 mr-1">Plan:</span>{p.remarks}</p>
+          )}
+          <p className="text-xs text-slate-500 inline-flex items-center gap-1.5">
+            <Calendar className="w-3 h-3" />
+            {p.followup_date} {p.followup_time}
+            {p.next_followup ? <span className="ml-1">· next on {p.next_followup}</span> : null}
           </p>
-          {p.voice_recording_url && (
+        </div>
+      );
+    case 'followup_completed':
+      return (
+        <div className="space-y-2">
+          {p.scheduled_remarks && (
+            <p className="text-xs text-slate-500 italic">Originally planned: "{p.scheduled_remarks}"</p>
+          )}
+          <div className="bg-emerald-50/60 border-l-2 border-emerald-400 px-2.5 py-1.5 rounded">
+            <p className="text-[10px] uppercase tracking-wider text-emerald-700 mb-0.5">Outcome</p>
+            <p className="text-sm text-slate-800">{p.outcome_summary || '—'}</p>
+          </div>
+          {p.voice_recording_url ? (
             <div className="bg-slate-50 border border-slate-200 rounded-md p-2 flex items-center gap-2" data-testid="timeline-voice-player">
               <Mic className="w-3.5 h-3.5 text-violet-600 flex-shrink-0" />
               <audio src={p.voice_recording_url} controls className="flex-1 h-8" />
               {p.voice_recording_duration && (
-                <span className="text-[10px] font-mono text-slate-500">
+                <span className="text-[10px] font-mono text-slate-500 flex-shrink-0">
                   {Math.floor(p.voice_recording_duration)}s
                 </span>
               )}
             </div>
+          ) : (
+            <p className="text-[11px] text-slate-400 italic">No voice recording was uploaded for this call.</p>
+          )}
+          {p.next_action && p.next_action !== 'none' && (
+            <p className="text-[11px] text-slate-500">
+              Next action: <span className="font-medium text-slate-700">{String(p.next_action).replace('_', ' ')}</span>
+            </p>
           )}
         </div>
       );
@@ -154,7 +180,14 @@ const EventBody = ({ event }) => {
         <p className="text-sm text-slate-600">Lead moved to Lost. Previous status: <span className="font-medium text-slate-900">{p.from}</span></p>
       );
     case 'note_added':
-      return <p className="text-sm text-slate-700">{p.note}</p>;
+      return (
+        <div className="bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1.5">
+          <p className="text-sm text-slate-700 whitespace-pre-wrap">{p.note}</p>
+          {p.from_role && (
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 mt-1">from {p.from_role}</p>
+          )}
+        </div>
+      );
     default:
       return <p className="text-sm text-slate-500">{JSON.stringify(p)}</p>;
   }
