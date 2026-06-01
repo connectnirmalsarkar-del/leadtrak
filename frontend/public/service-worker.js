@@ -1,6 +1,6 @@
 // Leadtrak Service Worker
 // IMPORTANT: Bump CACHE_NAME on every release to force the browser to fetch fresh CSS/JS
-const CACHE_NAME = 'leadtrak-v54-users-readonly';
+const CACHE_NAME = 'leadtrak-v55-won-only-deals';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', (event) => {

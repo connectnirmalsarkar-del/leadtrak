@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
-import { API } from '@/context/AuthContext';
+import { API, useAuth } from '@/context/AuthContext';
 import { useTerminology } from '@/lib/terminology';
 import { Plus, GraduationCap, IndianRupee, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,22 @@ import { toast } from 'sonner';
 
 export default function AdmissionsPage() {
   const t = useTerminology();
+  const { user } = useAuth();
+  // Industry-specific conversion status — only leads at THIS status are
+  // eligible to be turned into a Deal/Admission record.
+  const CONVERSION_STATUS_BY_INDUSTRY = {
+    education: 'Admission Done',
+    admission_consultancy: 'Admission Confirmed',
+    it_software: 'Won',
+    real_estate: 'Booked',
+    healthcare: 'Completed',
+    insurance: 'Issued',
+    travel: 'Confirmed',
+    retail: 'Delivered',
+    fitness: 'Joined',
+    generic: 'Won',
+  };
+  const wonStatus = CONVERSION_STATUS_BY_INDUSTRY[user?.industry] || 'Won';
   const [admissions, setAdmissions] = useState([]);
   const [revenue, setRevenue] = useState(0);
   const [services, setServices] = useState([]);
@@ -74,10 +90,8 @@ export default function AdmissionsPage() {
       setServices(srvRes.data);
       // Backend now returns paginated shape {items,total,...}; defensive fallback to array
       const leadsList = Array.isArray(leadsRes.data) ? leadsRes.data : (leadsRes.data?.items || []);
-      // Filter to non-converted leads only (status != Admission Done / Lost)
-      const eligible = leadsList.filter(
-        (l) => !['Admission Done', 'Lost'].includes(l.status)
-      );
+      // Only leads at the industry's WON status are eligible for deal closing
+      const eligible = leadsList.filter((l) => l.status === wonStatus);
       setLeads(eligible);
     } catch (e) {
       toast.error('Failed to load admissions');
@@ -144,7 +158,7 @@ export default function AdmissionsPage() {
                 <Label>Select {t.lead} from your pipeline *</Label>
                 <Select value={form.lead_id} onValueChange={(v) => setForm({...form, lead_id: v})}>
                   <SelectTrigger data-testid="adm-lead-select">
-                    <SelectValue placeholder={`Pick a ${t.lead.toLowerCase()} that is converting`} />
+                    <SelectValue placeholder={`Pick a ${t.lead.toLowerCase()} marked "${wonStatus}"`} />
                   </SelectTrigger>
                   <SelectContent className="max-h-72">
                     {leads.map((l) => (
@@ -157,11 +171,12 @@ export default function AdmissionsPage() {
                     ))}
                     {leads.length === 0 && (
                       <SelectItem value="__none__" disabled>
-                        No eligible {t.leads.toLowerCase()}. Convert one from your pipeline first.
+                        No {t.leads.toLowerCase()} at "{wonStatus}" status. Move a {t.lead.toLowerCase()} to "{wonStatus}" first.
                       </SelectItem>
                     )}
                   </SelectContent>
                 </Select>
+                <p className="text-[11px] text-slate-500">Only {t.leads.toLowerCase()} marked <strong>{wonStatus}</strong> appear here.</p>
                 {selectedLead && (
                   <div className="text-xs text-slate-500 px-3 py-2 bg-slate-50 rounded-md border border-slate-200">
                     <span className="font-medium text-slate-700">{selectedLead.name}</span> · {selectedLead.mobile}
