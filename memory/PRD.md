@@ -633,3 +633,26 @@ Earlier the only feedback after a successful subscription payment was a toast no
 
 **Verified:** Created a fake paid order via Mongo script → Playwright opened Invoice modal → all fields rendered correctly (RCP-20260601-A1B2C3 / Growth Plan / ₹2,999 + ₹539.82 GST = ₹3,538.82 / pay_test_invoice_001 / Online Razorpay / Valid until 01 Jul 2026). Test data cleaned up. Backend + frontend lint clean.
 
+---
+
+## 2026-06-01 — Invoice "Billed by" Details + Super Admin View ✅
+
+**Billing entity details** updated on the Tax Invoice using user's real Ncriptech Labs registration:
+
+- **Legal name:** Leadtrak — Ncriptech Labs
+- **Address:** 185/35, Rajiv Gandhi Road, Konnagar (M), District: Hooghly, West Bengal — 712235, India
+- **GSTIN:** 19BMZPS3329E1ZD (highlighted monospace)
+- **Contact:** care@leadtrak.in · +91 98368 07060
+- Header support line updated to `leadtrak.in · care@leadtrak.in · +91 98368 07060`
+
+**Super Admin Subscription Report — Invoice view + print added:**
+- `PlatformOrgsPage.jsx` (`/platform/organizations` → Orders tab) — new "Invoice" column with a "View" button per paid row that opens the same `InvoiceDialog` as the tenant side. Button only shown for `status=paid` orders.
+- Reused the tenant-side `GET /api/subscriptions/orders/{id}` endpoint (super-admin can fetch any tenant's invoice).
+
+**Files:**
+- `/app/frontend/src/components/InvoiceDialog.jsx` — replaced "Emergent Labs" with full Ncriptech Labs details + GSTIN.
+- `/app/frontend/src/pages/PlatformOrgsPage.jsx` — imported `InvoiceDialog`, added invoice state + `openInvoice()` helper, added "Invoice" column with View button, mounted dialog.
+- `/app/frontend/public/service-worker.js` — `CACHE_NAME` bumped to `leadtrak-v37-superadmin-invoice`.
+
+**Verified via Playwright:** Created fake paid order → Super Admin → Platform → Orders tab → View → Tax Invoice modal with full Ncriptech billing details renders correctly. Lint clean.
+

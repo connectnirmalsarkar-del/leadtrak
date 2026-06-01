@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Plus, Users, UserPlus, Trash2, PauseCircle, PlayCircle,
-  IndianRupee, Hourglass, ShoppingCart, Wallet, CalendarPlus, Link2, Copy, ExternalLink, UserCog,
+  IndianRupee, Hourglass, ShoppingCart, Wallet, CalendarPlus, Link2, Copy, ExternalLink, UserCog, FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import InvoiceDialog from '@/components/InvoiceDialog';
 
 const planBadge = (plan) => {
   const p = (plan || 'starter').toLowerCase();
@@ -48,6 +49,20 @@ export default function PlatformOrgsPage() {
   const [created, setCreated] = useState(null);
   const [form, setForm] = useState({ organization_name: '', industry: 'education', admin_name: '', admin_email: '', admin_password: '', subscription_plan: 'starter' });
   const [industries, setIndustries] = useState([]);
+
+  // Invoice view state
+  const [invoice, setInvoice] = useState(null);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+
+  const openInvoice = async (orderId) => {
+    try {
+      const { data } = await axios.get(`${API}/subscriptions/orders/${orderId}`);
+      setInvoice(data);
+      setInvoiceOpen(true);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not load invoice');
+    }
+  };
 
   // Manual payment dialog state
   const [paymentDialog, setPaymentDialog] = useState(false);
@@ -622,11 +637,12 @@ export default function PlatformOrgsPage() {
                   <TableHead className="text-xs uppercase tracking-[0.1em] font-semibold">Status</TableHead>
                   <TableHead className="text-xs uppercase tracking-[0.1em] font-semibold">Recorded By</TableHead>
                   <TableHead className="text-xs uppercase tracking-[0.1em] font-semibold">Paid At</TableHead>
+                  <TableHead className="text-xs uppercase tracking-[0.1em] font-semibold text-right">Invoice</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {orderRows.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-12 text-slate-500">No orders yet</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center py-12 text-slate-500">No orders yet</TableCell></TableRow>
                 ) : orderRows.map((r) => (
                   <TableRow key={r.id} data-testid={`order-row-${r.id}`}>
                     <TableCell className="font-medium text-slate-900">{r.organization_name}</TableCell>
@@ -649,6 +665,21 @@ export default function PlatformOrgsPage() {
                     </TableCell>
                     <TableCell className="text-xs text-slate-600">{r.recorded_by || '—'}</TableCell>
                     <TableCell className="text-xs text-slate-500">{r.paid_at ? new Date(r.paid_at).toLocaleString() : '—'}</TableCell>
+                    <TableCell className="text-right">
+                      {r.status === 'paid' ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openInvoice(r.id)}
+                          data-testid={`platform-view-invoice-${r.id}`}
+                          title="View / Print invoice"
+                        >
+                          <FileText className="w-3.5 h-3.5 mr-1.5" /> View
+                        </Button>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">—</span>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -886,6 +917,8 @@ export default function PlatformOrgsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <InvoiceDialog invoice={invoice} open={invoiceOpen} onClose={() => setInvoiceOpen(false)} />
     </div>
   );
 }
