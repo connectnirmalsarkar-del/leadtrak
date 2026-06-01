@@ -52,6 +52,14 @@ export const AuthProvider = ({ children }) => {
     } catch (e) {
       // ignore
     }
+    // Clear the PWA app icon badge so a logged-out user doesn't see stale numbers
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.clearAppBadge === 'function') {
+        navigator.clearAppBadge().catch(() => {});
+      }
+    } catch (_) {
+      /* ignore */
+    }
     setUser(false);
   };
 

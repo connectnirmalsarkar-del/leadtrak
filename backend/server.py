@@ -1395,6 +1395,34 @@ async def my_new_leads_count(current_user: dict = Depends(get_current_user)):
     return {"count": count}
 
 
+@api_router.get("/badge/count")
+async def app_badge_count(current_user: dict = Depends(get_current_user)):
+    """Unified badge count for the PWA App Badging API.
+
+    Returns the total number of pending actions for the logged-in user:
+      new_leads_count + unread_notifications_count
+    The mobile/desktop home-screen icon shows this as a numeric badge.
+    """
+    org_id = ObjectId(current_user["organization_id"])
+    # New (untouched) leads visible to the user
+    if current_user["role"] in ("counselor", "telecaller"):
+        lead_q = {"organization_id": org_id, "assigned_to": current_user["id"], "status": "New"}
+    elif current_user["role"] in ("manager", "org_admin", "super_admin"):
+        lead_q = {"organization_id": org_id, "status": "New"}
+    else:
+        lead_q = None
+
+    new_leads = (await db.leads.count_documents(lead_q)) if lead_q else 0
+    unread_notifs = await db.notifications.count_documents(
+        {"user_id": current_user["id"], "read": {"$ne": True}}
+    )
+    return {
+        "new_leads": new_leads,
+        "unread_notifications": unread_notifs,
+        "count": new_leads + unread_notifs,
+    }
+
+
 @api_router.get("/leads")
 async def get_leads(
     current_user: dict = Depends(get_current_user),

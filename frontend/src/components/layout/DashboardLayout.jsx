@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useAuth, API } from '@/context/AuthContext';
+import { usePWABadge } from '@/hooks/usePWABadge';
 import {
   LayoutDashboard,
   Users,
@@ -87,6 +88,9 @@ export default function DashboardLayout({ children }) {
   const [newLeadsCount, setNewLeadsCount] = useState(0);
   const knownNotifIdsRef = useRef(new Set());
   const isFirstLoadRef = useRef(true);
+
+  // Keep the PWA home-screen icon badge in sync (Android Chrome / Desktop Chrome / Edge)
+  usePWABadge(30000, !!user);
 
   useEffect(() => {
     if (!user) return;

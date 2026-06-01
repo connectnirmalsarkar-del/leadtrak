@@ -560,3 +560,30 @@ Each industry now controls which sidebar nav items appear + their localized labe
 - All 10 industries verified via python REPL with the correct config (Insurance/Travel/Retail → demos:False).
 - Backend lint clean, frontend lint clean.
 
+---
+
+## 2026-06-01 — PWA Home-Screen Icon Badge (Badging API) ✅
+
+When the LeadTrak PWA is installed on Android / Desktop, the home-screen icon now shows a live numeric badge with the user's pending actions count — same UX as native apps (WhatsApp, Gmail, etc.).
+
+**What counts toward the badge:**
+- New (untouched) leads visible to the user (RBAC-filtered)
+- Unread in-app notifications (`notifications.read != true`)
+
+**Files:**
+- `/app/backend/server.py` — new `GET /api/badge/count` returns `{new_leads, unread_notifications, count}`.
+- `/app/frontend/src/hooks/usePWABadge.js` — custom hook that polls every 30 s + on `visibilitychange`, calls `navigator.setAppBadge(count)` / `clearAppBadge()`. Feature-detects support — silently no-ops on iOS Safari + Firefox.
+- `/app/frontend/src/components/layout/DashboardLayout.jsx` — mounts `usePWABadge(30000, !!user)` so the badge is active whenever a user is logged in.
+- `/app/frontend/src/context/AuthContext.jsx` — clears the app badge on logout so stale numbers don't persist.
+- `/app/frontend/public/service-worker.js` — `CACHE_NAME` bumped to `leadtrak-v31-pwa-badge`.
+
+**Platform behavior:**
+| Platform | Behavior |
+|----------|----------|
+| Android Chrome (PWA) | ✅ Full numeric badge on home screen icon |
+| Desktop Chrome / Edge | ✅ Full numeric badge on taskbar/dock |
+| iOS Safari (PWA) | ⚠️ No badge (Apple hasn't shipped the API yet) |
+| Firefox | ❌ Silent no-op |
+
+**Verified:** `/api/badge/count` returns `{new_leads:1, unread_notifications:1, count:2}` for the Super Admin. The hook is feature-detected and bails gracefully on unsupported browsers, so there's no console noise or errors anywhere.
+
