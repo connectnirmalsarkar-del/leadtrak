@@ -25,7 +25,8 @@ INDUSTRY_CONFIG = {
         },
         "default_sources": ["Website", "Facebook Ad", "Google Ad", "Walk-in", "Referral", "Cold Call", "WhatsApp"],
         "default_lead_statuses": [
-            "New", "Contacted", "Interested", "Counseling Scheduled", "Counseling Done",
+            "New", "Contacted", "Phone Not Received", "Not Reachable", "Wrong Number",
+            "Interested", "Counseling Scheduled", "Counseling Done",
             "Application Sent", "Documents Pending", "Fee Discussion", "Admitted",
             "Not Interested", "Dropped", "Lost"
         ],
@@ -47,7 +48,8 @@ INDUSTRY_CONFIG = {
         },
         "default_sources": ["Website", "LinkedIn", "Referral", "Cold Email", "Demo Request", "Partner", "Event"],
         "default_lead_statuses": [
-            "New", "Contacted", "Qualifying", "Demo Scheduled", "Demo Done",
+            "New", "Contacted", "Phone Not Received", "Not Reachable", "Wrong Number",
+            "Qualifying", "Demo Scheduled", "Demo Done",
             "Proposal Sent", "Negotiation", "Contract Sent", "Won", "Lost", "On Hold"
         ],
         "default_pipeline_stages": ["Discovery", "Qualification", "Demo", "Proposal", "Negotiation", "Closed Won"],
@@ -68,7 +70,8 @@ INDUSTRY_CONFIG = {
         },
         "default_sources": ["99acres", "MagicBricks", "Housing.com", "Website", "Facebook Ad", "Walk-in", "Referral"],
         "default_lead_statuses": [
-            "New", "Contacted", "Site Visit Scheduled", "Site Visited",
+            "New", "Contacted", "Phone Not Received", "Not Reachable", "Wrong Number",
+            "Site Visit Scheduled", "Site Visited",
             "Negotiation", "Token Paid", "Booked", "Cancelled", "Lost"
         ],
         "default_pipeline_stages": ["Inquiry", "Site Visit", "Negotiation", "Token Money", "Agreement", "Booked"],
@@ -88,7 +91,7 @@ INDUSTRY_CONFIG = {
             "revenue_label": "Treatment Revenue",
         },
         "default_sources": ["Website", "Google Ad", "Walk-in", "Referral", "Insurance Network", "WhatsApp"],
-        "default_lead_statuses": ["New", "Contacted", "Consulted", "Treatment Ongoing", "Completed", "Lost"],
+        "default_lead_statuses": ["New", "Contacted", "Phone Not Received", "Not Reachable", "Wrong Number", "Consulted", "Treatment Ongoing", "Completed", "Lost"],
         "default_pipeline_stages": ["Inquiry", "Consultation Booked", "Consulted", "Treatment Plan", "Treatment Started", "Completed"],
     },
     "insurance": {
@@ -107,7 +110,8 @@ INDUSTRY_CONFIG = {
         },
         "default_sources": ["Website", "Cold Call", "Referral", "Walk-in", "Agent Network", "WhatsApp"],
         "default_lead_statuses": [
-            "New", "Contacted", "Quote Sent", "Proposal Sent",
+            "New", "Contacted", "Phone Not Received", "Not Reachable", "Wrong Number",
+            "Quote Sent", "Proposal Sent",
             "KYC Pending", "Underwriting", "Issued", "Rejected", "Lost"
         ],
         "default_pipeline_stages": ["Quote", "Proposal", "Medical/KYC", "Underwriting", "Issued"],
@@ -128,7 +132,8 @@ INDUSTRY_CONFIG = {
         },
         "default_sources": ["Website", "Google Ad", "Instagram", "Facebook Ad", "Referral", "Walk-in", "WhatsApp"],
         "default_lead_statuses": [
-            "New", "Itinerary Sent", "Quote Sent", "Negotiation",
+            "New", "Phone Not Received", "Not Reachable", "Wrong Number",
+            "Itinerary Sent", "Quote Sent", "Negotiation",
             "Token Paid", "Confirmed", "Travelled", "Cancelled", "Lost"
         ],
         "default_pipeline_stages": ["Inquiry", "Itinerary", "Quote", "Negotiation", "Token", "Booked", "Travelled"],
@@ -149,7 +154,8 @@ INDUSTRY_CONFIG = {
         },
         "default_sources": ["Website", "Instagram", "Facebook Ad", "Walk-in", "Referral", "Marketplace", "WhatsApp"],
         "default_lead_statuses": [
-            "New", "Contacted", "Cart Added", "Checkout Started",
+            "New", "Contacted", "Phone Not Received", "Not Reachable", "Wrong Number",
+            "Cart Added", "Checkout Started",
             "Ordered", "Shipped", "Delivered", "Returned", "Lost"
         ],
         "default_pipeline_stages": ["Inquiry", "Quote", "Order Placed", "Paid", "Shipped", "Delivered"],
@@ -170,7 +176,8 @@ INDUSTRY_CONFIG = {
         },
         "default_sources": ["Website", "Instagram", "Walk-in", "Referral", "Google Ad", "WhatsApp"],
         "default_lead_statuses": [
-            "New", "Trial Booked", "Trial Done", "Member",
+            "New", "Phone Not Received", "Not Reachable", "Wrong Number",
+            "Trial Booked", "Trial Done", "Member",
             "Renewal Due", "Renewed", "Churned", "Lost"
         ],
         "default_pipeline_stages": ["Inquiry", "Trial Booked", "Trial Done", "Joined", "Active", "Renewed"],
@@ -191,7 +198,8 @@ INDUSTRY_CONFIG = {
         },
         "default_sources": ["Walk-in", "Reference", "Facebook Ad", "Education Fair", "College Tie-up", "Direct Inquiry", "WhatsApp"],
         "default_lead_statuses": [
-            "New Inquiry", "Counseling Booked", "Counseling Done", "Application Submitted",
+            "New Inquiry", "Phone Not Received", "Not Reachable", "Wrong Number",
+            "Counseling Booked", "Counseling Done", "Application Submitted",
             "Documents Pending", "Fee Payment", "Admission Confirmed",
             "Not Interested", "Lost"
         ],
@@ -213,7 +221,8 @@ INDUSTRY_CONFIG = {
         },
         "default_sources": ["Website", "Referral", "Cold Call", "Walk-in", "Email", "Event", "WhatsApp"],
         "default_lead_statuses": [
-            "New", "Contacted", "Qualified", "Proposal Sent",
+            "New", "Contacted", "Phone Not Received", "Not Reachable", "Wrong Number",
+            "Qualified", "Proposal Sent",
             "Negotiation", "Won", "Lost", "On Hold"
         ],
         "default_pipeline_stages": ["Lead", "Qualified", "Proposal", "Negotiation", "Won"],

@@ -476,3 +476,26 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - Email service (Resend) integration — user deferred.
 - Twilio WhatsApp real send — user deferred.
 - Splitting `server.py` (now 5963 lines) into routers — deferred.
+
+---
+
+## 2026-06-01 — Call-Flow Statuses Added Across All Industries ✅
+
+Added 3 telecaller-friendly statuses to every industry's `default_lead_statuses` so the counselor/telecaller can mark a lead without going through the full Log Call dialog:
+
+- `Phone Not Received`
+- `Not Reachable`
+- `Wrong Number`
+
+**Files changed:**
+- `/app/backend/industry_config.py` — 10 industries updated (Education, IT/Software, Real Estate, Healthcare, Insurance, Travel, Retail, Fitness, Admission Consultancy, Generic). Inserted right after "Contacted" (or after "New" for Travel/Fitness/Admission Consultancy which don't have a "Contacted" stage) so they appear at the top of the dropdown for fast access.
+- `/app/frontend/src/pages/LeadsPage.jsx` — `statusBadgeClass` map extended:
+  - `Phone Not Received` → amber (status-followup)
+  - `Not Reachable` → muted red (status-notinterested)
+  - `Wrong Number` → red (status-lost)
+- `/app/frontend/public/service-worker.js` — `CACHE_NAME` bumped to `leadtrak-v28-call-statuses`.
+
+**Migration:** No DB migration needed — `lead_statuses` is read live from `INDUSTRY_CONFIG` via `get_lead_statuses(industry_key)` inside `/api/auth/me`, so every existing org automatically gets the new dropdown options after backend reload.
+
+**Verified:** `/api/auth/me` for the Education-industry Super Admin now returns the 3 new statuses in `lead_statuses[]`. Status dropdown on `/leads` shows them positioned right after Contacted with proper badge colors.
+

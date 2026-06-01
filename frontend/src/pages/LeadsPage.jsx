@@ -48,6 +48,9 @@ const statusBadgeClass = (status) => {
   const map = {
     'New': 'status-new',
     'Contacted': 'status-contacted',
+    'Phone Not Received': 'status-followup',
+    'Not Reachable': 'status-notinterested',
+    'Wrong Number': 'status-lost',
     'Interested': 'status-interested',
     'Follow-up': 'status-followup',
     'Counseling Scheduled': 'status-followup',
