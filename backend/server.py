@@ -299,11 +299,11 @@ def _normalize_whatsapp_number(value: Optional[str]) -> Optional[str]:
 
 
 class LeadCreate(BaseModel):
-    name: str
-    mobile: str
+    name: str = Field(..., min_length=1, description="Full name; cannot be empty")
+    mobile: str = Field(..., min_length=1, description="Mobile number; cannot be empty")
     whatsapp_number: Optional[str] = None  # Optional secondary — if blank, fallback to `mobile` for WhatsApp actions
     email: Optional[str] = None
-    course_interested: str
+    course_interested: str = Field(..., min_length=1, description="Course/service is required")
     state: Optional[str] = None
     city: Optional[str] = None
     lead_source: str
@@ -956,22 +956,26 @@ async def login(data: LoginRequest, request: Request, response: Response):
     response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="none", max_age=900, path="/")
     response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="none", max_age=604800, path="/")
     
-    # Fetch industry + org name from org for the response
+    # Fetch industry + org name + logo from org for the response
     org_id = user.get("organization_id")
     industry = "generic"
     org_name = ""
+    org_logo = ""
     if org_id:
-        org = await db.organizations.find_one({"_id": org_id}, {"industry": 1, "name": 1})
+        org = await db.organizations.find_one({"_id": org_id}, {"industry": 1, "name": 1, "logo_url": 1})
         if org:
             industry = org.get("industry") or "education"
             org_name = org.get("name", "")
+            org_logo = org.get("logo_url", "") or ""
     return {
         "id": user_id,
         "email": user["email"],
         "name": user["name"],
         "role": user["role"],
+        "avatar_url": user.get("avatar_url") or "",
         "organization_id": str(user.get("organization_id", "")),
         "organization_name": org_name,
+        "logo_url": org_logo,
         "industry": industry,
         "terminology": get_terms(industry),
         # Include industry-derived data so the frontend has everything it
@@ -1213,10 +1217,10 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
         ]
     pending_followups = await db.followups.count_documents(followup_filter)
 
-    # Admissions/conversions — for callers, count only the ones they own
+    # Admissions/conversions — caller's own (admissions store `created_by`)
     admissions_filter = {"organization_id": org_id}
     if is_caller:
-        admissions_filter["closed_by"] = current_user["id"]
+        admissions_filter["created_by"] = current_user["id"]
     admissions_done = await db.admissions.count_documents(admissions_filter)
 
     interested_leads = await db.leads.count_documents({**base_filter, "status": {"$in": ["Interested", "Admission Done"]}})
@@ -1297,6 +1301,17 @@ async def check_duplicate_lead(
 
 @api_router.post("/leads")
 async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current_user)):
+    # Extra hardening: strip + reject whitespace-only strings that bypass min_length=1
+    if not (data.name or "").strip():
+        raise HTTPException(status_code=422, detail="Full Name is required")
+    if not (data.mobile or "").strip():
+        raise HTTPException(status_code=422, detail="Mobile number is required")
+    if not (data.course_interested or "").strip():
+        raise HTTPException(status_code=422, detail="Course/Service is required")
+    data.name = data.name.strip()
+    data.mobile = data.mobile.strip()
+    data.course_interested = data.course_interested.strip()
+
     org_id = ObjectId(current_user["organization_id"])
 
     # Validate WhatsApp number (strict +91XXXXXXXXXX) — falls back to mobile if blank
@@ -5210,7 +5225,7 @@ async def get_activity_feed(current_user: dict = Depends(get_current_user)):
     # Recent admissions — for callers, only their own conversions
     adm_q = {"organization_id": org_id}
     if is_caller:
-        adm_q["closed_by"] = current_user["id"]
+        adm_q["created_by"] = current_user["id"]
     admissions = await db.admissions.find(adm_q).sort("created_at", -1).limit(5).to_list(5)
     for adm in admissions:
         activities.append({
