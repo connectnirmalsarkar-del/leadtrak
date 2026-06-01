@@ -225,6 +225,7 @@ export default function DashboardLayout({ children }) {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 px-4 mb-2">Main</p>
           {navItems
             .filter((item) => !item.feature || user?.features?.[item.feature] !== false)
+            .filter((item) => !item.rolesHidden || !item.rolesHidden.includes(user?.role))
             .map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;

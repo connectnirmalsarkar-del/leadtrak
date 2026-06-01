@@ -656,3 +656,17 @@ Earlier the only feedback after a successful subscription payment was a toast no
 
 **Verified via Playwright:** Created fake paid order → Super Admin → Platform → Orders tab → View → Tax Invoice modal with full Ncriptech billing details renders correctly. Lint clean.
 
+
+---
+
+## Hide Reports from Caller & Counselor sidebar (Feb 2026)
+
+**Request:** Caller and Counsellor er dashboard sidebar theke Reports menu sorano.
+
+**Root cause:** `navItems` array-e `rolesHidden: ['counselor', 'telecaller']` declared chilo, kintu render-side filter logic seta consume korchhilo na — only `feature` flag check hocchilo.
+
+**Fix:**
+- `/app/frontend/src/components/layout/DashboardLayout.jsx` — added second `.filter()` chain: `!item.rolesHidden || !item.rolesHidden.includes(user?.role)` before `.map()`.
+- `/app/frontend/public/service-worker.js` — `CACHE_NAME` bumped to `leadtrak-v57-hide-reports-caller-counselor`.
+
+**Verified via Playwright:** Telecaller (Rohan Verma) login → sidebar shows Dashboard, Leads, Follow-ups, Counselling, Admissions, Tasks, WhatsApp, Support — **no Reports**. ✅
