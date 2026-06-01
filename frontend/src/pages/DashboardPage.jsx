@@ -384,7 +384,7 @@ export default function DashboardPage() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 mb-1">Performance</p>
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2" style={{ fontFamily: 'Sora' }}>
                 <Trophy className="w-4 h-4 text-amber-500" />
-                Top Counselors
+                Top Performers
               </h3>
             </div>
           </div>
@@ -396,11 +396,13 @@ export default function DashboardPage() {
             <div className="space-y-3">
               {leaderboard.map((m, i) => {
                 const initials = m.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+                // Industry-aware short label (Admission → ADM, Deal → DEAL, Booking → BOOK)
+                const convLabel = (m.conversion_label || t.conversion || 'Admission').slice(0, 4).toUpperCase();
                 return (
                   <div key={m.user_id} className="flex items-center gap-3" data-testid={`leaderboard-row-${i}`}>
                     <div className="text-sm font-bold text-slate-400 w-4">{i + 1}</div>
                     <Avatar className="w-9 h-9">
-                      <AvatarImage src={AVATARS[i % AVATARS.length]} />
+                      {m.avatar_url && <AvatarImage src={m.avatar_url} alt={m.name} />}
                       <AvatarFallback className="bg-violet-100 text-violet-700 text-xs font-semibold">{initials}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
@@ -414,7 +416,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-slate-900 font-mono">{m.admissions}</p>
-                      <p className="text-[10px] text-slate-400 uppercase">adm</p>
+                      <p className="text-[10px] text-slate-400 uppercase">{convLabel}</p>
                     </div>
                   </div>
                 );

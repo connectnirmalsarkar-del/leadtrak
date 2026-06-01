@@ -5598,9 +5598,26 @@ async def get_lead_funnel(current_user: dict = Depends(get_current_user)):
     org = await db.organizations.find_one({"_id": org_id}, {"industry": 1})
     industry = (org or {}).get("industry") or "education"
     terms = get_terms(industry)
-    stages = ["New", "Contacted", "Interested", "Admission Done"]
+
+    # Industry-specific funnel stages — each must reference a status that
+    # actually exists in the industry's lead_statuses list (so counts > 0
+    # are possible) and culminates in the conversion status.
+    FUNNEL_BY_INDUSTRY = {
+        "education": ["New", "Contacted", "Interested", "Admission Done"],
+        "it_software": ["New", "Contacted", "Demo Done", "Won"],
+        "real_estate": ["New", "Contacted", "Site Visited", "Booked"],
+        "healthcare": ["New", "Contacted", "Consulted", "Completed"],
+        "insurance": ["New", "Contacted", "Quote Sent", "Issued"],
+        "travel": ["New", "Itinerary Sent", "Quote Sent", "Confirmed"],
+        "retail": ["New", "Contacted", "Cart Added", "Delivered"],
+        "fitness": ["New", "Trial Booked", "Trial Done", "Joined"],
+        "admission_consultancy": ["New Inquiry", "Counseling Done", "Application Submitted", "Admission Confirmed"],
+        "generic": ["New", "Contacted", "Qualified", "Won"],
+    }
+    stages = FUNNEL_BY_INDUSTRY.get(industry, ["New", "Contacted", "Interested", "Admission Done"])
+    # Last stage label = industry's conversion verb (e.g. Won, Booked, Admitted)
     display_labels = {
-        "Admission Done": terms.get("conversion_verb", "Converted"),
+        stages[-1]: terms.get("conversion_verb", stages[-1]),
     }
     base_filter = {"organization_id": org_id}
     if current_user["role"] in ("counselor", "telecaller"):
@@ -5622,12 +5639,18 @@ async def get_lead_funnel(current_user: dict = Depends(get_current_user)):
 @api_router.get("/dashboard/leaderboard")
 async def get_counselor_leaderboard(current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
+    # Use industry-specific conversion status (kept for future per-status counts)
+    org = await db.organizations.find_one({"_id": org_id}, {"industry": 1})
+    industry = (org or {}).get("industry") or "education"
+    terms = get_terms(industry)
     users_cursor = db.users.find({"organization_id": org_id})
     leaderboard = []
     async for user in users_cursor:
         user_id = str(user["_id"])
         leads_assigned = await db.leads.count_documents({"organization_id": org_id, "assigned_to": user_id})
-        admissions_done = await db.leads.count_documents({"organization_id": org_id, "assigned_to": user_id, "status": "Admission Done"})
+        # Count actual admissions records for this user (more accurate than
+        # status-based counting since admissions are an authoritative record).
+        admissions_done = await db.admissions.count_documents({"organization_id": org_id, "created_by": user_id})
         if leads_assigned > 0:
             conversion = round(admissions_done / leads_assigned * 100, 1)
         else:
@@ -5636,9 +5659,11 @@ async def get_counselor_leaderboard(current_user: dict = Depends(get_current_use
             "user_id": user_id,
             "name": user["name"],
             "role": user["role"],
+            "avatar_url": user.get("avatar_url", "") or "",
             "leads_assigned": leads_assigned,
             "admissions": admissions_done,
             "conversion_rate": conversion,
+            "conversion_label": terms.get("conversion", "Admission"),
         })
     leaderboard.sort(key=lambda x: x["admissions"], reverse=True)
     return leaderboard[:5]
@@ -5647,6 +5672,26 @@ async def get_counselor_leaderboard(current_user: dict = Depends(get_current_use
 async def get_activity_feed(current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
     is_caller = current_user["role"] in ("counselor", "telecaller")
+    # Industry-specific verbiage so a Real Estate org sees "recorded booking"
+    # instead of "recorded admission" etc.
+    org = await db.organizations.find_one({"_id": org_id}, {"industry": 1})
+    industry = (org or {}).get("industry") or "education"
+    terms = get_terms(industry)
+    conversion_verb = terms.get("conversion_action", "Record Admission")
+    # Convert "Record Admission" / "Close Deal" → "recorded admission" / "closed deal"
+    verb_lower = conversion_verb.lower()
+    # Normalize: convert "record admission" -> "recorded admission", "close deal" -> "closed deal", "confirm booking" -> "confirmed booking"
+    parts = verb_lower.split(" ", 1)
+    if len(parts) == 2:
+        head, tail = parts
+        if head.endswith("e"):
+            past_head = head + "d"
+        else:
+            past_head = head + "ed"
+        action_phrase = f"{past_head} {tail}"
+    else:
+        action_phrase = f"{verb_lower}ed" if not verb_lower.endswith("d") else verb_lower
+
     activities = []
     # Recent leads
     lead_q = {"organization_id": org_id}
@@ -5658,7 +5703,7 @@ async def get_activity_feed(current_user: dict = Depends(get_current_user)):
         activities.append({
             "type": "lead_created",
             "actor": creator["name"] if creator else "System",
-            "text": f"created lead {lead['name']}",
+            "text": f"created {terms.get('lead','lead').lower()} {lead['name']}",
             "timestamp": lead["created_at"].isoformat() if isinstance(lead["created_at"], datetime) else lead["created_at"],
             "color": "violet",
         })
@@ -5671,7 +5716,7 @@ async def get_activity_feed(current_user: dict = Depends(get_current_user)):
         activities.append({
             "type": "admission",
             "actor": adm.get("counselor_name", "System"),
-            "text": f"recorded admission for {adm['student_name']}",
+            "text": f"{action_phrase} for {adm['student_name']}",
             "timestamp": adm["created_at"].isoformat() if isinstance(adm["created_at"], datetime) else adm["created_at"],
             "color": "emerald",
         })

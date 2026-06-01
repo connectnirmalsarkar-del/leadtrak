@@ -778,3 +778,38 @@ POST https://leadtrak.in/api/platform/migrate-invalid-lead-statuses
 - ✅ Reset cleared the custom override successfully.
 
 **Result:** Every industry-default list + any user-added custom statuses now flow through a single source of truth. Future industries can be onboarded without code changes by configuring the list per organization.
+
+---
+
+## Caller Dashboard — Industry-Aware Fixes (3-in-1) (Feb 2026)
+
+**Reported issues (production screenshots):**
+1. **Lead Funnel** stuck at 0/0/0/0 — "NOT CONNECTED WITH DATA"
+2. **Top Counselors** showing stock unsplash avatars + hardcoded "0 ADM" label not industry-specific
+3. **Recent Activity** says "recorded admission for X" even for non-education industries
+
+**Root cause:**
+- `/dashboard/funnel` hardcoded `["New","Contacted","Interested","Admission Done"]` — wrong statuses for IT/Real Estate/Healthcare/etc → all 0
+- `/dashboard/leaderboard` counted `status="Admission Done"` (hardcoded) instead of actual admissions records → IT/RE/Healthcare orgs always showed 0
+- Frontend leaderboard rendered `AVATARS[i % AVATARS.length]` (stock unsplash) instead of `user.avatar_url`
+- Frontend showed hardcoded `"adm"` label below count
+
+**Fix:**
+
+### Backend (`/app/backend/server.py`)
+- `/dashboard/funnel`: new `FUNNEL_BY_INDUSTRY` mapping with 4 meaningful stages per industry (e.g. IT: New→Contacted→Demo Done→Won, Real Estate: New→Contacted→Site Visited→Booked, Fitness: New→Trial Booked→Trial Done→Joined, etc.). Last stage label uses industry's `conversion_verb`.
+- `/dashboard/leaderboard`: now counts admissions from the `admissions` collection (`created_by` field) instead of hardcoded `status="Admission Done"`. Returns `avatar_url` + `conversion_label` per user so frontend can render correctly.
+- `/dashboard/activity-feed`: industry-aware verb derivation from `conversion_action` (e.g. "Record Admission" → "recorded admission", "Close Deal" → "closed deal", "Confirm Booking" → "confirmed booking"). Lead-created events also use `terms.lead` (e.g. "created student" for admission_consultancy).
+
+### Frontend (`/app/frontend/src/pages/DashboardPage.jsx`)
+- Top Performers (renamed from "Top Counselors" → universal label):
+  - `<AvatarImage src={m.avatar_url} />` — real user avatar; falls back to initials chip.
+  - Bottom label: `convLabel = (m.conversion_label || t.conversion || 'Admission').slice(0, 4).toUpperCase()` → "ADMI" / "DEAL" / "BOOK" per industry.
+
+**SW cache:** bumped to `leadtrak-v61-industry-aware-dashboard`.
+
+**Verified:**
+- ✅ `/api/dashboard/funnel` (Education) returns: New (100%), Contacted (0%), Interested (0%), **Enrolled** (0%) — Enrolled = education's conversion_verb.
+- ✅ `/api/dashboard/leaderboard` returns avatar_url + conversion_label="Admission" per user.
+- ✅ `/api/dashboard/activity-feed` returns "created lead NIRMAL" (industry-aware lead label).
+- ✅ Dashboard screenshot confirms: Lead Funnel labels correct, Top Performers shows real initials avatar with "ADMI" label, Recent Activity uses correct wording.
