@@ -3964,7 +3964,7 @@ async def platform_wipe_org_data(
                   followups      → followups
                   admissions     → admissions
                   demos          → demos
-                  call_logs      → call_logs + lead_events
+                  call_logs      → call_logs + lead_timeline
                   whatsapp       → whatsapp_messages
                   notifications  → notifications (lead-scoped)
                   all            → everything above + duplicate_dismissals
@@ -4046,11 +4046,11 @@ async def platform_wipe_org_data(
     org_filter = {"organization_id": org_oid}
 
     if wipe_all or "leads" in requested:
-        # When wiping leads, also wipe lead_events to avoid orphaned timeline
+        # When wiping leads, also wipe lead_timeline so the timeline is reset
         res = await db.leads.delete_many(org_filter)
         counts["leads"] = res.deleted_count
-        res = await db.lead_events.delete_many(org_filter)
-        counts["lead_events"] = res.deleted_count
+        res = await db.lead_timeline.delete_many(org_filter)
+        counts["lead_timeline"] = res.deleted_count
     if wipe_all or "followups" in requested:
         res = await db.followups.delete_many(org_filter)
         counts["followups"] = res.deleted_count
@@ -4063,10 +4063,10 @@ async def platform_wipe_org_data(
     if wipe_all or "call_logs" in requested:
         res = await db.call_logs.delete_many(org_filter)
         counts["call_logs"] = res.deleted_count
-        # If leads weren't wiped above, also reset lead_events here
-        if "lead_events" not in counts:
-            res = await db.lead_events.delete_many(org_filter)
-            counts["lead_events"] = res.deleted_count
+        # If leads weren't wiped above, also reset lead_timeline here
+        if "lead_timeline" not in counts:
+            res = await db.lead_timeline.delete_many(org_filter)
+            counts["lead_timeline"] = res.deleted_count
 
     # Lead-scoped child collections
     if (wipe_all or "whatsapp" in requested) and (lead_ids_str or lead_ids_oid):
@@ -4127,7 +4127,7 @@ async def platform_org_data_counts(org_id: str, current_user: dict = Depends(get
             "admissions": await db.admissions.count_documents(f),
             "demos": await db.demos.count_documents(f),
             "call_logs": await db.call_logs.count_documents(f),
-            "lead_events": await db.lead_events.count_documents(f),
+            "lead_timeline": await db.lead_timeline.count_documents(f),
             "whatsapp_messages": await db.whatsapp_messages.count_documents(lead_filter),
             "notifications": await db.notifications.count_documents({"organization_id": oid}),
         },
