@@ -436,7 +436,7 @@ export default function PlatformOrgsPage() {
                     </Select>
                     <p className="text-[11px] text-slate-500">This pre-configures default services, lead statuses, and terminology for the tenant.</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label>Admin Name *</Label>
                       <Input value={form.admin_name} onChange={(e) => setForm({ ...form, admin_name: e.target.value })} placeholder="Priya Sharma" data-testid="admin-name-field" />
@@ -797,7 +797,7 @@ export default function PlatformOrgsPage() {
           ) : (
             <>
               <div className="space-y-3 py-2">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label>Plan *</Label>
                     <Select value={paymentForm.plan_id} onValueChange={onSelectPlanForPayment}>
@@ -834,7 +834,7 @@ export default function PlatformOrgsPage() {
                     );
                   })()}
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label>Payment Method *</Label>
                     <Select value={paymentForm.payment_method} onValueChange={(v) => setPaymentForm({ ...paymentForm, payment_method: v })}>
@@ -942,7 +942,7 @@ export default function PlatformOrgsPage() {
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <Button onClick={() => shareWhatsApp(linkResult.short_url, linkDialog?.name)} className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="whatsapp-share-btn">
                   Share on WhatsApp
                 </Button>

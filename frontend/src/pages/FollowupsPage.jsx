@@ -227,7 +227,7 @@ function CompleteFollowupDialog({ followup, open, onOpenChange, onDone }) {
             </Select>
           </div>
           {nextAction === 'next_followup' && (
-            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-md">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3 rounded-md">
               <div className="space-y-1.5">
                 <Label className="text-xs">Next date *</Label>
                 <Input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} data-testid="next-date-input" />

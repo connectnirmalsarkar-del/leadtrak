@@ -222,7 +222,7 @@ export default function AdmissionsPage() {
                     <span className="text-slate-600">Base Price</span>
                     <span className="font-mono font-medium text-slate-900">₹{basePrice.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs">Discount (₹)</Label>
                       <div className="relative">

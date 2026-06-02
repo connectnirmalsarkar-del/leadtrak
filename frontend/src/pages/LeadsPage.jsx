@@ -1144,7 +1144,7 @@ export default function LeadsPage() {
             <DialogDescription>Schedule a follow-up for {selectedLead?.name}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Date *</Label>
                 <Input type="date" value={followup.followup_date} onChange={(e) => setFollowup({...followup, followup_date: e.target.value})} data-testid="followup-date-input" />
@@ -1236,7 +1236,7 @@ export default function LeadsPage() {
               </label>
               {logCall.schedule_next && (
                 <div className="space-y-2 pt-1">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs">Date *</Label>
                       <Input type="date" value={logCall.next_date} onChange={(e) => setLogCall({ ...logCall, next_date: e.target.value })} data-testid="log-call-next-date" />

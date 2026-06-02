@@ -105,7 +105,7 @@ export default function BookDemoDialog({ open, onOpenChange, lead, users = [], o
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Date *</Label>
                 <Input type="date" value={form.scheduled_date} onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })} data-testid="demo-date-input" />
@@ -159,7 +159,7 @@ export default function BookDemoDialog({ open, onOpenChange, lead, users = [], o
               <Label>Pre-filled invite message</Label>
               <Textarea value={savedDemo.share?.message || ''} readOnly rows={4} className="text-xs font-mono bg-slate-50" data-testid="demo-share-message" />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {savedDemo.share?.whatsapp ? (
                 <a href={savedDemo.share.whatsapp} target="_blank" rel="noopener noreferrer" className="contents">
                   <Button variant="outline" className="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-50" data-testid="share-whatsapp-btn">

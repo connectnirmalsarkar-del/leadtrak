@@ -315,8 +315,6 @@ export default function DashboardLayout({ children }) {
 
       {/* Main Content */}
       <div className="lg:ml-64">
-        {/* Spacer for iOS PWA notch — only visible on mobile (where sticky header sits at very top) */}
-        <div className="lg:hidden h-safe-top bg-white sticky top-0 z-30"></div>
         {/* Impersonation banner — Super Admin acting AS a tenant user */}
         {user?.impersonating && (
           <div className="bg-amber-500 text-amber-950 px-4 py-2 text-sm font-medium flex items-center justify-between gap-3 sticky top-0 z-30 lg:pt-0 pt-safe" data-testid="impersonation-banner">
@@ -337,7 +335,7 @@ export default function DashboardLayout({ children }) {
           </div>
         )}
         {/* Topbar */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-20">
+        <header className="min-h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-20 pt-safe">
           <div className="flex items-center gap-4">
             <button
               className="lg:hidden text-slate-600"

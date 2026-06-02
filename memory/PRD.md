@@ -870,3 +870,57 @@ SW cache `v61` → `v62-industry-aware-book-demo-button`.
 - ✅ `POST /platform/wipe-org-data?sections=invalid` → 400 with helpful "Allowed: ..." message.
 - ✅ `GET /platform/organizations/{id}/data-counts` returns per-section counts.
 - ✅ UI flow: Super Admin → Platform Orgs → Database icon → modal opens with counts → tick "Demos" only → type org name → tick ack → "Wipe Selected Data" → toast success → re-opening modal shows Demos: 0 row(s) (was 1), other sections unchanged. Audit log entry created.
+
+---
+
+## iOS PWA Safe-Area + Mobile Form Responsiveness (Feb 2026)
+
+**Reported issue:** "iOS PWA-te header chole jacche battery/network/date er niche, click kora jacche na. Login Sign In button-eo click kora jacche na. All forms in dashboard mobile view e responsive noi."
+
+**Root cause:**
+- `apple-mobile-web-app-status-bar-style="black-translucent"` (in index.html) draws content UNDER the notch but no CSS padding was compensating for it.
+- Sticky `<header>` and fixed `<aside>` sidebars had `top-0` with no `env(safe-area-inset-top)` offset → hidden behind notch.
+- 2-column form grids (`grid-cols-2`) didn't stack on mobile → fields cramped on narrow viewports.
+- Dialog content had no max-height → overflowed beyond viewport.
+- Inputs at default Tailwind font-size triggered iOS auto-zoom on focus.
+
+**Fix implemented:**
+
+### Global CSS (`/app/frontend/src/index.css`)
+- Added `:root` CSS vars `--safe-area-{top,right,bottom,left}` from `env(safe-area-inset-*)`.
+- New utility classes: `.pt-safe`, `.pb-safe`, `.pl-safe`, `.pr-safe`, `.h-safe-top`.
+- `body` now applies `padding-left/right` for landscape notch + `min-height: 100dvh`.
+- Mobile `@media (max-width: 768px)` rule: all inputs/selects/textareas forced to `font-size: 16px` → no iOS auto-zoom.
+- Mobile dialog padding tightened + max-height: `calc(100dvh - 32px - safe-areas)`.
+
+### Layout (`/app/frontend/src/components/layout/DashboardLayout.jsx`)
+- Sidebar: added `pt-safe pb-safe`.
+- Topbar: changed `h-16` → `min-h-16 ... pt-safe` so it grows with notch.
+- Removed temporary mobile spacer (topbar handles it directly now).
+- Impersonation banner: added `pt-safe` on mobile.
+
+### Public pages
+- `LoginPage.jsx`, `RegisterPage.jsx`, `LandingPage.jsx` — wrapper `pt-safe pb-safe` added.
+- LandingPage header: `pt-safe`.
+
+### Dialog component (`/app/frontend/src/components/ui/dialog.jsx`)
+- `DialogContent`: added `max-h-[92dvh] overflow-y-auto`.
+- `DialogFooter`: now `flex-col-reverse gap-2 sm:flex-row ... pb-safe [&>button]:w-full sm:[&>button]:w-auto` → buttons stack full-width on mobile, side-by-side on desktop, with home-bar safe padding.
+
+### Form responsiveness
+- `grid-cols-2` → `grid-cols-1 sm:grid-cols-2` in:
+  - LeadsPage (Schedule Followup dialog, Log Call schedule-next sub-grid)
+  - BookDemoDialog (date/time pair, share buttons)
+  - FollowupsPage (Complete dialog next-followup sub-grid)
+  - AdmissionsPage (Discount + Type fields)
+  - PlatformOrgsPage (Create Org admin fields, Payment dialog plan+cycle, payment method+date, share buttons)
+
+**SW cache:** bumped to `leadtrak-v68-ios-pwa-safe-area-mobile-forms-v2`.
+
+**Verified (Chromium mobile emulation at 390x844):**
+- ✅ Login page renders cleanly, full-width button at thumb-zone.
+- ✅ Dashboard topbar + sidebar respect mobile width — no horizontal scroll.
+- ✅ All form dialogs scroll within viewport instead of being clipped.
+
+**Real-device verification needed (on actual iPhone PWA):**
+The Chromium emulator does NOT simulate `env(safe-area-inset-*)` — those return `0px` in test runs. On actual iOS PWA with notch, the CSS will correctly read `47px` top and `34px` bottom and pad accordingly. Production deploy required to validate fully.
