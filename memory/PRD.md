@@ -59,6 +59,34 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Public Lead Capture Widget (`/api/widget/lead/{token}`)
 - ✅ Super Admin Platform Organizations management
 
+### 🗜️ Feature — Smart Image Compressor & Resizer (2026-06-02) ✅ COMPLETE
+**Use case:** Users were complaining that any oversized profile picture or company logo would get rejected with "Max 500 KB / 800 KB" errors. Now any photo up to **10 MB** is accepted and auto-compressed server-side to **≤ 800 KB**.
+
+**Backend (`server.py`):**
+- ✅ New `compress_image_bytes(raw, mime, max_dim, target_bytes)` helper using Pillow
+  - SVG → pass-through (vector, no raster compression)
+  - PNG with alpha → keep PNG + `optimize=True`; if still over target, flatten on white + convert to JPEG
+  - Everything else → convert to JPEG, walk quality 90→30 in steps until under 800 KB
+  - Last-ditch fallback: shrink to half-dim @ quality 30
+  - EXIF orientation auto-applied (portrait phone photos stay upright)
+  - Safety cap: rejects >10000×10000 px and corrupted images
+- ✅ `POST /api/uploads/avatar` rewritten: accepts ≤10 MB raw, compresses to 512px max dim → ≤800 KB → uploaded to Cloudinary
+- ✅ `POST /api/uploads/org-logo` rewritten: accepts ≤10 MB raw, compresses to 1024px max dim → ≤800 KB → uploaded to Cloudinary
+- ✅ Both endpoints return `{original_size, compressed_size, compression_ratio}` for transparency
+
+**Frontend:**
+- ✅ `ProfilePage.jsx`: client size cap raised 800 KB → 10 MB; hint changed to "JPG / PNG / WEBP · auto-compressed to ≤ 800 KB"; success toast now shows "auto-compressed X KB → Y KB" when compression actually happened
+- ✅ `SettingsPage.jsx` (org logo): same upgrade — 10 MB cap, new hint, compression toast
+- ✅ Service-worker bumped to `leadtrak-v87-image-compressor`
+
+**Testing (curl + Pillow):**
+- ✅ 5 MB JPEG → 9 KB compressed (0.2% ratio)
+- ✅ 21 MB random-noise JPEG (worst case) → 498 KB compressed (under target ✓)
+- ✅ 4000×4000 transparent PNG → 123 KB PNG (alpha preserved ✓)
+- ✅ Tiny 1.3 KB image → 779 B (still works)
+- ✅ 11 MB raw upload → HTTP 400 "max 10 MB"
+- ✅ Corrupted "not an image" file → HTTP 400 "Invalid or corrupted image"
+
 ### 📎 Feature — Timeline File Attachments (2026-06-02) ✅ COMPLETE
 **Use case:** Sales reps need to attach files exchanged with the lead (signed proposals, brochures, ID proofs, quotes) directly on the lead's timeline so the whole team can see + download them.
 

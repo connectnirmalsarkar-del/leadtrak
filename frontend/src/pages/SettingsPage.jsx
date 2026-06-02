@@ -149,8 +149,8 @@ export default function SettingsPage() {
   const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 500 * 1024) {
-      toast.error('Logo too large. Max 500 KB allowed.');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Logo too large. Max 10 MB raw upload.');
       e.target.value = '';
       return;
     }
@@ -162,7 +162,13 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setOrganization((o) => ({ ...o, logo_url: data.logo_url }));
-      toast.success('Logo uploaded');
+      if (data.compressed_size && data.original_size && data.compressed_size < data.original_size) {
+        const origKb = Math.round(data.original_size / 1024);
+        const compKb = Math.round(data.compressed_size / 1024);
+        toast.success(`Logo uploaded · auto-compressed ${origKb} KB → ${compKb} KB`);
+      } else {
+        toast.success('Logo uploaded');
+      }
       // Refresh auth user
       try {
         const { data: me } = await axios.get(`${API}/auth/me`);
@@ -324,7 +330,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex-1 space-y-2">
                 <Label>Company logo</Label>
-                <p className="text-xs text-slate-500">PNG / JPG / WEBP / SVG · max 500 KB · any aspect ratio</p>
+                <p className="text-xs text-slate-500">PNG / JPG / WEBP / SVG · auto-compressed to ≤ 800 KB · any size</p>
                 <div className="flex gap-2">
                   <input
                     ref={logoInputRef}

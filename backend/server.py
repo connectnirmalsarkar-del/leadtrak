@@ -29,6 +29,7 @@ import razorpay
 import secrets
 import cloudinary
 import cloudinary.uploader
+from PIL import Image, ImageOps
 from openpyxl import Workbook
 from india_locations import INDIA_LOCATIONS
 from industry_config import INDUSTRY_CONFIG, SUPPORTED_INDUSTRIES, get_industry, get_terms, get_lead_statuses, get_widget_fields, list_industries, get_default_services, get_features
@@ -2185,7 +2186,7 @@ async def add_lead_attachment(
     if not os.environ.get("CLOUDINARY_CLOUD_NAME"):
         raise HTTPException(status_code=500, detail="File uploads not configured. Please add Cloudinary credentials.")
     if file.content_type not in ALLOWED_LEAD_ATTACHMENT_MIME:
-        raise HTTPException(status_code=400, detail=f"File type not allowed. Use PDF, Excel (.xls/.xlsx) or JPG.")
+        raise HTTPException(status_code=400, detail="File type not allowed. Use PDF, Excel (.xls/.xlsx) or JPG.")
     content = await file.read()
     if len(content) > MAX_LEAD_ATTACHMENT_SIZE:
         raise HTTPException(status_code=400, detail="File too large. Max 400 KB allowed.")
@@ -3445,7 +3446,70 @@ async def reset_org_lead_statuses(current_user: dict = Depends(get_current_user)
 
 # ==================== Organization Logo Upload (Cloudinary) ====================
 ALLOWED_LOGO_MIME = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/svg+xml"}
-MAX_LOGO_SIZE = 500 * 1024  # 500 KB
+MAX_LOGO_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB raw upload — gets auto-compressed to ≤800 KB
+TARGET_COMPRESSED_SIZE = 800 * 1024  # 800 KB final
+MAX_IMAGE_PIXELS = 10000  # safety cap on dimensions to prevent DOS
+
+
+def compress_image_bytes(raw: bytes, mime_type: str, max_dim: int = 1024, target_bytes: int = TARGET_COMPRESSED_SIZE):
+    """Resize + iteratively re-encode an image so the final byte size is ≤ target_bytes.
+
+    Returns (compressed_bytes, output_mime, output_ext).
+
+    - SVG: passes through unchanged (vector — already small, can't compress).
+    - PNG with alpha (transparency): keeps PNG, optimizes; if still too big, flattens onto white and converts to JPEG.
+    - Everything else: converts to JPEG, walks quality from 90 → 30 in steps of 10 until ≤ target.
+    - If raw image already ≤ target AND within max_dim, returns as-is.
+    """
+    # SVG — pass through (vector format, no raster compression possible)
+    if mime_type == "image/svg+xml":
+        return raw, "image/svg+xml", "svg"
+
+    try:
+        img = Image.open(io.BytesIO(raw))
+        # Reject crazy dimensions early
+        if img.width > MAX_IMAGE_PIXELS or img.height > MAX_IMAGE_PIXELS:
+            raise HTTPException(status_code=400, detail="Image dimensions too large (max 10000x10000)")
+        # Apply EXIF orientation so portrait phone photos stay upright
+        img = ImageOps.exif_transpose(img)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Image decode failed: {e}")
+        raise HTTPException(status_code=400, detail="Invalid or corrupted image")
+
+    # Resize down preserving aspect ratio
+    if img.width > max_dim or img.height > max_dim:
+        img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+
+    has_alpha = img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info)
+
+    # Try PNG-with-alpha path first if input had transparency
+    if has_alpha:
+        png_buf = io.BytesIO()
+        png_img = img.convert("RGBA") if img.mode != "RGBA" else img
+        png_img.save(png_buf, format="PNG", optimize=True)
+        if png_buf.tell() <= target_bytes:
+            return png_buf.getvalue(), "image/png", "png"
+        # PNG still too big — flatten on white + JPEG
+        bg = Image.new("RGB", png_img.size, (255, 255, 255))
+        bg.paste(png_img, mask=png_img.split()[-1])
+        img = bg
+    else:
+        img = img.convert("RGB")
+
+    # Walk JPEG quality down until we're under target
+    for q in (90, 85, 80, 75, 70, 60, 50, 40, 30):
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=q, optimize=True, progressive=True)
+        if buf.tell() <= target_bytes:
+            return buf.getvalue(), "image/jpeg", "jpg"
+
+    # Last-ditch: shrink half + quality 30
+    img.thumbnail((max_dim // 2, max_dim // 2), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=30, optimize=True, progressive=True)
+    return buf.getvalue(), "image/jpeg", "jpg"
 
 
 @api_router.post("/uploads/org-logo")
@@ -3460,12 +3524,15 @@ async def upload_org_logo(
     if file.content_type not in ALLOWED_LOGO_MIME:
         raise HTTPException(status_code=400, detail=f"File type {file.content_type} not allowed. Use JPG/PNG/WEBP/SVG.")
     content = await file.read()
-    if len(content) > MAX_LOGO_SIZE:
-        raise HTTPException(status_code=400, detail="Logo too large. Max 500 KB allowed.")
+    if len(content) > MAX_LOGO_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="Logo file too large (max 10 MB). Auto-compress works on any photo within this limit.")
+    original_size = len(content)
+    # Auto-compress to ≤ 800 KB (logo target = 1024px max dim)
+    compressed, out_mime, _ = compress_image_bytes(content, file.content_type, max_dim=1024)
     folder = f"leadtrak/org-logo/{current_user['organization_id']}"
     try:
         result = cloudinary.uploader.upload(
-            content,
+            compressed,
             folder=folder,
             resource_type="image",
             overwrite=True,
@@ -3480,12 +3547,18 @@ async def upload_org_logo(
         {"_id": ObjectId(current_user["organization_id"])},
         {"$set": {"logo_url": logo_url}},
     )
-    return {"logo_url": logo_url, "public_id": result.get("public_id")}
+    return {
+        "logo_url": logo_url,
+        "public_id": result.get("public_id"),
+        "original_size": original_size,
+        "compressed_size": len(compressed),
+        "compression_ratio": round(len(compressed) / original_size, 3) if original_size else 1,
+    }
 
 
 # ==================== User Avatar Upload (Cloudinary) + Self Profile Update ====================
 ALLOWED_AVATAR_MIME = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
-MAX_AVATAR_SIZE = 800 * 1024  # 800 KB
+MAX_AVATAR_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB raw — auto-compressed to ≤ 800 KB
 
 
 @api_router.post("/uploads/avatar")
@@ -3495,7 +3568,8 @@ async def upload_user_avatar(
 ):
     """Upload the logged-in user's avatar/profile picture to Cloudinary.
 
-    Stores `avatar_url` on the user document and returns the public URL.
+    Any image up to 10 MB is accepted and auto-compressed server-side to ≤ 800 KB before storage.
+    Stores `avatar_url` on the user document and returns the public URL plus compression stats.
     """
     if not os.environ.get("CLOUDINARY_CLOUD_NAME"):
         raise HTTPException(status_code=500, detail="Avatar upload not configured")
@@ -3505,12 +3579,15 @@ async def upload_user_avatar(
             detail=f"File type {file.content_type} not allowed. Use JPG/PNG/WEBP.",
         )
     content = await file.read()
-    if len(content) > MAX_AVATAR_SIZE:
-        raise HTTPException(status_code=400, detail="Avatar too large. Max 800 KB allowed.")
+    if len(content) > MAX_AVATAR_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="Image file too large (max 10 MB).")
+    original_size = len(content)
+    # Avatar target dimension = 512px (Cloudinary will further crop to 400x400 face-aware)
+    compressed, _out_mime, _ = compress_image_bytes(content, file.content_type, max_dim=512)
     folder = f"leadtrak/user-avatar/{current_user['organization_id']}"
     try:
         result = cloudinary.uploader.upload(
-            content,
+            compressed,
             folder=folder,
             resource_type="image",
             overwrite=True,
@@ -3529,7 +3606,13 @@ async def upload_user_avatar(
         {"_id": ObjectId(current_user["id"])},
         {"$set": {"avatar_url": avatar_url}},
     )
-    return {"avatar_url": avatar_url, "public_id": result.get("public_id")}
+    return {
+        "avatar_url": avatar_url,
+        "public_id": result.get("public_id"),
+        "original_size": original_size,
+        "compressed_size": len(compressed),
+        "compression_ratio": round(len(compressed) / original_size, 3) if original_size else 1,
+    }
 
 
 @api_router.delete("/uploads/avatar")

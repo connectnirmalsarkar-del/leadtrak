@@ -47,8 +47,8 @@ export default function ProfilePage() {
       toast.error('Please choose a JPG / PNG / WEBP image');
       return;
     }
-    if (file.size > 800 * 1024) {
-      toast.error('Image must be ≤ 800 KB');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image must be ≤ 10 MB');
       return;
     }
     setUploadingAvatar(true);
@@ -60,7 +60,13 @@ export default function ProfilePage() {
       });
       setAvatarUrl(data.avatar_url);
       await checkAuth();
-      toast.success('Profile picture updated');
+      if (data.compressed_size && data.original_size && data.compressed_size < data.original_size) {
+        const origKb = Math.round(data.original_size / 1024);
+        const compKb = Math.round(data.compressed_size / 1024);
+        toast.success(`Profile picture updated · auto-compressed ${origKb} KB → ${compKb} KB`);
+      } else {
+        toast.success('Profile picture updated');
+      }
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Avatar upload failed');
     } finally {
@@ -195,7 +201,7 @@ export default function ProfilePage() {
               </p>
             )}
             <div className="flex items-center gap-2 pt-1">
-              <p className="text-[11px] text-slate-500">JPG / PNG / WEBP, ≤ 800 KB</p>
+              <p className="text-[11px] text-slate-500">JPG / PNG / WEBP · auto-compressed to ≤ 800 KB</p>
               {avatarUrl && (
                 <button
                   type="button"
