@@ -7035,6 +7035,38 @@ app.add_middleware(
     max_age=600,
 )
 
+
+# ==================== Widget CORS (wildcard for embed-on-any-domain) ====================
+# Widget endpoints (/api/widget/*) are public, no-auth, no-cookies — they MUST
+# be reachable from ANY 3rd-party customer website where the embed snippet is
+# pasted. The strict CORS allowlist above would block them. We override with
+# wildcard headers for widget paths only.
+@app.middleware("http")
+async def widget_cors_middleware(request, call_next):
+    path = request.url.path
+    is_widget = path.startswith("/api/widget/")
+    # Short-circuit preflight for widget endpoints
+    if is_widget and request.method == "OPTIONS":
+        from starlette.responses import Response
+        return Response(
+            status_code=204,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Max-Age": "600",
+            },
+        )
+    response = await call_next(request)
+    if is_widget:
+        # Override the strict CORS headers added by the global CORSMiddleware
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        # Remove credentials header — wildcard origin + credentials is invalid
+        response.headers.pop("Access-Control-Allow-Credentials", None)
+    return response
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
