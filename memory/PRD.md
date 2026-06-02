@@ -59,6 +59,34 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Public Lead Capture Widget (`/api/widget/lead/{token}`)
 - ✅ Super Admin Platform Organizations management
 
+### 📎 Feature — Timeline File Attachments (2026-06-02) ✅ COMPLETE
+**Use case:** Sales reps need to attach files exchanged with the lead (signed proposals, brochures, ID proofs, quotes) directly on the lead's timeline so the whole team can see + download them.
+
+**Backend:**
+- ✅ New `POST /api/leads/{lead_id}/attachments` (multipart) — accepts single file + optional `note`
+- ✅ Allowed mime: `application/pdf`, `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` (xlsx), `application/vnd.ms-excel` (xls), `image/jpeg` (jpg)
+- ✅ Max size: **400 KB** (HTTP 400 on overflow / wrong mime)
+- ✅ Upload goes to Cloudinary `educrm/lead-attachments/{org_id}/` (raw for PDFs/Excel, image for JPG)
+- ✅ Emits `lead_attachment` timeline event with `{filename, url, public_id, mime_type, size, note}`
+- ✅ Notifies the assigned counselor if the uploader is someone else
+- ✅ Counselor/telecaller can only attach to leads assigned to them
+
+**Frontend (`LeadTimeline.jsx`):**
+- ✅ Timeline composer now has a "Attach" button next to "Post" → opens file picker (PDF / Excel / JPG only)
+- ✅ Client-side size + mime validation before upload (toast errors)
+- ✅ Picked-file chip with filename, size, ❌ remove icon
+- ✅ "Post" button switches to "Upload" when a file is queued
+- ✅ Optional note field doubles as caption for the file
+- ✅ New `lead_attachment` event renderer: file icon (FileText for PDF, FileSpreadsheet for Excel, Image for JPG), filename, size in KB, mime, Download button (opens Cloudinary URL with `download` attribute), inline image preview for JPGs, italic caption note
+- ✅ Service-worker bumped to `leadtrak-v86-timeline-attachments`
+
+**Testing:**
+- ✅ curl POST with 407-byte PDF → 200 + timeline event created with Cloudinary URL
+- ✅ curl POST with 500 KB file → HTTP 400 (oversize rejected)
+- ✅ curl POST with .txt file → HTTP 400 (mime rejected)
+- ✅ Timeline GET returns event with full metadata
+- ✅ Playwright screenshot confirms: Composer rendered, Attach button visible with "PDF · Excel · JPG · max 400 KB" hint, "File attached" event renders with filename + size + Download button + caption
+
 ### 🔥 Hotfix — Widget CORS Middleware Crash (2026-06-02) ✅ COMPLETE
 **Bug:** Lead Capture Widget embed snippet did nothing on external customer websites — `<div id="leadtrak-form-root">` stayed empty, no form rendered.
 

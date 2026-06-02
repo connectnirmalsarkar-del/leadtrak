@@ -2163,6 +2163,84 @@ async def add_lead_comment(lead_id: str, data: LeadCommentCreate, current_user: 
     return {"message": "Comment added", "lead_id": str(lid)}
 
 
+# ==================== Lead Attachments (file uploads on timeline) ====================
+ALLOWED_LEAD_ATTACHMENT_MIME = {
+    "image/jpeg", "image/jpg",
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
+    "application/vnd.ms-excel",  # .xls
+}
+MAX_LEAD_ATTACHMENT_SIZE = 400 * 1024  # 400 KB
+
+
+@api_router.post("/leads/{lead_id}/attachments")
+async def add_lead_attachment(
+    lead_id: str,
+    file: UploadFile = File(...),
+    note: str = Form(""),
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload a single file (PDF/Excel/JPG, max 400 KB) and log it on the lead's timeline.
+    The file is stored on Cloudinary and the timeline event holds a permanent download URL."""
+    if not os.environ.get("CLOUDINARY_CLOUD_NAME"):
+        raise HTTPException(status_code=500, detail="File uploads not configured. Please add Cloudinary credentials.")
+    if file.content_type not in ALLOWED_LEAD_ATTACHMENT_MIME:
+        raise HTTPException(status_code=400, detail=f"File type not allowed. Use PDF, Excel (.xls/.xlsx) or JPG.")
+    content = await file.read()
+    if len(content) > MAX_LEAD_ATTACHMENT_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Max 400 KB allowed.")
+
+    org_id = ObjectId(current_user["organization_id"])
+    lid = safe_object_id(lead_id, "lead_id")
+    lead = await db.leads.find_one({"_id": lid, "organization_id": org_id}, {"name": 1, "assigned_to": 1})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Counselors/telecallers may only attach to leads assigned to them
+    if current_user["role"] in ("counselor", "telecaller") and lead.get("assigned_to") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You can only attach files to leads assigned to you")
+
+    is_image = file.content_type.startswith("image/")
+    resource_type = "image" if is_image else "raw"
+    folder = f"educrm/lead-attachments/{current_user['organization_id']}"
+    try:
+        result = cloudinary.uploader.upload(
+            content,
+            folder=folder,
+            resource_type=resource_type,
+            use_filename=True,
+            unique_filename=True,
+        )
+    except Exception as e:
+        logger.error(f"Cloudinary lead-attachment upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Upload failed")
+
+    payload = {
+        "filename": file.filename or "attachment",
+        "url": result.get("secure_url"),
+        "public_id": result.get("public_id"),
+        "resource_type": resource_type,
+        "mime_type": file.content_type,
+        "size": len(content),
+        "note": (note or "").strip()[:500],
+    }
+    await log_lead_event(lid, "lead_attachment", payload, current_user, org_id)
+
+    # Notify the assigned counselor if the uploader is someone else
+    if lead.get("assigned_to") and lead["assigned_to"] != current_user["id"]:
+        await db.notifications.insert_one({
+            "user_id": lead["assigned_to"],
+            "message": f"{current_user.get('name')} attached a file to lead '{lead.get('name')}': {payload['filename']}",
+            "type": "lead_attachment",
+            "lead_id": str(lid),
+            "read": False,
+            "organization_id": org_id,
+            "created_at": datetime.now(timezone.utc),
+        })
+
+    return {"message": "File attached", "lead_id": str(lid), **payload}
+
+
 @api_router.get("/reports/caller-leads/{user_id}")
 async def report_caller_leads(user_id: str, current_user: dict = Depends(get_current_user)):
     """Drill-down: every lead currently assigned to the given counselor/telecaller/manager.
