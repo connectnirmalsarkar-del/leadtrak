@@ -1955,7 +1955,12 @@ async def get_lead_timeline(lead_id: str, current_user: dict = Depends(get_curre
         e["lead_id"] = str(e["lead_id"])
         e.pop("organization_id", None)
         if isinstance(e.get("created_at"), datetime):
-            e["created_at"] = e["created_at"].isoformat()
+            ts = e["created_at"]
+            # MongoDB returns naive datetime — explicitly mark as UTC so the
+            # ISO string includes `+00:00` and JS Date parses it as UTC, not local.
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            e["created_at"] = ts.isoformat()
     return events
 
 

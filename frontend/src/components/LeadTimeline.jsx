@@ -21,7 +21,11 @@ import { toast } from 'sonner';
 
 const formatDate = (iso) => {
   const d = new Date(iso);
-  return d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+  return d.toLocaleString('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Kolkata',
+  });
 };
 
 const EVENT_META = {
