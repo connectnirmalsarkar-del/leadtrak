@@ -3665,7 +3665,10 @@ async def subscription_status(current_user: dict = Depends(get_current_user)):
         # Ensure tz-aware comparison
         if end_date.tzinfo is None:
             end_date = end_date.replace(tzinfo=timezone.utc)
-        days_remaining = max(0, (end_date - now).days)
+        # Calendar-day difference (NOT 24-hour rolling) — so a trial that
+        # ends 'Jun 14' shows "13 days left" on Jun 1 and "12 days left"
+        # on Jun 2, regardless of the time-of-day the trial was started.
+        days_remaining = max(0, (end_date.date() - now.date()).days)
     status_val = org.get("subscription_status") or "trial"
     # Auto-flip to expired if past end
     if end_date and now > end_date and status_val in ("trial", "active"):
@@ -3707,7 +3710,7 @@ async def platform_trial_report(current_user: dict = Depends(get_current_user)):
         end_date = org.get("trial_end_date") or org.get("subscription_end_date")
         if end_date and end_date.tzinfo is None:
             end_date = end_date.replace(tzinfo=timezone.utc)
-        days_remaining = max(0, (end_date - now).days) if end_date else 0
+        days_remaining = max(0, (end_date.date() - now.date()).days) if end_date else 0
         is_expired = end_date and end_date < now
         # Fetch admin user for contact
         admin = await db.users.find_one({"organization_id": org["_id"], "role": "org_admin"}, {"email": 1, "name": 1})
@@ -6625,7 +6628,7 @@ async def list_all_organizations(current_user: dict = Depends(get_current_user))
         end_date = org.get("subscription_end_date") or org.get("trial_end_date")
         if end_date and end_date.tzinfo is None:
             end_date = end_date.replace(tzinfo=timezone.utc)
-        days_remaining = max(0, (end_date - now).days) if end_date else None
+        days_remaining = max(0, (end_date.date() - now.date()).days) if end_date else None
         result.append({
             "id": str(oid),
             "name": org.get("name", ""),
