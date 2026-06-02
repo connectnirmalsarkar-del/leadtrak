@@ -251,13 +251,6 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="pt-6 border-t border-slate-200">
-            <p className="text-xs text-slate-500 text-center mb-2">Default Super Admin</p>
-            <div className="bg-slate-50 rounded-lg p-3 font-mono text-xs text-slate-700 text-center">
-              admin@educationcrm.com / Admin@123
-            </div>
-          </div>
-
           <p className="text-xs text-slate-500 text-center">
             By signing in, you agree to our{' '}
             <a href="#" className="text-slate-700 underline">Terms</a> and{' '}
