@@ -60,10 +60,10 @@ export default function LandingPage() {
   const CurrentIcon = currentIndustry.icon;
 
   return (
-    <div className="min-h-screen bg-white overflow-x-hidden pt-safe">
+    <div className="min-h-screen bg-white overflow-x-hidden">
       {/* Header */}
       <header className="border-b border-slate-100 sticky top-0 bg-white/90 backdrop-blur-xl z-50 pt-safe">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 flex-shrink-0">
             <img src="/logo-light.png?v=3" alt="Leadtrak" className="h-7 sm:h-10 w-auto" data-testid="landing-header-logo" />
           </div>
@@ -90,7 +90,7 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative pt-24 pb-32 overflow-hidden">
+      <section className="relative pt-12 sm:pt-24 pb-20 sm:pb-32 overflow-hidden">
         <div className="absolute inset-0 -z-10">
           <div className="absolute top-20 left-1/4 w-96 h-96 bg-violet-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
           <div className="absolute top-40 right-1/4 w-96 h-96 bg-indigo-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" style={{ animationDelay: '2s' }}></div>

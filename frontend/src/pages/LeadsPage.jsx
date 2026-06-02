@@ -590,7 +590,7 @@ export default function LeadsPage() {
                   data-testid="lead-mobile-input"
                 />
               </div>
-              <div className="space-y-2 col-span-2">
+              <div className="space-y-2 col-span-1 sm:col-span-2">
                 <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 select-none">
                   <input
                     type="checkbox"
@@ -610,7 +610,7 @@ export default function LeadsPage() {
                   />
                 )}
               </div>
-              <div className="space-y-2 col-span-2">
+              <div className="space-y-2 col-span-1 sm:col-span-2">
                 <Label>Email</Label>
                 <Input
                   type="email"
@@ -621,7 +621,7 @@ export default function LeadsPage() {
                 />
               </div>
               {duplicate && (
-                <div className="col-span-2 p-3 bg-red-50 border border-red-200 rounded-md flex items-start gap-2" data-testid="duplicate-warning">
+                <div className="col-span-1 sm:col-span-2 p-3 bg-red-50 border border-red-200 rounded-md flex items-start gap-2" data-testid="duplicate-warning">
                   <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
                   <div className="text-sm">
                     <p className="font-semibold text-red-800">{duplicate.message}</p>
@@ -634,7 +634,7 @@ export default function LeadsPage() {
                   </div>
                 </div>
               )}
-              <div className="space-y-2 col-span-2">
+              <div className="space-y-2 col-span-1 sm:col-span-2">
                 <Label>{t.offering} Interested In <span className="text-slate-400 font-normal">(optional · set anytime)</span></Label>
                 <Select
                   value={newLead.course_interested || '__none__'}
@@ -722,7 +722,7 @@ export default function LeadsPage() {
                 </Select>
                 <p className="text-[10px] text-slate-500">Leave empty to auto-assign via round-robin</p>
               </div>
-              <div className="space-y-2 col-span-2">
+              <div className="space-y-2 col-span-1 sm:col-span-2">
                 <Label>Temperature</Label>
                 <Select value={newLead.temperature} onValueChange={(v) => setNewLead({...newLead, temperature: v})}>
                   <SelectTrigger data-testid="lead-temp-select"><SelectValue /></SelectTrigger>

@@ -58,10 +58,8 @@ table { display: table; }
     [role="dialog"] {
         max-width: calc(100vw - 16px) !important;
         max-height: calc(100dvh - 32px - var(--safe-area-top) - var(--safe-area-bottom)) !important;
-        padding: 1rem !important;
     }
     [role="dialog"] > * { min-width: 0; }
-    /* Dialog body grid spacing tighter on mobile */
     [role="dialog"] .grid.gap-4 { gap: 0.75rem !important; }
 }
 
@@ -74,10 +72,10 @@ table { display: table; }
     h1.text-3xl, h1.text-4xl { font-size: 1.5rem !important; }
     .text-3xl { font-size: 1.5rem !important; }
     .text-4xl { font-size: 1.875rem !important; }
-    /* Reduce default card paddings */
-    .p-8 { padding: 1rem !important; }
-    .p-7 { padding: 1rem !important; }
-    .p-6 { padding: 1rem !important; }
+    /* Reduce default card paddings — but NOT on portal'd dialogs/sheets (those handle their own padding incl. safe-area inset) */
+    .p-8:not([role="dialog"]):not([role="dialog"] *) { padding: 1rem !important; }
+    .p-7:not([role="dialog"]):not([role="dialog"] *) { padding: 1rem !important; }
+    .p-6:not([role="dialog"]) { padding: 1rem !important; }
     .px-7, .px-8 { padding-left: 1rem !important; padding-right: 1rem !important; }
     /* Sidebar/topbar nav text scale */
     .text-2xl { font-size: 1.25rem !important; }

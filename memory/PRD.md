@@ -959,3 +959,43 @@ The Chromium emulator does NOT simulate `env(safe-area-inset-*)` — those retur
 - ✅ Read API returns the updated value correctly.
 - ✅ Clear service (empty string) → properly stored as `null`.
 - ✅ UI label, dropdown, and helper text all rendered correctly.
+
+---
+
+## iOS PWA Notch — Sheet/Side Panel Safe-Area Fix (Feb 2026)
+
+**Reported issues (real iPhone PWA screenshots):**
+1. Landing page header — too much gap, content pushed too far down
+2. Lead Detail side Sheet → content (LEAD00001 + close button) hidden behind notch / Dynamic Island
+
+**Root causes:**
+1. **Landing page:** Double `pt-safe` — outer `<div>` wrapper AND inner sticky `<header>` both had `pt-safe`, doubling the notch padding (59px + 59px = 118px).
+2. **Sheet:** The Sheet primitive `p-6` (24px padding) was being globally overridden on mobile by `index.css` rule `.p-6 { padding: 1rem !important }`. This shorthand-with-!important beat the `pt-safe`/`pb-safe` longhand classes added to Sheet, so paddingTop stayed at 16px (no notch clearance).
+
+**Fix:**
+
+### `LandingPage.jsx`
+- Removed duplicate `pt-safe` from outer wrapper (only sticky header keeps it).
+- Hero `pt-24` → `pt-12 sm:pt-24` (less wasteful empty space on mobile).
+- Header height `h-16` → `h-14 sm:h-16` (more compact on mobile).
+
+### `components/ui/sheet.jsx`
+- Added **inline style** to `SheetPrimitive.Content`:
+  ```js
+  style={{
+    paddingTop: 'calc(1.5rem + env(safe-area-inset-top, 0px))',
+    paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))'
+  }}
+  ```
+- Close (X) button repositioned with `top-[calc(1rem+env(safe-area-inset-top,0px))]` so it's clickable on iOS PWA (not hidden behind status bar).
+
+### `index.css`
+- Updated `.p-6 { padding: 1rem !important }` → `.p-6:not([role="dialog"]) { ... }` so portal'd Sheets/Dialogs keep their own safe-area-aware padding.
+- Removed redundant media-query rules now that inline styles handle Sheet padding.
+
+**SW cache:** bumped to `leadtrak-v72-sheet-inline-safe-area`.
+
+**Verified:**
+- ✅ Chromium 393x852: Sheet padding-top = 24px (correct; no notch on test browser).
+- ✅ Inline style attribute properly set: `padding-top: calc(1.5rem + env(safe-area-inset-top, 0px))`.
+- ⚠️ Real iPhone PWA verification needed after production deploy — env() will resolve to ~59px and padding becomes ~83px → content clears Dynamic Island.
