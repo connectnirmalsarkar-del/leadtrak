@@ -46,13 +46,48 @@ export default function SettingsPage() {
   const [newStatus, setNewStatus] = useState('');
   const [savingStatuses, setSavingStatuses] = useState(false);
 
+  // Timezone customization
+  const [timezone, setTimezone] = useState('Asia/Kolkata');
+  const [tzOptions, setTzOptions] = useState([]);
+  const [savingTimezone, setSavingTimezone] = useState(false);
+
   const canManage = user && ['super_admin', 'org_admin'].includes(user.role);
 
   useEffect(() => {
     fetchOrg();
     fetchSources();
     fetchLeadStatuses();
+    fetchTimezone();
   }, []);
+
+  const fetchTimezone = async () => {
+    try {
+      const { data } = await axios.get(`${API}/organization/timezone`);
+      setTimezone(data.timezone);
+      setTzOptions(data.options || []);
+    } catch (_) { /* ignore */ }
+  };
+
+  const refreshUserSession = async () => {
+    try {
+      const { data: me } = await axios.get(`${API}/auth/me`);
+      setUser && setUser(me);
+    } catch (_) { /* ignore */ }
+  };
+
+  const handleSaveTimezone = async (tz) => {
+    setSavingTimezone(true);
+    try {
+      await axios.put(`${API}/organization/timezone`, { timezone: tz });
+      setTimezone(tz);
+      toast.success('Timezone updated — all timestamps will now display in this timezone');
+      await refreshUserSession();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update timezone');
+    } finally {
+      setSavingTimezone(false);
+    }
+  };
 
   const fetchOrg = async () => {
     try {
@@ -266,6 +301,7 @@ export default function SettingsPage() {
           <TabsTrigger value="company" data-testid="tab-company" className="text-xs sm:text-sm"><Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" /><span className="hidden xs:inline sm:inline">Company Profile</span><span className="xs:hidden sm:hidden">Profile</span></TabsTrigger>
           <TabsTrigger value="sources" data-testid="tab-sources" className="text-xs sm:text-sm">Lead Sources</TabsTrigger>
           <TabsTrigger value="lead-statuses" data-testid="tab-lead-statuses" className="text-xs sm:text-sm"><ListChecks className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />Lead Statuses</TabsTrigger>
+          <TabsTrigger value="timezone" data-testid="tab-timezone" className="text-xs sm:text-sm">Timezone</TabsTrigger>
           <TabsTrigger value="integrations" data-testid="tab-integrations" asChild>
             <Link to="/integrations" className="flex items-center text-xs sm:text-sm"><Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-1.5" />Integrations →</Link>
           </TabsTrigger>
@@ -554,6 +590,53 @@ export default function SettingsPage() {
                 <li>Reorder with the arrows — the order is how it shows up everywhere.</li>
                 <li>You can't remove a status that's currently in use by an existing lead. Move those leads first.</li>
                 <li>Reset reverts to the {statusMeta.industry || 'industry'} default list (only enabled when custom).</li>
+              </ul>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Timezone */}
+        <TabsContent value="timezone" className="space-y-4 mt-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-6" data-testid="timezone-card">
+            <div className="mb-4">
+              <h3 className="text-base font-semibold text-slate-900 mb-1" style={{ fontFamily: 'Sora' }}>Organization Timezone</h3>
+              <p className="text-xs text-slate-500">
+                All timestamps in the app (timelines, reports, follow-ups) are displayed in this timezone.
+                The database always stores in UTC — only the display layer changes.
+              </p>
+            </div>
+            <div className="space-y-2 max-w-md">
+              <Label className="text-xs">Display timezone</Label>
+              <Select
+                value={timezone}
+                onValueChange={(v) => handleSaveTimezone(v)}
+                disabled={!canManage || savingTimezone}
+              >
+                <SelectTrigger data-testid="timezone-select">
+                  <SelectValue placeholder="Pick timezone" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72 overflow-y-auto">
+                  {tzOptions.map((tz) => (
+                    <SelectItem key={tz.value} value={tz.value} data-testid={`tz-option-${tz.value}`}>
+                      {tz.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-slate-500">
+                Current: <span className="font-mono text-slate-700">{timezone}</span>
+                {savingTimezone && <span className="ml-2 text-violet-600">saving…</span>}
+              </p>
+              {!canManage && (
+                <p className="text-[11px] text-rose-600">Only org admins can change this.</p>
+              )}
+            </div>
+            <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-600">
+              <p className="font-semibold text-slate-700 mb-1">Why this matters</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>Multi-region teams see local times — your Dubai branch reads GST, your London branch reads GMT, automatically.</li>
+                <li>Reports + lead timelines render in your business's timezone (no more "3 AM" surprises).</li>
+                <li>Changing this only affects DISPLAY — historical data stays accurate (stored as UTC).</li>
               </ul>
             </div>
           </div>

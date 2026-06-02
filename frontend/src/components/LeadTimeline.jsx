@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { API } from '@/context/AuthContext';
+import { API, useAuth } from '@/context/AuthContext';
 import {
   UserPlus,
   ArrowRightLeft,
@@ -19,12 +19,12 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const formatDate = (iso) => {
+const makeFormatDate = (timeZone) => (iso) => {
   const d = new Date(iso);
   return d.toLocaleString('en-IN', {
     dateStyle: 'medium',
     timeStyle: 'short',
-    timeZone: 'Asia/Kolkata',
+    timeZone: timeZone || 'Asia/Kolkata',
   });
 };
 
@@ -214,6 +214,8 @@ const EventBody = ({ event }) => {
 };
 
 export default function LeadTimeline({ leadId, refreshKey }) {
+  const { user } = useAuth();
+  const formatDate = makeFormatDate(user?.timezone);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');

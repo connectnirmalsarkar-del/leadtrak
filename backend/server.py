@@ -130,14 +130,17 @@ async def get_current_user(request: Request) -> dict:
         # Attach industry + terminology from the organization
         industry_key = "generic"
         org_name = ""
+        org_timezone = "Asia/Kolkata"
         if org_id:
-            org = await db.organizations.find_one({"_id": org_id}, {"industry": 1, "name": 1, "logo_url": 1})
+            org = await db.organizations.find_one({"_id": org_id}, {"industry": 1, "name": 1, "logo_url": 1, "timezone": 1})
             if org:
                 industry_key = org.get("industry") or "education"
                 org_name = org.get("name", "")
                 user["logo_url"] = org.get("logo_url", "")
+                org_timezone = org.get("timezone") or "Asia/Kolkata"
         user["industry"] = industry_key
         user["organization_name"] = org_name
+        user["timezone"] = org_timezone
         user["terminology"] = get_terms(industry_key)
         # Effective list = org's custom override (if any) else industry defaults
         if org_id:
@@ -1064,11 +1067,16 @@ async def login(data: LoginRequest, request: Request, response: Response):
     org_name = ""
     org_logo = ""
     if org_id:
-        org = await db.organizations.find_one({"_id": org_id}, {"industry": 1, "name": 1, "logo_url": 1})
+        org = await db.organizations.find_one({"_id": org_id}, {"industry": 1, "name": 1, "logo_url": 1, "timezone": 1})
         if org:
             industry = org.get("industry") or "education"
             org_name = org.get("name", "")
             org_logo = org.get("logo_url", "") or ""
+            org_timezone = org.get("timezone") or "Asia/Kolkata"
+        else:
+            org_timezone = "Asia/Kolkata"
+    else:
+        org_timezone = "Asia/Kolkata"
     return {
         "id": user_id,
         "email": user["email"],
@@ -1079,6 +1087,7 @@ async def login(data: LoginRequest, request: Request, response: Response):
         "organization_name": org_name,
         "logo_url": org_logo,
         "industry": industry,
+        "timezone": org_timezone,
         "terminology": get_terms(industry),
         # Include industry-derived data so the frontend has everything it
         # needs to render the dashboard correctly on the first paint (no
@@ -3192,7 +3201,61 @@ async def update_organization(data: OrganizationUpdate, current_user: dict = Dep
     return {"message": "Organization updated successfully"}
 
 
+# ==================== Org Timezone (Admin) ====================
+# Common IANA timezones with friendly labels; admins can pick from this list
+SUPPORTED_TIMEZONES = [
+    {"value": "Asia/Kolkata", "label": "India (IST, UTC+5:30)"},
+    {"value": "Asia/Dubai", "label": "UAE / Gulf (GST, UTC+4)"},
+    {"value": "Asia/Singapore", "label": "Singapore / Malaysia (SGT, UTC+8)"},
+    {"value": "Asia/Bangkok", "label": "Thailand / Vietnam (ICT, UTC+7)"},
+    {"value": "Asia/Tokyo", "label": "Japan (JST, UTC+9)"},
+    {"value": "Asia/Manila", "label": "Philippines (PHT, UTC+8)"},
+    {"value": "Asia/Karachi", "label": "Pakistan (PKT, UTC+5)"},
+    {"value": "Asia/Dhaka", "label": "Bangladesh (BST, UTC+6)"},
+    {"value": "Europe/London", "label": "UK / Ireland (GMT/BST)"},
+    {"value": "Europe/Berlin", "label": "Central Europe (CET/CEST)"},
+    {"value": "America/New_York", "label": "US Eastern (EST/EDT)"},
+    {"value": "America/Chicago", "label": "US Central (CST/CDT)"},
+    {"value": "America/Denver", "label": "US Mountain (MST/MDT)"},
+    {"value": "America/Los_Angeles", "label": "US Pacific (PST/PDT)"},
+    {"value": "America/Toronto", "label": "Canada Eastern"},
+    {"value": "Australia/Sydney", "label": "Sydney (AEST/AEDT)"},
+    {"value": "Australia/Perth", "label": "Perth (AWST)"},
+    {"value": "Africa/Nairobi", "label": "East Africa (EAT)"},
+    {"value": "Africa/Lagos", "label": "West Africa (WAT)"},
+    {"value": "UTC", "label": "UTC"},
+]
+SUPPORTED_TZ_VALUES = {tz["value"] for tz in SUPPORTED_TIMEZONES}
+
+
+class TimezoneUpdate(BaseModel):
+    timezone: str
+
+
+@api_router.get("/organization/timezone")
+async def get_org_timezone(current_user: dict = Depends(get_current_user)):
+    org_id = ObjectId(current_user["organization_id"])
+    org = await db.organizations.find_one({"_id": org_id}, {"timezone": 1, "name": 1}) or {}
+    return {
+        "timezone": org.get("timezone") or "Asia/Kolkata",
+        "options": SUPPORTED_TIMEZONES,
+    }
+
+
+@api_router.put("/organization/timezone")
+async def update_org_timezone(data: TimezoneUpdate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] not in ("super_admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    tz = (data.timezone or "").strip()
+    if tz not in SUPPORTED_TZ_VALUES:
+        raise HTTPException(status_code=400, detail=f"Unsupported timezone '{tz}'. Pick from the supported list.")
+    org_id = ObjectId(current_user["organization_id"])
+    await db.organizations.update_one({"_id": org_id}, {"$set": {"timezone": tz}})
+    return {"message": "Timezone updated", "timezone": tz}
+
+
 # ==================== Lead Status Management (Admin Customization) ====================
+
 class LeadStatusesUpdate(BaseModel):
     statuses: List[str]
 
