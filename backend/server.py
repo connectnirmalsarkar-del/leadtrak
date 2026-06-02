@@ -6317,8 +6317,19 @@ class PublicLeadCreate(BaseModel):
 async def get_widget_token(current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ["super_admin", "org_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
-    org_id = ObjectId(current_user["organization_id"])
+    org_id_raw = current_user.get("organization_id")
+    if not org_id_raw:
+        raise HTTPException(
+            status_code=400,
+            detail="Super Admin must impersonate a tenant first (Platform → Organizations → Login as) before generating a widget. The widget belongs to a tenant org.",
+        )
+    try:
+        org_id = ObjectId(org_id_raw)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid organization context")
     org = await db.organizations.find_one({"_id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
     if not org.get("widget_token"):
         token = secrets.token_urlsafe(16)
         await db.organizations.update_one({"_id": org_id}, {"$set": {"widget_token": token}})
@@ -7063,8 +7074,12 @@ async def widget_cors_middleware(request, call_next):
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-        # Remove credentials header — wildcard origin + credentials is invalid
-        response.headers.pop("Access-Control-Allow-Credentials", None)
+        # Remove credentials header — wildcard origin + credentials is invalid.
+        # MutableHeaders supports __delitem__ but not .pop(); guard with try.
+        try:
+            del response.headers["Access-Control-Allow-Credentials"]
+        except KeyError:
+            pass
     return response
 
 @app.on_event("shutdown")

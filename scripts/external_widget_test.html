@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>External Customer Site — Leadtrak Widget Test</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:#f1f5f9; margin:0; padding:60px 20px; }
+  h1 { color:#0f172a; max-width:420px; margin:0 auto 24px; }
+  p { color:#64748b; max-width:420px; margin:0 auto 32px; }
+</style>
+</head>
+<body>
+<h1>Dummy Customer Site</h1>
+<p>This page simulates a 3rd-party website embedding the Leadtrak Lead Capture Widget.</p>
+
+<!-- Leadtrak Lead Capture Widget -->
+<div id="leadtrak-form-root"></div>
+<script>
+(function(){
+  var API="https://institute-crm-pro.preview.emergentagent.com", TOKEN="sIqUI6-l_dYY8H8U-1Pcsw", ROOT=document.getElementById("leadtrak-form-root");
+  if(!ROOT) return;
+  var brand="#7C3AED", success="#10B981", danger="#EF4444";
+
+  function el(tag,attrs,children){
+    var e=document.createElement(tag);
+    if(attrs) for(var k in attrs){ if(k==="style") Object.assign(e.style,attrs[k]); else if(k==="html") e.innerHTML=attrs[k]; else e.setAttribute(k,attrs[k]); }
+    (children||[]).forEach(function(c){ e.appendChild(typeof c==="string"?document.createTextNode(c):c); });
+    return e;
+  }
+  function input(name,label,type,required,placeholder){
+    var wrap=el("div",{style:{marginBottom:"12px"}});
+    wrap.appendChild(el("label",{style:{display:"block",fontSize:"12px",fontWeight:"600",color:"#475569",marginBottom:"5px"}},[label+(required?" *":"")]));
+    var i=el("input",{name:name,type:type||"text",placeholder:placeholder||"",style:{width:"100%",padding:"11px 13px",border:"1px solid #CBD5E1",borderRadius:"10px",fontSize:"14px",boxSizing:"border-box",outline:"none",transition:"border-color .15s, box-shadow .15s",background:"#fff"}});
+    if(required) i.required=true;
+    wrap.appendChild(i);
+    return wrap;
+  }
+  function selectField(name,label,opts,required){
+    var s=el("select",{name:name,style:{width:"100%",padding:"11px 13px",border:"1px solid #CBD5E1",borderRadius:"10px",fontSize:"14px",boxSizing:"border-box",outline:"none",background:"#fff",appearance:"auto"}});
+    if(required) s.required=true;
+    s.appendChild(el("option",{value:""},["Select…"]));
+    (opts||[]).forEach(function(o){ s.appendChild(el("option",{value:o},[o])); });
+    return s;
+  }
+
+  var xhr=new XMLHttpRequest();
+  xhr.open("GET",API+"/api/widget/config/"+TOKEN,true);
+  xhr.onload=function(){
+    console.log("[Leadtrak] config status:", xhr.status);
+    if(xhr.status!==200){ console.error("[Leadtrak] failed to load config"); return; }
+    var cfg=JSON.parse(xhr.responseText);
+    brand=cfg.primary_color||brand;
+    var serviceNames=(cfg.services||[]).map(function(s){return s.name;});
+    var card=el("div",{style:{maxWidth:"420px",margin:"0 auto",border:"1px solid #E2E8F0",borderRadius:"16px",padding:"28px",background:"#fff",boxShadow:"0 8px 30px rgba(15,23,42,0.08)",fontFamily:"-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"}});
+    var brandTag=el("div",{style:{display:"inline-block",padding:"4px 10px",background:brand+"15",color:brand,fontSize:"10px",fontWeight:"700",letterSpacing:"1.5px",borderRadius:"100px",marginBottom:"10px",textTransform:"uppercase"}},["Request a Callback"]);
+    card.appendChild(brandTag);
+    card.appendChild(el("h3",{style:{margin:"0 0 6px",fontSize:"22px",fontWeight:"700",color:"#0F172A"}},["Speak with our team"]));
+    card.appendChild(el("p",{style:{margin:"0 0 22px",fontSize:"13px",color:"#64748B"}},["Drop your details and we'll reach out shortly."]));
+    var form=el("form",{id:"ltf"});
+    form.appendChild(input("name","Your name","text",true,"Full name"));
+    form.appendChild(input("mobile","Mobile number","tel",true,"10-digit mobile"));
+    form.appendChild(input("email","Email","email",false,"name@example.com"));
+    (cfg.fields||[]).forEach(function(f){
+      if(f.type==="service-select" && serviceNames.length>0){
+        var w=el("div",{style:{marginBottom:"12px"}});
+        w.appendChild(el("label",{style:{display:"block",fontSize:"12px",fontWeight:"600",color:"#475569",marginBottom:"5px"}},[f.label+(f.required?" *":"")]));
+        w.appendChild(selectField(f.name,f.label,serviceNames,f.required));
+        form.appendChild(w);
+      } else {
+        form.appendChild(input(f.name,f.label,"text",!!f.required,f.placeholder||""));
+      }
+    });
+    var btn=el("button",{type:"submit",style:{width:"100%",padding:"13px",background:brand,color:"#fff",border:"0",borderRadius:"10px",fontSize:"14px",fontWeight:"700",cursor:"pointer"}},["Request a Callback →"]);
+    form.appendChild(btn);
+    card.appendChild(form);
+    ROOT.appendChild(card);
+    console.log("[Leadtrak] widget rendered successfully ✓");
+  };
+  xhr.onerror=function(){ console.error("[Leadtrak] XHR error"); };
+  xhr.send();
+})();
+</script>
+</body>
+</html>

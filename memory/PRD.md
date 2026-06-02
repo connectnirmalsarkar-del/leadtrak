@@ -59,6 +59,21 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Public Lead Capture Widget (`/api/widget/lead/{token}`)
 - ✅ Super Admin Platform Organizations management
 
+### 🔥 Hotfix — Widget CORS Middleware Crash (2026-06-02) ✅ COMPLETE
+**Bug:** Lead Capture Widget embed snippet did nothing on external customer websites — `<div id="leadtrak-form-root">` stayed empty, no form rendered.
+
+**Root cause:** `widget_cors_middleware` in `server.py` called `response.headers.pop("Access-Control-Allow-Credentials", None)`. Starlette's `MutableHeaders` does **not** expose `.pop()` → every widget API request raised `AttributeError` → returned HTTP 500 → embed XHR silently failed (`if(xhr.status!==200) return;`).
+
+**Fix:** Replaced `.pop()` with `del response.headers["..."]` guarded by `try/except KeyError`.
+
+**Verification:**
+- `GET /api/widget/config/{token}` with cross-origin `Origin` header now returns 200 + `Access-Control-Allow-Origin: *`
+- `POST /api/widget/lead/{token}` returns 200, lead created, `access-control-allow-origin: *` header present
+- Real Playwright test from a 3rd-party origin (`http://localhost:8765/external_widget_test.html`) successfully rendered the full form (4 base fields + dynamic service-select with 5 services) and console logged: `[Leadtrak] widget rendered successfully ✓`
+- Test artifact kept at `/app/scripts/external_widget_test.html` for future regressions
+
+**Action needed:** User must hit **"Re-deploy changes"** on Emergent dashboard to push fix to `leadtrak.in`.
+
 ### Phase 3 — Support Ticket System with Cloudinary (2026-05-31) ✅ COMPLETE
 - ✅ Cloudinary integration (keys configured in `.env`)
 - ✅ POST `/api/uploads/ticket-attachment` — Cloudinary upload, validates mime type (JPG/PNG/WebP/PDF/Excel) + 200KB size cap

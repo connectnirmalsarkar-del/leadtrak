@@ -11,6 +11,8 @@ export default function LeadWidgetPage() {
   const [token, setToken] = useState('');
   const [config, setConfig] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(true);
   const apiBase = process.env.REACT_APP_BACKEND_URL;
 
   // Live preview state
@@ -18,14 +20,35 @@ export default function LeadWidgetPage() {
   const [previewCity, setPreviewCity] = useState('');
   const [previewCities, setPreviewCities] = useState([]);
 
-  useEffect(() => {
-    axios.get(`${API}/widget/token`).then(({ data }) => setToken(data.widget_token)).catch(() => {});
-  }, []);
+  const fetchTokenAndConfig = async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const { data: tokenRes } = await axios.get(`${API}/widget/token`);
+      const tok = tokenRes.widget_token;
+      setToken(tok);
+      const { data: cfgRes } = await axios.get(`${API}/widget/config/${tok}`);
+      setConfig(cfgRes);
+    } catch (e) {
+      const status = e.response?.status;
+      const detail = e.response?.data?.detail;
+      if (status === 403) {
+        setLoadError("Only Org Admin / Super Admin can generate the widget snippet. Ask your admin to do this and share the embed code with you.");
+      } else if (status === 404) {
+        setLoadError(`Widget config not found (${detail || 'invalid token'}). Try refreshing.`);
+      } else if (typeof detail === 'string') {
+        setLoadError(detail);
+      } else {
+        setLoadError(e.message || 'Failed to load widget — please refresh and try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!token) return;
-    axios.get(`${API}/widget/config/${token}`).then(({ data }) => setConfig(data)).catch(() => {});
-  }, [token]);
+    fetchTokenAndConfig();
+  }, []);
 
   useEffect(() => {
     if (!previewState || !token) { setPreviewCities([]); return; }
@@ -223,9 +246,19 @@ export default function LeadWidgetPage() {
               <Sparkles className="w-3 h-3 text-violet-600" />
               Self-configuring snippet — pulls latest field list, brand color and state list from your account at runtime.
             </p>
-            <pre className="bg-slate-900 text-slate-200 text-[10px] p-4 rounded-lg overflow-x-auto max-h-[480px] leading-relaxed font-mono">
-              {embedCode}
+            <pre className="bg-slate-900 text-slate-200 text-[10px] p-4 rounded-lg overflow-x-auto max-h-[480px] leading-relaxed font-mono" data-testid="widget-embed-code">
+              {loading ? '⏳ Loading widget snippet...' : (loadError ? `⚠️ ${loadError}` : (embedCode || '— Generating widget code, hold on...'))}
             </pre>
+            {loadError && (
+              <button
+                type="button"
+                onClick={fetchTokenAndConfig}
+                className="mt-3 text-xs text-violet-600 hover:text-violet-800 font-semibold"
+                data-testid="widget-retry-btn"
+              >
+                ↻ Retry
+              </button>
+            )}
           </div>
         </div>
 
