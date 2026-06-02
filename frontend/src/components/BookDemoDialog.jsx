@@ -22,16 +22,19 @@ import { toast } from 'sonner';
  * Props:
  *   open: bool
  *   onOpenChange: (bool) => void
- *   lead: { _id, name, mobile, email } | null
+ *   lead: { _id, name, mobile, email } | null   // required for create mode
+ *   demo: existing demo object  // pass to switch to EDIT mode
  *   users: full org user list (manager+counselor+telecaller pool to pick demo owner)
- *   onBooked: (demo) => void   // called after successful book — { share.whatsapp, share.mailto, ... }
+ *   onBooked: (demo) => void   // called after successful book OR edit
  */
-export default function BookDemoDialog({ open, onOpenChange, lead, users = [], onBooked }) {
+export default function BookDemoDialog({ open, onOpenChange, lead, demo = null, users = [], onBooked }) {
   const { user } = useAuth();
+  const isEdit = !!demo;
   // Industry-aware label: Book Demo / Book Counselling / Book Site Visit / Book Consultation / Book Trial Session
   const demoLabelRaw = user?.features?.demo_label || 'Demo';
   const demoLabelSingular = demoLabelRaw.endsWith('s') ? demoLabelRaw.slice(0, -1) : demoLabelRaw;
   const bookDemoLabel = `Book ${demoLabelSingular}`;
+  const editDemoLabel = `Update ${demoLabelSingular}`;
   const [form, setForm] = useState({
     demo_owner_id: '',
     scheduled_date: new Date().toISOString().split('T')[0],
@@ -41,39 +44,64 @@ export default function BookDemoDialog({ open, onOpenChange, lead, users = [], o
     agenda: '',
   });
   const [savedDemo, setSavedDemo] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
       setSavedDemo(null);
-      setForm({
-        demo_owner_id: '',
-        scheduled_date: new Date().toISOString().split('T')[0],
-        scheduled_time: '11:00',
-        demo_mode: 'Online',
-        demo_link: '',
-        agenda: '',
-      });
+      if (isEdit && demo) {
+        setForm({
+          demo_owner_id: demo.demo_owner_id || '',
+          scheduled_date: demo.scheduled_date || new Date().toISOString().split('T')[0],
+          scheduled_time: demo.scheduled_time || '11:00',
+          demo_mode: demo.demo_mode || 'Online',
+          demo_link: demo.demo_link || '',
+          agenda: demo.agenda || '',
+        });
+      } else {
+        setForm({
+          demo_owner_id: '',
+          scheduled_date: new Date().toISOString().split('T')[0],
+          scheduled_time: '11:00',
+          demo_mode: 'Online',
+          demo_link: '',
+          agenda: '',
+        });
+      }
     }
-  }, [open]);
+  }, [open, isEdit, demo]);
 
   const submit = async () => {
-    if (!lead) return;
     if (!form.demo_owner_id) {
       toast.error('Please choose a demo owner');
       return;
     }
+    if (!isEdit && !lead) return;
+    setSubmitting(true);
     try {
-      const { data } = await axios.post(`${API}/demos`, {
-        lead_id: lead._id,
-        ...form,
-      });
-      toast.success('Demo booked. Share invite via WhatsApp or email.');
+      let data;
+      if (isEdit) {
+        const res = await axios.put(`${API}/demos/${demo._id}`, form);
+        data = res.data;
+        toast.success('Demo updated. Share the new link via WhatsApp or email.');
+      } else {
+        const res = await axios.post(`${API}/demos`, {
+          lead_id: lead._id,
+          ...form,
+        });
+        data = res.data;
+        toast.success('Demo booked. Share invite via WhatsApp or email.');
+      }
       setSavedDemo(data);
       onBooked && onBooked(data);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to book demo');
+      toast.error(e.response?.data?.detail || (isEdit ? 'Failed to update demo' : 'Failed to book demo'));
+    } finally {
+      setSubmitting(false);
     }
   };
+
+  const headerLeadName = lead?.name || demo?.lead_name;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -81,10 +109,12 @@ export default function BookDemoDialog({ open, onOpenChange, lead, users = [], o
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Video className="w-5 h-5 text-violet-600" />
-            {bookDemoLabel} {lead && <span className="text-sm font-normal text-slate-500">for {lead.name}</span>}
+            {isEdit ? editDemoLabel : bookDemoLabel} {headerLeadName && <span className="text-sm font-normal text-slate-500">for {headerLeadName}</span>}
           </DialogTitle>
           <DialogDescription>
-            Schedule a {demoLabelSingular.toLowerCase()} with the right team member. Once booked, share the invite via WhatsApp or email in one click.
+            {isEdit
+              ? `Update ${demoLabelSingular.toLowerCase()} details and re-share the invite via WhatsApp or email in one click.`
+              : `Schedule a ${demoLabelSingular.toLowerCase()} with the right team member. Once booked, share the invite via WhatsApp or email in one click.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -150,7 +180,7 @@ export default function BookDemoDialog({ open, onOpenChange, lead, users = [], o
           // Post-booking: share invite via WhatsApp / Email
           <div className="space-y-3 py-2">
             <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3 text-sm text-emerald-800">
-              <p className="font-semibold">✓ Demo booked successfully</p>
+              <p className="font-semibold">✓ {isEdit ? 'Demo updated successfully' : 'Demo booked successfully'}</p>
               <p className="text-xs mt-0.5">
                 {savedDemo.scheduled_date} at {savedDemo.scheduled_time} ({savedDemo.demo_mode}) — presented by {savedDemo.demo_owner_name}
               </p>
@@ -197,9 +227,9 @@ export default function BookDemoDialog({ open, onOpenChange, lead, users = [], o
           {!savedDemo ? (
             <>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={submit} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid="book-demo-submit-btn">
+              <Button onClick={submit} disabled={submitting} className="bg-violet-700 hover:bg-violet-800 text-white" data-testid={isEdit ? "edit-demo-submit-btn" : "book-demo-submit-btn"}>
                 <Send className="w-4 h-4 mr-1.5" />
-                {bookDemoLabel}
+                {submitting ? 'Saving…' : (isEdit ? editDemoLabel : bookDemoLabel)}
               </Button>
             </>
           ) : (

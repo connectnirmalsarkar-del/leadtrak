@@ -384,6 +384,15 @@ class DemoCreate(BaseModel):
     demo_link: Optional[str] = ""
     agenda: Optional[str] = ""
 
+class DemoEdit(BaseModel):
+    """Edit a Scheduled demo (link, agenda, schedule, mode, owner)."""
+    demo_owner_id: Optional[str] = None
+    scheduled_date: Optional[str] = None
+    scheduled_time: Optional[str] = None
+    demo_mode: Optional[str] = None
+    demo_link: Optional[str] = None
+    agenda: Optional[str] = None
+
 class DemoComplete(BaseModel):
     outcome: str                 # interested | not_interested | reschedule | no_show
     feedback: Optional[str] = ""
@@ -2429,6 +2438,95 @@ async def get_demo(demo_id: str, current_user: dict = Depends(get_current_user))
     lead = await db.leads.find_one({"_id": ObjectId(demo["lead_id"])}, {"name": 1, "mobile": 1, "email": 1})
     out = _serialize_demo(demo)
     out["share"] = _build_demo_share_links(lead or {}, demo)
+    return out
+
+
+@api_router.put("/demos/{demo_id}")
+async def update_demo(demo_id: str, data: DemoEdit, current_user: dict = Depends(get_current_user)):
+    """Edit a Scheduled demo. Useful when the meeting link or schedule changes after
+    the initial booking — owner can then re-share via WhatsApp/email with one tap."""
+    org_id = ObjectId(current_user["organization_id"])
+    did = safe_object_id(demo_id, "demo_id")
+    demo = await db.demos.find_one({"_id": did, "organization_id": org_id})
+    if not demo:
+        raise HTTPException(status_code=404, detail="Demo not found")
+    if demo.get("status") != "Scheduled":
+        raise HTTPException(status_code=400, detail="Only Scheduled demos can be edited")
+    # Permission: owner, scheduler, or admin/manager
+    if (
+        demo.get("demo_owner_id") != current_user["id"]
+        and demo.get("scheduled_by_id") != current_user["id"]
+        and current_user["role"] not in ("super_admin", "org_admin", "manager")
+    ):
+        raise HTTPException(status_code=403, detail="You are not allowed to edit this demo")
+
+    updates = {}
+    if data.demo_owner_id and data.demo_owner_id != demo.get("demo_owner_id"):
+        owner_oid = safe_object_id(data.demo_owner_id, "demo_owner_id")
+        owner = await db.users.find_one({"_id": owner_oid, "organization_id": org_id}, {"name": 1})
+        if not owner:
+            raise HTTPException(status_code=400, detail="Demo owner not found in your organization")
+        updates["demo_owner_id"] = data.demo_owner_id
+        updates["demo_owner_name"] = owner.get("name")
+    if data.scheduled_date is not None:
+        updates["scheduled_date"] = data.scheduled_date
+    if data.scheduled_time is not None:
+        updates["scheduled_time"] = data.scheduled_time
+    if data.demo_mode is not None:
+        updates["demo_mode"] = data.demo_mode
+    if data.demo_link is not None:
+        updates["demo_link"] = data.demo_link
+    if data.agenda is not None:
+        updates["agenda"] = data.agenda
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+
+    updates["updated_at"] = datetime.now(timezone.utc)
+    updates["updated_by_id"] = current_user["id"]
+    updates["updated_by_name"] = current_user["name"]
+
+    await db.demos.update_one({"_id": did, "organization_id": org_id}, {"$set": updates})
+
+    # Reload + build fresh share links so frontend can re-prompt WhatsApp/Email
+    demo_doc = await db.demos.find_one({"_id": did, "organization_id": org_id})
+    lead = await db.leads.find_one({"_id": ObjectId(demo_doc["lead_id"])}, {"name": 1, "mobile": 1, "email": 1})
+
+    # Timeline event so the lead history shows the change
+    try:
+        await log_lead_event(
+            ObjectId(demo_doc["lead_id"]),
+            "demo_updated",
+            {
+                "demo_id": str(did),
+                "demo_owner_name": demo_doc.get("demo_owner_name"),
+                "scheduled_date": demo_doc.get("scheduled_date"),
+                "scheduled_time": demo_doc.get("scheduled_time"),
+                "demo_mode": demo_doc.get("demo_mode"),
+                "demo_link": demo_doc.get("demo_link"),
+                "changed_fields": sorted([k for k in updates.keys() if k not in ("updated_at", "updated_by_id", "updated_by_name")]),
+            },
+            current_user,
+            org_id,
+        )
+    except Exception as e:
+        logger.warning(f"demo_updated timeline log failed: {e}")
+
+    # Notify demo owner if a different user edited their demo
+    if demo_doc.get("demo_owner_id") and demo_doc["demo_owner_id"] != current_user["id"]:
+        await db.notifications.insert_one({
+            "user_id": demo_doc["demo_owner_id"],
+            "message": f"{current_user.get('name')} updated the demo for '{demo_doc.get('lead_name')}' — please review the new details.",
+            "type": "demo_updated",
+            "demo_id": str(did),
+            "lead_id": demo_doc.get("lead_id"),
+            "read": False,
+            "organization_id": org_id,
+            "created_at": datetime.now(timezone.utc),
+        })
+
+    out = _serialize_demo(demo_doc)
+    out["share"] = _build_demo_share_links(lead or {}, demo_doc)
     return out
 
 

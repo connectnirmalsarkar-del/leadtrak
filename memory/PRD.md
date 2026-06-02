@@ -59,6 +59,35 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Public Lead Capture Widget (`/api/widget/lead/{token}`)
 - ✅ Super Admin Platform Organizations management
 
+### ✏️ Feature — Edit Demo / Re-share Link via WhatsApp (2026-06-02) ✅ COMPLETE
+**Use case:** After booking a demo, the meeting link is often missing or changes later. Users needed to update the link and re-send it to the client via WhatsApp/email without re-booking.
+
+**Backend (`server.py`):**
+- ✅ New `DemoEdit` Pydantic model (all fields optional: `demo_owner_id`, `scheduled_date`, `scheduled_time`, `demo_mode`, `demo_link`, `agenda`)
+- ✅ New `PUT /api/demos/{demo_id}` endpoint
+  - Only Scheduled demos editable (Completed/Rescheduled/NoShow → HTTP 400)
+  - Permission: owner OR scheduler OR admin/manager only (403 otherwise)
+  - Owner-change validation: ensures new owner exists in same org
+  - Empty body → 400 "Nothing to update"
+  - Persists `updated_at`, `updated_by_id`, `updated_by_name` for auditability
+  - Returns updated demo + **fresh `share` object** (wa.me + mailto URLs containing the NEW link)
+  - Logs `demo_updated` event on the lead timeline with `changed_fields` array
+  - Notifies the demo owner when edited by someone else
+
+**Frontend:**
+- ✅ `BookDemoDialog` refactored to dual-purpose (create + edit): accepts optional `demo` prop; pre-fills form; flips title to "Update Counselling/Demo/etc"; submits PUT instead of POST; same post-save share-screen with WhatsApp/Email buttons (now pre-filled with the NEW link)
+- ✅ `DemosPage`: New **Edit** button (Pencil icon) on each Scheduled demo row, visible to owner/scheduler/admin/manager only. Fetches user pool to populate the owner-picker.
+- ✅ `LeadTimeline.jsx`: Added `demo_updated` event rendering (amber Video icon, shows new owner / date / mode / link, lists which fields were changed)
+- ✅ Service-worker bumped to `leadtrak-v88-demo-edit`
+
+**Testing (curl + Playwright):**
+- ✅ Edit a scheduled demo → 200 with updated payload + share links containing new link
+- ✅ GET reflects new link, agenda, fresh WhatsApp message
+- ✅ Edit a completed demo → 400 "Only Scheduled demos can be edited"
+- ✅ Empty body → 400 "Nothing to update"
+- ✅ Timeline `demo_updated` event logged with `changed_fields: ['agenda', 'demo_link']`
+- ✅ Playwright UI test: Edit buttons render, dialog opens as "Update Counselling", new link saves, share screen shows pre-filled WhatsApp message containing the updated URL
+
 ### 🗜️ Feature — Smart Image Compressor & Resizer (2026-06-02) ✅ COMPLETE
 **Use case:** Users were complaining that any oversized profile picture or company logo would get rejected with "Max 500 KB / 800 KB" errors. Now any photo up to **10 MB** is accepted and auto-compressed server-side to **≤ 800 KB**.
 

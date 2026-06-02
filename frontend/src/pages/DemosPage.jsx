@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API, useAuth } from '@/context/AuthContext';
-import { Video, Phone, Mail, CheckCircle2, ExternalLink, Calendar, Clock } from 'lucide-react';
+import { Video, Phone, Mail, CheckCircle2, ExternalLink, Calendar, Clock, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import BookDemoDialog from '@/components/BookDemoDialog';
 import { toast } from 'sonner';
 
 const statusBadge = (s) => {
@@ -34,6 +35,8 @@ export default function DemosPage() {
   const [scope, setScope] = useState('mine');
   const [activeDemo, setActiveDemo] = useState(null);
   const [completeForm, setCompleteForm] = useState({ outcome: 'interested', feedback: '', recording_url: '', lead_status: '' });
+  const [editingDemo, setEditingDemo] = useState(null);
+  const [users, setUsers] = useState([]);
 
   const fetchDemos = async () => {
     try {
@@ -44,7 +47,30 @@ export default function DemosPage() {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const { data } = await axios.get(`${API}/users`);
+      // BookDemoDialog wants the manager/counselor/telecaller pool
+      const pool = (Array.isArray(data) ? data : []).filter((u) =>
+        ['manager', 'counselor', 'telecaller', 'org_admin'].includes(u.role)
+      );
+      setUsers(pool);
+    } catch (e) {
+      // Non-blocking — edit dialog will just show empty owner list
+    }
+  };
+
   useEffect(() => { fetchDemos(); }, [scope]);
+  useEffect(() => { fetchUsers(); }, []);
+
+  const canEdit = (d) => {
+    if (d.status !== 'Scheduled') return false;
+    return (
+      d.demo_owner_id === user?.id ||
+      d.scheduled_by_id === user?.id ||
+      ['super_admin', 'org_admin', 'manager'].includes(user?.role)
+    );
+  };
 
   const openComplete = (demo) => {
     setActiveDemo(demo);
@@ -122,6 +148,18 @@ export default function DemosPage() {
                       </Button>
                     </a>
                   )}
+                  {canEdit(d) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingDemo(d)}
+                      data-testid={`demo-edit-btn-${d._id}`}
+                      title="Edit demo (link, schedule, presenter) and re-share via WhatsApp"
+                    >
+                      <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                      Edit
+                    </Button>
+                  )}
                   {d.status === 'Scheduled' && (d.demo_owner_id === user?.id || ['super_admin', 'org_admin', 'manager'].includes(user?.role)) && (
                     <Button size="sm" onClick={() => openComplete(d)} className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid={`demo-complete-btn-${d._id}`}>
                       <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
@@ -191,6 +229,14 @@ export default function DemosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Edit demo dialog (reuses BookDemoDialog in edit mode + re-share screen) */}
+      <BookDemoDialog
+        open={!!editingDemo}
+        onOpenChange={(o) => !o && setEditingDemo(null)}
+        demo={editingDemo}
+        users={users}
+        onBooked={() => { fetchDemos(); }}
+      />
     </div>
   );
 }

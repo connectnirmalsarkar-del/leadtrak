@@ -45,6 +45,7 @@ const EVENT_META = {
   note_added: { icon: StickyNote, color: 'slate', title: 'Comment' },
   lead_attachment: { icon: Paperclip, color: 'indigo', title: 'File attached' },
   demo_scheduled: { icon: Video, color: 'fuchsia', title: 'Demo scheduled' },
+  demo_updated: { icon: Video, color: 'amber', title: 'Demo updated' },
   demo_completed: { icon: CheckCircle2, color: 'teal', title: 'Demo completed' },
   admission_recorded: { icon: Trophy, color: 'emerald', title: 'Converted' },
   lead_lost: { icon: XCircle, color: 'red', title: 'Marked as lost' },
@@ -175,6 +176,32 @@ const EventBody = ({ event }) => {
             </p>
           )}
           {p.agenda && <p className="text-xs italic text-slate-500">"{p.agenda}"</p>}
+        </div>
+      );
+    case 'demo_updated':
+      return (
+        <div className="text-sm text-slate-700 space-y-1">
+          <p>
+            Now with <span className="font-medium text-slate-900">{p.demo_owner_name || '—'}</span>
+            {p.scheduled_date && p.scheduled_time && (
+              <> · {p.scheduled_date} at {p.scheduled_time}</>
+            )}
+            {p.demo_mode && (
+              <span className="ml-1 text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{p.demo_mode}</span>
+            )}
+          </p>
+          {p.demo_link && (
+            <p className="text-xs">
+              <a href={p.demo_link} target="_blank" rel="noopener noreferrer" className="text-violet-700 hover:underline break-all">
+                {p.demo_link}
+              </a>
+            </p>
+          )}
+          {Array.isArray(p.changed_fields) && p.changed_fields.length > 0 && (
+            <p className="text-[11px] text-slate-500">
+              Updated: <span className="font-medium text-slate-700">{p.changed_fields.join(', ')}</span>
+            </p>
+          )}
         </div>
       );
     case 'demo_completed':
