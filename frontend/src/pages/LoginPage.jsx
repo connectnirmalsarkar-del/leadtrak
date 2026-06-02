@@ -66,7 +66,7 @@ export default function LoginPage() {
   const t = TESTIMONIALS[testimonialIdx];
 
   return (
-    <div className="min-h-screen flex bg-white">
+    <div className="min-h-screen flex bg-white pt-safe pb-safe">
       {/* Left brand panel */}
       <div className="hidden lg:flex flex-col lg:w-[55%] bg-gradient-to-br from-slate-950 via-violet-950 to-slate-900 relative overflow-hidden">
         {/* Background effects */}

@@ -192,7 +192,7 @@ export default function RegisterPage() {
     : (loading ? 'Creating account...' : 'Create my account');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50/50 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50/50 relative overflow-hidden pt-safe pb-safe">
       {/* Background blobs */}
       <div className="absolute inset-0 -z-0 pointer-events-none">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-violet-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>

@@ -1,164 +1,67 @@
 {
-  "theme_and_archetype": {
-    "domain": "Enterprise Education CRM",
+  "project_context": {
+    "domain": "SaaS CRM",
     "theme": "Light",
-    "archetype": "Hybrid 3/4 (Pastel & Soft / Swiss & High-Contrast)",
-    "rationale": "Balances the deep violet branding (#7C3AED) and requested rounded-xl/Sora styling (soft/friendly) with the high density and structural clarity needed for an enterprise CRM dashboard (Swiss)."
+    "archetype": "4 (Swiss & High-Contrast)",
+    "locked_colors": "violet primary, slate neutrals, emerald accent"
   },
-  "typography": {
-    "headings": {
-      "family": "Sora",
-      "weights": "font-semibold, font-bold",
-      "classes": "tracking-tight"
+  "design_system_rules": {
+    "typography": {
+      "font_size_mobile_inputs": "16px minimum to prevent iOS zoom (already applied globally by main agent).",
+      "hierarchy": "Maintain clean UI, prioritize clarity. Respect existing locked styles."
     },
-    "body": {
-      "family": "Plus Jakarta Sans",
-      "weights": "font-normal, font-medium, font-semibold",
-      "classes": "tracking-normal"
+    "spacing_and_layout": {
+      "mobile_first": "Start with grid-cols-1. Stack columns vertically on mobile viewports (<640px).",
+      "padding_containers": "Use p-4 or p-6 internally in dialogs. Never allow text to hit screen edges."
     },
-    "numbers": {
-      "family": "JetBrains Mono",
-      "weights": "font-medium, font-bold",
-      "classes": "tracking-tighter"
+    "safe_area_guidelines": {
+      "header_topbar": "Crucial: Apply `pt-safe` to the sticky top bar. Change height constraints (like `h-16`) to `min-h-[calc(4rem+env(safe-area-inset-top))]` or `h-auto` so it scales with the notch.",
+      "page_containers": "Apply `pt-safe` and `pb-safe` to full-screen pages like Login, Register, Landing.",
+      "modals": "Apply `pb-safe` to dialog/modal footers to avoid the iOS home indicator overlapping buttons."
     },
-    "hierarchy": {
-      "h1": "text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900",
-      "h2": "text-lg sm:text-xl font-semibold text-slate-800",
-      "h3": "text-base font-semibold text-slate-800",
-      "body": "text-sm text-slate-600",
-      "label": "text-[11px] sm:text-xs font-semibold tracking-wider uppercase text-slate-500",
-      "stat_number": "text-2xl sm:text-3xl font-bold font-mono tracking-tighter text-slate-900"
+    "touch_targets": {
+      "minimum_size": "Buttons, inputs, selects must have a minimum touch target of 44x44px for iOS. Ensure full-width buttons on mobile for easier thumb reach."
     }
-  },
-  "colors": {
-    "primary": {
-      "DEFAULT": "#7C3AED",
-      "hover": "#6D28D9",
-      "light": "#EDE9FE",
-      "light_hover": "#DDD6FE"
-    },
-    "background": {
-      "app": "#F8FAFC",
-      "card": "#FFFFFF",
-      "sidebar": "#0F172A",
-      "sidebar_hover": "#1E293B"
-    },
-    "border": {
-      "DEFAULT": "#E2E8F0",
-      "sidebar": "#1E293B"
-    },
-    "text": {
-      "primary": "#0F172A",
-      "secondary": "#475569",
-      "tertiary": "#94A3B8",
-      "sidebar": "#94A3B8",
-      "sidebar_active": "#FFFFFF"
-    },
-    "chart_palette": [
-      "#7C3AED",
-      "#4F46E5",
-      "#D946EF",
-      "#10B981",
-      "#F59E0B"
-    ],
-    "status": {
-      "success": { "bg": "#D1FAE5", "text": "#065F46", "icon": "#10B981" },
-      "warning": { "bg": "#FEF3C7", "text": "#92400E", "icon": "#F59E0B" },
-      "danger": { "bg": "#FEE2E2", "text": "#991B1B", "icon": "#EF4444" },
-      "info": { "bg": "#DBEAFE", "text": "#1E40AF", "icon": "#3B82F6" }
-    }
-  },
-  "grids_and_layouts": {
-    "page_container": "min-h-screen bg-slate-50",
-    "dashboard_container": "max-w-[1440px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6",
-    "control_room_grid": "grid grid-cols-12 gap-6",
-    "card": "bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 p-5",
-    "sections": {
-      "header": "col-span-12 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2",
-      "top_stats": "col-span-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4",
-      "funnel": "col-span-12 lg:col-span-8",
-      "source_pie": "col-span-12 lg:col-span-4",
-      "trends_chart": "col-span-12 lg:col-span-8",
-      "leaderboard": "col-span-12 lg:col-span-4",
-      "follow_ups": "col-span-12 lg:col-span-8",
-      "activity_feed": "col-span-12 lg:col-span-4"
-    }
-  },
-  "component_usage": {
-    "header": {
-      "title": "Page Title + Date string (e.g., Today, 24 Oct)",
-      "actions": "Date Range Filter (Shadcn Select) + Primary Button (+ New Lead) in Violet"
-    },
-    "topbar": {
-      "structure": "Org switcher dropdown (left), Search (center/optional), Notification Bell with Red Dot & Dropdown + User Avatar (right)"
-    },
-    "sidebar": {
-      "style": "bg-slate-900 border-r border-slate-800 text-slate-400. Active states text-white bg-slate-800 rounded-lg. Logo in violet gradient."
-    },
-    "stat_cards": {
-      "structure": "Label (text-xs uppercase), Number (JetBrains Mono text-3xl), Trend Arrow + Percentage (text-sm green/red), Inline Sparkline at the bottom (Recharts TinyLineChart). Height is fully utilized."
-    },
-    "funnel_chart": {
-      "structure": "Horizontal stacked bar chart. Labels: New, Contacted, Interested, Admission. Use Recharts BarChart with layout='vertical' or custom HTML div segments for conversion visualization."
-    },
-    "activity_feed": {
-      "structure": "Right rail vertical timeline. Custom relative positioned dots with left border. Actor + Verb + Timestamp."
-    },
-    "today_followups": {
-      "structure": "Compact list. Name, time, status. Quick actions on hover: WhatsApp icon button (green), Call icon button (violet)."
-    },
-    "empty_state": {
-      "structure": "Centered flex container. Custom 3D illustration, title 'No data yet', subtitle 'Start adding leads to see your dashboard come alive', CTA Button 'Add your first lead'."
-    }
-  },
-  "motion_and_interactions": {
-    "numbers": "Use framer-motion to animate number count-up on initial load for the stat cards.",
-    "cards": "Subtle hover lift `-translate-y-0.5` and `shadow-md` for interactive widgets/rows.",
-    "buttons": "Active state scaling `active:scale-95`, hover background transitions.",
-    "dropdowns": "Shadcn defaults with standard enter/exit opacity and scale animations."
-  },
-  "accessibility": {
-    "testing_attributes": "All buttons, links, dropdowns, form inputs, and key numeric outputs MUST have a `data-testid` attribute (e.g. `data-testid='new-lead-button'`).",
-    "contrast": "Ensure white text on violet background passes APCA guidelines. Ensure slate-500 labels on white background are legible.",
-    "screen_readers": "Add `aria-hidden='true'` to decorative icons. Ensure Sparklines have an `aria-label` describing the trend."
-  },
-  "media_urls": {
-    "empty_state": {
-      "url": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/e6eff6bbe53ec3c5c5380c96406726591f54685f9cd4e55e56f103f0668c0e4e.png",
-      "description": "Friendly, minimalist 3D illustration for dashboard empty states",
-      "usage": "Use in widgets when there is no data to show, or as the main page empty state."
-    },
-    "leaderboard_icon": {
-      "url": "https://static.prod-images.emergentagent.com/jobs/9d32b703-6ca6-4ee9-abe2-0a12936906a9/images/f95e835b71855c45986f483d376f30ba1bc1e4074bbe4cb0454e16b736db1c83.png",
-      "description": "3D trophy with arrow icon",
-      "usage": "Use as a header icon or decorative element in the Counselor Leaderboard widget."
-    },
-    "avatars": [
-      {
-        "url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MHx8fHwxNzgwMjE2NDgzfDA&ixlib=rb-4.1.0&q=85",
-        "usage": "Female avatar for leaderboard or topbar user profile"
-      },
-      {
-        "url": "https://images.unsplash.com/photo-1560250097-0b93528c311a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MHx8fHwxNzgwMjE2NDgzfDA&ixlib=rb-4.1.0&q=85",
-        "usage": "Male avatar for leaderboard"
-      },
-      {
-        "url": "https://images.unsplash.com/photo-1652471943570-f3590a4e52ed?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MHx8fHwxNzgwMjE2NDgzfDA&ixlib=rb-4.1.0&q=85",
-        "usage": "Male avatar for activity feed"
-      },
-      {
-        "url": "https://images.unsplash.com/photo-1685760259914-ee8d2c92d2e0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHw0fHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMHBvcnRyYWl0JTIwaGVhZHNob3R8ZW58MHx8fHwxNzgwMjE2NDgzfDA&ixlib=rb-4.1.0&q=85",
-        "usage": "Female avatar for activity feed"
-      }
-    ]
   },
   "instructions_to_main_agent": {
-    "1": "Update /app/frontend/src/pages/DashboardPage.jsx (or similar entry file) to implement the 'control_room_grid' (12-column grid) defined in grids_and_layouts.",
-    "2": "Retain the existing deep violet brand (#7C3AED) but apply it purposefully for primary CTAs, active states, and charts. Maintain the dark sidebar.",
-    "3": "Use Shadcn components for Select (date filter), DropdownMenu (notifications/org switcher), and Buttons. Heavily customize their styling to match the rounded-xl aesthetic and minimal 1px slate-200 border look.",
-    "4": "Integrate Recharts. Add TinyLineChart for stat card sparklines, BarChart for the Lead Funnel, PieChart for Source distribution, and LineChart for the main monthly trends block.",
-    "5": "Do NOT use placeholder text or dummy image services. Use the exact Unsplash avatar URLs for the Leaderboard and Activity Feed, and the generated 3D illustrations for the empty state.",
-    "6": "Add `data-testid` to EVERY interactive element (buttons, filters, tabs) and key data points (stat numbers) to support robust automated E2E tests.",
-    "7": "Integrate framer-motion for micro-interactions: animate number count-ups in the stat cards and use a subtle stagger-children animation on the initial dashboard render."
+    "1_safe_area_topbar": {
+      "target": "/app/frontend/src/components/layout/DashboardLayout.jsx",
+      "action": "Locate the sticky topbar (approx line 338). It currently gets hidden under the notch. Add `pt-safe` class. Ensure its height adjusts correctly (e.g. `h-auto min-h-[4rem]` or `box-content h-16 pt-safe`). Verify header buttons and user menus are fully clickable below the iOS status bar."
+    },
+    "2_login_and_register_pages": {
+      "targets": [
+        "/app/frontend/src/pages/LoginPage.jsx",
+        "/app/frontend/src/pages/RegisterPage.jsx"
+      ],
+      "action": "Ensure the outermost container wrapper has `pt-safe` and `pb-safe` so the forms are not obscured by the notch or home bar. Add padding to the top if the logo/back button overlaps the status bar."
+    },
+    "3_form_responsiveness": {
+      "targets": [
+        "/app/frontend/src/pages/LeadsPage.jsx",
+        "/app/frontend/src/components/BookDemoDialog.jsx",
+        "/app/frontend/src/pages/DemosPage.jsx",
+        "/app/frontend/src/pages/FollowupsPage.jsx",
+        "/app/frontend/src/pages/AdmissionsPage.jsx",
+        "/app/frontend/src/pages/SettingsPage.jsx",
+        "/app/frontend/src/pages/PlatformOrgsPage.jsx"
+      ],
+      "action": "Sweep all forms and dialogs. Replace rigid grids like `grid-cols-2` with `grid-cols-1 sm:grid-cols-2`. Ensure all 2-column or 3-column form layouts properly stack on mobile. Verify input fields do not cause horizontal scrolling."
+    },
+    "4_dialog_footers_and_buttons": {
+      "targets": "All usages of DialogFooter in the above form files.",
+      "action": "Ensure buttons in the DialogFooter stack cleanly on mobile. Use `flex-col sm:flex-row w-full` for the footer wrapper, and `w-full sm:w-auto` for the action buttons inside, so they span full-width on mobile but sit side-by-side on desktop."
+    },
+    "5_dialog_overflow": {
+      "target": "/app/frontend/src/components/ui/dialog.jsx",
+      "action": "Main agent added `max-h-[92dvh] overflow-y-auto`. Verify this is robust. Additionally, make sure `pb-safe` is applied to DialogContent so content isn't clipped by the iOS home bar."
+    },
+    "6_touch_targets": {
+      "targets": "Globally (Forms and UI components)",
+      "action": "Ensure inputs and clickable buttons inside forms have adequate height. If they are standard `h-10`, consider adding `sm:h-10 h-11` or minimum height CSS for better mobile tap reliability."
+    },
+    "7_service_worker": {
+      "target": "/app/frontend/public/service-worker.js",
+      "action": "Bump the cache version (e.g., from `v67-ios-pwa-safe-area-mobile-forms` to `v68-ios-pwa-safe-area-mobile-forms-v2`) to deploy the updated PWA CSS/JS layouts."
+    }
   }
 }

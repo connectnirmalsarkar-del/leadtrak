@@ -60,9 +60,9 @@ export default function LandingPage() {
   const CurrentIcon = currentIndustry.icon;
 
   return (
-    <div className="min-h-screen bg-white overflow-x-hidden">
+    <div className="min-h-screen bg-white overflow-x-hidden pt-safe">
       {/* Header */}
-      <header className="border-b border-slate-100 sticky top-0 bg-white/90 backdrop-blur-xl z-50">
+      <header className="border-b border-slate-100 sticky top-0 bg-white/90 backdrop-blur-xl z-50 pt-safe">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 flex-shrink-0">
             <img src="/logo-light.png?v=3" alt="Leadtrak" className="h-7 sm:h-10 w-auto" data-testid="landing-header-logo" />
