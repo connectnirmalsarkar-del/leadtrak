@@ -919,7 +919,7 @@ export default function LeadsPage() {
                 <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                   <span className="text-xs font-mono text-slate-500">{selectedLead.lead_id}</span>
                   <div className="flex items-center gap-2">
-                    {['super_admin', 'org_admin', 'manager'].includes(user?.role) && (
+                    {['super_admin', 'org_admin', 'manager', 'counselor', 'telecaller'].includes(user?.role) && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -935,7 +935,32 @@ export default function LeadsPage() {
                   </div>
                 </div>
                 <SheetTitle className="text-xl sm:text-2xl pr-2" style={{fontFamily: 'Sora'}}>{selectedLead.name}</SheetTitle>
-                <SheetDescription>{selectedLead.course_interested || <span className="text-slate-400 italic">No service selected yet — click "Edit" to set</span>}</SheetDescription>
+                <SheetDescription>
+                  {selectedLead.course_interested ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      {selectedLead.course_interested}
+                      <button
+                        type="button"
+                        onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
+                        className="text-slate-400 hover:text-violet-700 transition-colors"
+                        title="Change service"
+                        data-testid="edit-service-icon"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
+                      className="text-violet-600 hover:text-violet-800 italic underline-offset-2 hover:underline inline-flex items-center gap-1"
+                      data-testid="set-service-link"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      No service selected yet — click to set
+                    </button>
+                  )}
+                </SheetDescription>
               </SheetHeader>
 
               <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
