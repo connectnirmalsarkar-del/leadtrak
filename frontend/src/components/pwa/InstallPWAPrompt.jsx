@@ -4,8 +4,7 @@ import { API, useAuth } from '@/context/AuthContext';
 import { Download, X, Smartphone, Share, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const DISMISS_KEY = 'leadtrak_pwa_dismissed_v2';
-const DISMISS_DAYS = 30;
+const DISMISS_KEY = 'leadtrak_pwa_dismissed_session';
 
 // Detect TRUE iOS Safari only (not Mac desktop with touch support)
 const isIos = () => {
@@ -20,11 +19,11 @@ const isInStandalone = () =>
   window.matchMedia('(display-mode: standalone)').matches ||
   window.navigator.standalone === true;
 
-const isDismissedRecently = () => {
+// SESSION-scoped: ekta tab e ekbar dismiss korle sei tab close hawa porjonto
+// silent. New tab / app reopen korle — abar prompt dekhabe (jodi install na thake).
+const isDismissedThisSession = () => {
   try {
-    const ts = parseInt(localStorage.getItem(DISMISS_KEY) || '0', 10);
-    if (!ts || Number.isNaN(ts)) return false;
-    return Date.now() - ts < DISMISS_DAYS * 24 * 60 * 60 * 1000;
+    return sessionStorage.getItem(DISMISS_KEY) === '1';
   } catch (e) {
     return false;
   }
@@ -55,13 +54,17 @@ export default function InstallPWAPrompt() {
 
   // Listen for the beforeinstallprompt event (Chromium / Edge / Samsung Internet)
   useEffect(() => {
-    if (isInStandalone()) return; // Already installed
-    if (isDismissedRecently()) return; // User said no within 30 days
+    // One-time cleanup: remove the v2 30-day localStorage key from old build so
+    // users who dismissed earlier aren't permanently silenced after upgrade.
+    try { localStorage.removeItem('leadtrak_pwa_dismissed_v2'); } catch (e) { /* ignore */ }
+
+    if (isInStandalone()) return; // Already installed — never prompt
+    if (isDismissedThisSession()) return; // User said no THIS SESSION — silent until reload
 
     const handler = (e) => {
       e.preventDefault();
       setInstallEvent(e);
-      if (!isDismissedRecently()) setShow(true);
+      if (!isDismissedThisSession()) setShow(true);
     };
     window.addEventListener('beforeinstallprompt', handler);
 
@@ -80,11 +83,11 @@ export default function InstallPWAPrompt() {
       await installEvent.prompt();
       const choice = await installEvent.userChoice;
       if (choice.outcome === 'accepted') {
-        // User accepted — hide and don't ask again for 30 days
-        localStorage.setItem(DISMISS_KEY, String(Date.now()));
+        // User accepted — installed; no need to silence further (standalone check handles it)
+        try { sessionStorage.setItem(DISMISS_KEY, '1'); } catch (e) { /* ignore */ }
       }
     } catch (e) {
-      // user closed the system prompt — still hide our card
+      // user closed the system prompt — still hide our card for this session
     } finally {
       setShow(false);
       setInstallEvent(null);
@@ -92,7 +95,7 @@ export default function InstallPWAPrompt() {
   };
 
   const dismiss = () => {
-    try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch (e) { /* ignore */ }
+    try { sessionStorage.setItem(DISMISS_KEY, '1'); } catch (e) { /* ignore */ }
     setShow(false);
     setInstallEvent(null);
   };
