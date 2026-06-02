@@ -999,3 +999,22 @@ The Chromium emulator does NOT simulate `env(safe-area-inset-*)` — those retur
 - ✅ Chromium 393x852: Sheet padding-top = 24px (correct; no notch on test browser).
 - ✅ Inline style attribute properly set: `padding-top: calc(1.5rem + env(safe-area-inset-top, 0px))`.
 - ⚠️ Real iPhone PWA verification needed after production deploy — env() will resolve to ~59px and padding becomes ~83px → content clears Dynamic Island.
+
+---
+
+## Mobile Form Field Uniformity (Feb 2026)
+
+**Reported issue:** "lead ad form in mobile view and pwa ... name field choto, mobile field boro ... ai vabe complete form e uneven field acche"
+
+**Investigation result:** After v68-v72 fixes (safe-area + dialog responsive + grid `sm:grid-cols-2`), forms were ALREADY rendering uniform in mobile (393px viewport). Likely the user was viewing OLD production cache.
+
+**Defensive fix applied by design agent:** Replaced `col-span-2` → `col-span-1 sm:col-span-2` across the Add Lead dialog to prevent any edge-case rendering issues on `grid-cols-1` mobile layouts.
+
+**Verified end-to-end in 393x852 viewport:**
+- ✅ **Add Lead form** — Full Name, Mobile, Email, Course Select, State, City, Lead Source, Assigned To, Temperature → **all 327px × 36px uniform**.
+- ✅ **Book Counselling form** — Counselling Presenter, Date, Time, Mode, Counselling Link → **all 327px × 36px uniform**. Agenda textarea naturally taller at 66px.
+- ✅ Lead Detail Sheet — Status + Temperature selects also uniform width.
+
+**SW cache:** bumped to `leadtrak-v73-uniform-form-fields-mobile`.
+
+**Note:** When user updates production to v73, hard refresh PWA to confirm the fix is live. The visual uneven-ness was likely a cached old version.
