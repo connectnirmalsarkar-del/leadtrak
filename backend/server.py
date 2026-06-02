@@ -2778,33 +2778,98 @@ async def create_task(data: TaskCreate, current_user: dict = Depends(get_current
 @api_router.get("/tasks")
 async def get_tasks(current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
-    
+
+    # Counselors/Telecallers must see:
+    #   1. Tasks ASSIGNED to them (work to do)
+    #   2. Tasks CREATED by them (so they can track tasks they passed to admin/manager)
+    # Admins/Managers/Super Admins see all tasks in the org.
     if current_user["role"] in ["counselor", "telecaller"]:
-        tasks = await db.tasks.find({"organization_id": org_id, "assigned_to": current_user["id"]}, {"organization_id": 0}).sort("due_date", 1).to_list(1000)
+        tasks = await db.tasks.find(
+            {
+                "organization_id": org_id,
+                "$or": [
+                    {"assigned_to": current_user["id"]},
+                    {"created_by": current_user["id"]},
+                ],
+            },
+            {"organization_id": 0},
+        ).sort("due_date", 1).to_list(1000)
     else:
         tasks = await db.tasks.find({"organization_id": org_id}, {"organization_id": 0}).sort("due_date", 1).to_list(1000)
-    
+
+    # Enrich with assignee + creator names so the UI can render "Created by X · Assigned to Y"
+    user_ids = set()
+    for t in tasks:
+        if t.get("assigned_to"):
+            user_ids.add(t["assigned_to"])
+        if t.get("created_by"):
+            user_ids.add(t["created_by"])
+    name_map = {}
+    if user_ids:
+        valid_oids = []
+        for uid in user_ids:
+            try:
+                valid_oids.append(ObjectId(uid))
+            except Exception:
+                pass
+        if valid_oids:
+            async for u in db.users.find({"_id": {"$in": valid_oids}}, {"name": 1, "role": 1}):
+                name_map[str(u["_id"])] = {"name": u.get("name", ""), "role": u.get("role", "")}
+
     for task in tasks:
         task["_id"] = str(task["_id"])
-    
+        a = task.get("assigned_to")
+        c = task.get("created_by")
+        task["assigned_to_name"] = (name_map.get(a) or {}).get("name") if a else None
+        task["assigned_to_role"] = (name_map.get(a) or {}).get("role") if a else None
+        task["created_by_name"] = (name_map.get(c) or {}).get("name") if c else None
+        task["created_by_role"] = (name_map.get(c) or {}).get("role") if c else None
+
     return tasks
 
 @api_router.put("/tasks/{task_id}")
 async def update_task(task_id: str, data: TaskUpdate, current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
-    
+
     if not update_data:
         raise HTTPException(status_code=400, detail="No data to update")
-    
+
+    # Read the task BEFORE updating so we can detect status changes and notify
+    existing = await db.tasks.find_one({"_id": ObjectId(task_id), "organization_id": org_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found")
+
     result = await db.tasks.update_one(
         {"_id": ObjectId(task_id), "organization_id": org_id},
-        {"$set": update_data}
+        {"$set": update_data},
     )
-    
+
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Task not found")
-    
+
+    # If the status changed, notify whichever party WASN'T the actor (so a caller
+    # sees admin's progress + admin sees caller's completion).
+    new_status = update_data.get("status")
+    if new_status and new_status != existing.get("status"):
+        title = existing.get("title", "Task")
+        actor_id = current_user["id"]
+        recipients = set()
+        if existing.get("created_by") and existing["created_by"] != actor_id:
+            recipients.add(existing["created_by"])
+        if existing.get("assigned_to") and existing["assigned_to"] != actor_id:
+            recipients.add(existing["assigned_to"])
+        for uid in recipients:
+            await db.notifications.insert_one({
+                "user_id": uid,
+                "message": f"Task '{title}' marked {new_status} by {current_user.get('name', 'a teammate')}",
+                "type": "task_status_changed",
+                "read": False,
+                "organization_id": org_id,
+                "data": {"task_id": task_id, "new_status": new_status},
+                "created_at": datetime.now(timezone.utc),
+            })
+
     return {"message": "Task updated successfully"}
 
 # ==================== Notification Routes ====================

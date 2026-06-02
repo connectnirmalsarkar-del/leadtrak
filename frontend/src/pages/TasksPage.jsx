@@ -88,6 +88,22 @@ export default function TasksPage() {
                 </Badge>
               </div>
               {task.description && <p className="text-xs text-slate-600 mb-3">{task.description}</p>}
+              {(task.created_by_name || task.assigned_to_name) && (
+                <div className="text-[11px] text-slate-500 mb-2 flex flex-wrap gap-x-3 gap-y-0.5">
+                  {task.created_by_name && (
+                    <span data-testid={`task-creator-${task._id}`}>
+                      <span className="text-slate-400">Created by:</span> <span className="font-medium text-slate-700">{task.created_by_name}</span>
+                      {task.created_by_role && <span className="text-slate-400"> · {task.created_by_role}</span>}
+                    </span>
+                  )}
+                  {task.assigned_to_name && (
+                    <span data-testid={`task-assignee-${task._id}`}>
+                      <span className="text-slate-400">Assigned to:</span> <span className="font-medium text-slate-700">{task.assigned_to_name}</span>
+                      {task.assigned_to_role && <span className="text-slate-400"> · {task.assigned_to_role}</span>}
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <span>Due: {task.due_date}</span>
                 <Select value={task.status} onValueChange={(v) => handleStatusChange(task._id, v)}>

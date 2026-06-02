@@ -1,6 +1,6 @@
 // Leadtrak Service Worker
 // IMPORTANT: Bump CACHE_NAME on every release to force the browser to fetch fresh CSS/JS
-const CACHE_NAME = 'leadtrak-v75-auto-refresh-no-pwa-logout';
+const CACHE_NAME = 'leadtrak-v76-tasks-rbac-creator-visibility';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
