@@ -256,10 +256,6 @@ export default function LeadsPage() {
       toast.error('Mobile number is required');
       return;
     }
-    if (!newLead.course_interested) {
-      toast.error('Please select a Course / Service');
-      return;
-    }
     try {
       // Strip the UI-only `wa_different` flag; send whatsapp_number only when toggled
       const payload = { ...newLead, name: trimmedName, mobile: trimmedMobile };
@@ -268,6 +264,8 @@ export default function LeadsPage() {
       if (!waDifferent) {
         payload.whatsapp_number = null;
       }
+      // Normalise empty course_interested to null so backend stores it cleanly
+      if (!payload.course_interested) payload.course_interested = null;
       await axios.post(`${API}/leads`, payload);
       toast.success('Lead added successfully');
       setShowAddDialog(false);
@@ -391,7 +389,7 @@ export default function LeadsPage() {
         mobile: editLead.mobile,
         whatsapp_number: editLead.wa_different ? (editLead.whatsapp_number || null) : null,
         email: editLead.email || null,
-        course_interested: editLead.course_interested,
+        course_interested: editLead.course_interested || null,
         state: editLead.state || null,
         city: editLead.city || null,
         lead_source: editLead.lead_source,
@@ -637,27 +635,31 @@ export default function LeadsPage() {
                 </div>
               )}
               <div className="space-y-2 col-span-2">
-                <Label>{t.offering} Interested In *</Label>
+                <Label>{t.offering} Interested In <span className="text-slate-400 font-normal">(optional · set anytime)</span></Label>
                 <Select
-                  value={newLead.course_interested}
-                  onValueChange={(v) => setNewLead({...newLead, course_interested: v})}
+                  value={newLead.course_interested || '__none__'}
+                  onValueChange={(v) => setNewLead({ ...newLead, course_interested: v === '__none__' ? '' : v })}
                 >
                   <SelectTrigger data-testid="lead-course-select">
-                    <SelectValue placeholder={`Select ${t.offering.toLowerCase()}`} />
+                    <SelectValue placeholder={`Select ${t.offering.toLowerCase()} (optional)`} />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="__none__" data-testid="lead-course-option-none">
+                      <span className="text-slate-500">— Not decided yet —</span>
+                    </SelectItem>
                     {services.map((s) => (
                       <SelectItem key={s._id} value={s.name} data-testid={`lead-course-option-${s._id}`}>
                         {s.name} {s.category && <span className="text-slate-400">· {s.category}</span>}
                       </SelectItem>
                     ))}
                     {services.length === 0 && (
-                      <SelectItem value="General" disabled>
-                        No {t.offerings.toLowerCase()} configured — ask admin to add under Services & Pricing
+                      <SelectItem value="__empty__" disabled>
+                        No {t.offerings.toLowerCase()} configured — ask admin to add under Services &amp; Pricing
                       </SelectItem>
                     )}
                   </SelectContent>
                 </Select>
+                <p className="text-[11px] text-slate-500">Don't worry if the lead hasn't decided yet — counsellor / caller / admin can update this anytime from the lead detail.</p>
               </div>
               {showCompanyCol && (
                 <>
@@ -762,7 +764,7 @@ export default function LeadsPage() {
               <Button variant="outline" onClick={() => { setShowAddDialog(false); setDuplicate(null); }} data-testid="cancel-add-lead-btn">Cancel</Button>
               <Button
                 onClick={handleAddLead}
-                disabled={!!duplicate || !(newLead.name || '').trim() || !(newLead.mobile || '').trim() || !newLead.course_interested}
+                disabled={!!duplicate || !(newLead.name || '').trim() || !(newLead.mobile || '').trim()}
                 className="bg-violet-700 hover:bg-violet-800 disabled:bg-slate-300 text-white"
                 data-testid="submit-add-lead-btn"
               >
@@ -838,7 +840,7 @@ export default function LeadsPage() {
                       <p className="text-xs text-slate-500">{lead.mobile}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-slate-700">{lead.course_interested}</TableCell>
+                  <TableCell className="text-sm text-slate-700">{lead.course_interested || <span className="text-slate-400 italic">Not set</span>}</TableCell>
                   {showCompanyCol && (
                     <TableCell className="text-sm text-slate-700" data-testid={`lead-company-${lead._id}`}>
                       {lead.company_name || '—'}
@@ -933,7 +935,7 @@ export default function LeadsPage() {
                   </div>
                 </div>
                 <SheetTitle className="text-xl sm:text-2xl pr-2" style={{fontFamily: 'Sora'}}>{selectedLead.name}</SheetTitle>
-                <SheetDescription>{selectedLead.course_interested}</SheetDescription>
+                <SheetDescription>{selectedLead.course_interested || <span className="text-slate-400 italic">No service selected yet — click "Edit" to set</span>}</SheetDescription>
               </SheetHeader>
 
               <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
@@ -1308,8 +1310,25 @@ export default function LeadsPage() {
                   <Input value={editLead.email || ''} onChange={(e) => setEditLead({ ...editLead, email: e.target.value })} placeholder="lead@example.com" data-testid="edit-email-input" />
                 </div>
                 <div className="space-y-2">
-                  <Label>{t.serviceLabel || 'Course Interested'} *</Label>
-                  <Input value={editLead.course_interested || ''} onChange={(e) => setEditLead({ ...editLead, course_interested: e.target.value })} data-testid="edit-course-input" />
+                  <Label>{t.serviceLabel || `${t.offering} Interested In`}</Label>
+                  <Select
+                    value={editLead.course_interested || '__none__'}
+                    onValueChange={(v) => setEditLead({ ...editLead, course_interested: v === '__none__' ? '' : v })}
+                  >
+                    <SelectTrigger data-testid="edit-course-select">
+                      <SelectValue placeholder={`Select ${t.offering.toLowerCase()}`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__" data-testid="edit-course-option-none">
+                        <span className="text-slate-500">— Not decided yet —</span>
+                      </SelectItem>
+                      {services.map((s) => (
+                        <SelectItem key={s._id} value={s.name} data-testid={`edit-course-option-${s._id}`}>
+                          {s.name} {s.category && <span className="text-slate-400">· {s.category}</span>}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 {showCompanyCol && (
                   <>

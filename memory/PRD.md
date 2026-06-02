@@ -924,3 +924,38 @@ SW cache `v61` → `v62-industry-aware-book-demo-button`.
 
 **Real-device verification needed (on actual iPhone PWA):**
 The Chromium emulator does NOT simulate `env(safe-area-inset-*)` — those return `0px` in test runs. On actual iOS PWA with notch, the CSS will correctly read `47px` top and `34px` bottom and pad accordingly. Production deploy required to validate fully.
+
+---
+
+## Service Interested → Optional + Editable Anytime (Feb 2026)
+
+**Request:** "service interested field ta non mandatory koro …. lead ad hobar por ota update kora jai kina dekho …."
+
+**Decision (after discussion with user):** Single-service approach kept (multi-service would create noise across 10 industries). Made the field optional + properly editable.
+
+**Implementation:**
+
+### Backend (`/app/backend/server.py`)
+- `LeadCreate.course_interested`: `str = Field(..., min_length=1)` → `Optional[str] = None`.
+- `create_lead`: dropped the 422 check on missing course_interested. Empty string → `None`.
+- `update_lead`: normalises `course_interested` — empty string treated as cleared (`None`).
+
+### Frontend (`/app/frontend/src/pages/LeadsPage.jsx`)
+- **Add Lead dialog:**
+  - Label: "Course Interested In *" → "Course Interested In (optional · set anytime)".
+  - Select dropdown got a new "— Not decided yet —" option at top.
+  - Helper text added: "Don't worry if the lead hasn't decided yet — counsellor / caller / admin can update this anytime from the lead detail."
+  - Validation `if (!newLead.course_interested) toast.error(...)` REMOVED.
+  - Create Lead button `disabled` no longer requires course_interested.
+- **Edit Lead dialog:** Replaced free-text `<Input>` with a proper `<Select>` dropdown sourced from `services`, with "— Not decided yet —" option. Counsellor/caller/admin can change anytime.
+- **Leads table:** Empty service renders as italic "Not set" placeholder.
+- **Lead Detail Sheet:** Empty service shows italic "No service selected yet — click 'Edit' to set" hint.
+
+**SW cache:** bumped to `leadtrak-v69-service-optional-editable`.
+
+**Verified end-to-end:**
+- ✅ Create lead without `course_interested` → 200 success, value `null` stored.
+- ✅ Update lead to set service later → 200, value persisted.
+- ✅ Read API returns the updated value correctly.
+- ✅ Clear service (empty string) → properly stored as `null`.
+- ✅ UI label, dropdown, and helper text all rendered correctly.

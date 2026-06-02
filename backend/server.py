@@ -307,7 +307,9 @@ class LeadCreate(BaseModel):
     mobile: str = Field(..., min_length=1, description="Mobile number; cannot be empty")
     whatsapp_number: Optional[str] = None  # Optional secondary — if blank, fallback to `mobile` for WhatsApp actions
     email: Optional[str] = None
-    course_interested: str = Field(..., min_length=1, description="Course/service is required")
+    # Service / course of interest. Optional at creation — admin/counsellor/caller can
+    # set it any time after lead is created via the Edit dialog.
+    course_interested: Optional[str] = None
     state: Optional[str] = None
     city: Optional[str] = None
     lead_source: str
@@ -1405,11 +1407,12 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
         raise HTTPException(status_code=422, detail="Full Name is required")
     if not (data.mobile or "").strip():
         raise HTTPException(status_code=422, detail="Mobile number is required")
-    if not (data.course_interested or "").strip():
-        raise HTTPException(status_code=422, detail="Course/Service is required")
     data.name = data.name.strip()
     data.mobile = data.mobile.strip()
-    data.course_interested = data.course_interested.strip()
+
+    # Service interest is now OPTIONAL — can be set later via Edit Lead.
+    if data.course_interested is not None:
+        data.course_interested = data.course_interested.strip() or None
 
     org_id = ObjectId(current_user["organization_id"])
 
@@ -1735,6 +1738,11 @@ async def update_lead(lead_id: str, data: LeadUpdate, current_user: dict = Depen
     # Validate lead status against industry's allowed list (single source of truth)
     if "status" in update_data and update_data["status"] != current.get("status"):
         await validate_lead_status_for_org(org_id, update_data["status"])
+
+    # Normalise course_interested (treat empty string as cleared)
+    if "course_interested" in update_data:
+        ci = (update_data.get("course_interested") or "").strip()
+        update_data["course_interested"] = ci or None
 
     # Safety: never let an admin/manager become an "assigned_to" via Edit
     if update_data.get("assigned_to"):
