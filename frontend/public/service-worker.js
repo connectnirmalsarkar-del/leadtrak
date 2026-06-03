@@ -1,6 +1,6 @@
 // Leadtrak Service Worker
 // IMPORTANT: Bump CACHE_NAME on every release to force the browser to fetch fresh CSS/JS
-const CACHE_NAME = 'leadtrak-v95-funnel-5-stages';
+const CACHE_NAME = 'leadtrak-v96-landing-floating-fix';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', (event) => {

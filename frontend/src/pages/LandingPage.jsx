@@ -252,33 +252,34 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-            {/* Floating cards */}
-            <motion.div
-              animate={{ y: [0, -8, 0] }}
-              transition={{ duration: 4, repeat: Infinity }}
-              className="absolute -left-6 top-1/3 bg-white rounded-xl p-3 border border-slate-200 shadow-xl hidden md:flex items-center gap-2.5"
-            >
-              <div className="w-9 h-9 bg-emerald-100 rounded-md flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-slate-900">New Conversion</p>
-                <p className="text-[10px] text-slate-500">+₹45,000</p>
-              </div>
-            </motion.div>
-            <motion.div
-              animate={{ y: [0, 8, 0] }}
-              transition={{ duration: 4, repeat: Infinity, delay: 1 }}
-              className="absolute -right-6 bottom-1/3 bg-white rounded-xl p-3 border border-slate-200 shadow-xl hidden md:flex items-center gap-2.5"
-            >
-              <div className="w-9 h-9 bg-violet-100 rounded-md flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-violet-600" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-slate-900">AI Lead Score</p>
-                <p className="text-[10px] text-slate-500">87% likely to convert</p>
-              </div>
-            </motion.div>
+          {/* Floating cards — only on xl+ screens where there's enough breathing room
+              outside the dashboard frame; otherwise they overlap the sidebar / chart. */}
+          <motion.div
+            animate={{ y: [0, -8, 0] }}
+            transition={{ duration: 4, repeat: Infinity }}
+            className="absolute -left-6 top-1/3 bg-white rounded-xl p-3 border border-slate-200 shadow-xl hidden xl:flex items-center gap-2.5"
+          >
+            <div className="w-9 h-9 bg-emerald-100 rounded-md flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-900">New Conversion</p>
+              <p className="text-[10px] text-slate-500">+₹45,000</p>
+            </div>
+          </motion.div>
+          <motion.div
+            animate={{ y: [0, 8, 0] }}
+            transition={{ duration: 4, repeat: Infinity, delay: 1 }}
+            className="absolute -right-6 bottom-1/3 bg-white rounded-xl p-3 border border-slate-200 shadow-xl hidden xl:flex items-center gap-2.5"
+          >
+            <div className="w-9 h-9 bg-violet-100 rounded-md flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-violet-600" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-900">AI Lead Score</p>
+              <p className="text-[10px] text-slate-500">87% likely to convert</p>
+            </div>
+          </motion.div>
           </motion.div>
         </div>
       </section>
