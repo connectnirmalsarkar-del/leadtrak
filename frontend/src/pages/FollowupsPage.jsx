@@ -370,9 +370,33 @@ export default function FollowupsPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-slate-100">
-          <TabsTrigger value="today" data-testid="tab-today">Today ({totals.today})</TabsTrigger>
-          <TabsTrigger value="upcoming" data-testid="tab-upcoming">Upcoming ({totals.upcoming})</TabsTrigger>
-          <TabsTrigger value="missed" data-testid="tab-missed">Missed ({totals.missed})</TabsTrigger>
+          <TabsTrigger value="today" data-testid="tab-today">
+            Today
+            <span
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums ${activeTab === 'today' ? 'bg-violet-700 text-white' : 'bg-violet-100 text-violet-700'}`}
+              data-testid="tab-today-count"
+            >
+              {totals.today}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="upcoming" data-testid="tab-upcoming">
+            Upcoming
+            <span
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums ${activeTab === 'upcoming' ? 'bg-violet-700 text-white' : 'bg-amber-100 text-amber-700'}`}
+              data-testid="tab-upcoming-count"
+            >
+              {totals.upcoming}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="missed" data-testid="tab-missed">
+            Missed
+            <span
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums ${activeTab === 'missed' ? 'bg-violet-700 text-white' : 'bg-red-100 text-red-700'}`}
+              data-testid="tab-missed-count"
+            >
+              {totals.missed}
+            </span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="today" className="space-y-3 mt-4">
