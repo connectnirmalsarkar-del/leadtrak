@@ -736,8 +736,13 @@ export default function LeadsPage() {
                 </Select>
               </div>
 
-              {/* Industry-specific extras — same fields as Lead Capture Widget */}
-              {(formConfig.fields || []).filter((f) => f.name !== 'course_interested').map((f) => (
+              {/* Industry-specific extras — same fields as Lead Capture Widget.
+                  Exclude fields already rendered above (course_interested handled by
+                  the main select; company_name & designation rendered via the
+                  hardcoded `showCompanyCol` block to avoid duplicates). */}
+              {(formConfig.fields || [])
+                .filter((f) => !['course_interested', 'company_name', 'designation'].includes(f.name))
+                .map((f) => (
                 <div key={f.name} className="space-y-2">
                   <Label>{f.label}</Label>
                   {f.type === 'select' ? (
