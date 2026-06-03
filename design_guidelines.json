@@ -1,67 +1,26 @@
 {
   "project_context": {
-    "domain": "SaaS CRM",
+    "domain": "SaaS CRM PWA (LeadTrak)",
     "theme": "Light",
-    "archetype": "4 (Swiss & High-Contrast)",
-    "locked_colors": "violet primary, slate neutrals, emerald accent"
+    "archetype": "Archetype 4 (Swiss & High-Contrast) - Prioritizes clarity, data hierarchy, and functional density.",
+    "mobile_target": "iPhone 14 Pro (390x844) with safe-area notch"
   },
-  "design_system_rules": {
-    "typography": {
-      "font_size_mobile_inputs": "16px minimum to prevent iOS zoom (already applied globally by main agent).",
-      "hierarchy": "Maintain clean UI, prioritize clarity. Respect existing locked styles."
-    },
-    "spacing_and_layout": {
-      "mobile_first": "Start with grid-cols-1. Stack columns vertically on mobile viewports (<640px).",
-      "padding_containers": "Use p-4 or p-6 internally in dialogs. Never allow text to hit screen edges."
-    },
-    "safe_area_guidelines": {
-      "header_topbar": "Crucial: Apply `pt-safe` to the sticky top bar. Change height constraints (like `h-16`) to `min-h-[calc(4rem+env(safe-area-inset-top))]` or `h-auto` so it scales with the notch.",
-      "page_containers": "Apply `pt-safe` and `pb-safe` to full-screen pages like Login, Register, Landing.",
-      "modals": "Apply `pb-safe` to dialog/modal footers to avoid the iOS home indicator overlapping buttons."
-    },
-    "touch_targets": {
-      "minimum_size": "Buttons, inputs, selects must have a minimum touch target of 44x44px for iOS. Ensure full-width buttons on mobile for easier thumb reach."
-    }
+  "typography": {
+    "primary_heading": "Sora (font-sora, tracking-tight, leading-[1.15])",
+    "body": "System Sans / Inter",
+    "mono": "Font-mono for Lead ID reference"
   },
-  "instructions_to_main_agent": {
-    "1_safe_area_topbar": {
-      "target": "/app/frontend/src/components/layout/DashboardLayout.jsx",
-      "action": "Locate the sticky topbar (approx line 338). It currently gets hidden under the notch. Add `pt-safe` class. Ensure its height adjusts correctly (e.g. `h-auto min-h-[4rem]` or `box-content h-16 pt-safe`). Verify header buttons and user menus are fully clickable below the iOS status bar."
-    },
-    "2_login_and_register_pages": {
-      "targets": [
-        "/app/frontend/src/pages/LoginPage.jsx",
-        "/app/frontend/src/pages/RegisterPage.jsx"
-      ],
-      "action": "Ensure the outermost container wrapper has `pt-safe` and `pb-safe` so the forms are not obscured by the notch or home bar. Add padding to the top if the logo/back button overlaps the status bar."
-    },
-    "3_form_responsiveness": {
-      "targets": [
-        "/app/frontend/src/pages/LeadsPage.jsx",
-        "/app/frontend/src/components/BookDemoDialog.jsx",
-        "/app/frontend/src/pages/DemosPage.jsx",
-        "/app/frontend/src/pages/FollowupsPage.jsx",
-        "/app/frontend/src/pages/AdmissionsPage.jsx",
-        "/app/frontend/src/pages/SettingsPage.jsx",
-        "/app/frontend/src/pages/PlatformOrgsPage.jsx"
-      ],
-      "action": "Sweep all forms and dialogs. Replace rigid grids like `grid-cols-2` with `grid-cols-1 sm:grid-cols-2`. Ensure all 2-column or 3-column form layouts properly stack on mobile. Verify input fields do not cause horizontal scrolling."
-    },
-    "4_dialog_footers_and_buttons": {
-      "targets": "All usages of DialogFooter in the above form files.",
-      "action": "Ensure buttons in the DialogFooter stack cleanly on mobile. Use `flex-col sm:flex-row w-full` for the footer wrapper, and `w-full sm:w-auto` for the action buttons inside, so they span full-width on mobile but sit side-by-side on desktop."
-    },
-    "5_dialog_overflow": {
-      "target": "/app/frontend/src/components/ui/dialog.jsx",
-      "action": "Main agent added `max-h-[92dvh] overflow-y-auto`. Verify this is robust. Additionally, make sure `pb-safe` is applied to DialogContent so content isn't clipped by the iOS home bar."
-    },
-    "6_touch_targets": {
-      "targets": "Globally (Forms and UI components)",
-      "action": "Ensure inputs and clickable buttons inside forms have adequate height. If they are standard `h-10`, consider adding `sm:h-10 h-11` or minimum height CSS for better mobile tap reliability."
-    },
-    "7_service_worker": {
-      "target": "/app/frontend/public/service-worker.js",
-      "action": "Bump the cache version (e.g., from `v67-ios-pwa-safe-area-mobile-forms` to `v68-ios-pwa-safe-area-mobile-forms-v2`) to deploy the updated PWA CSS/JS layouts."
-    }
+  "design_rationale": [
+    "Notch/Safe-Area Avoidance: Wrapped the header contents in a container with 'pr-12' and 'pt-1'. This isolates the text from the top-right absolute-positioned close (X) button, stopping collision entirely.",
+    "Name Wrapping Grace: Applied 'text-2xl sm:text-3xl' fluid sizing, 'leading-[1.15]', 'break-words', and 'line-clamp-3' to the Lead Name. Long names stack elegantly instead of breaking the flex container.",
+    "Optical Hierarchy: Extracted the Lead ID and Status Badge into a distinct 'eyebrow' row above the main title. This anchors the top visual edge with high-contrast metadata.",
+    "Micro-interactions & De-cluttering: The Service/Course interested line hides its edit icon until hovered/focused (group-hover). This reduces initial cognitive load while retaining discoverability.",
+    "Testing Resilience: Injected distinct role-based data-testids into all interactive surfaces and data points."
+  ],
+  "implementation_instructions": {
+    "target_file": "/app/frontend/src/pages/LeadsPage.jsx",
+    "target_lines": "Replace the <SheetHeader> block around lines ~915-965.",
+    "imports_required": "Ensure 'Building2', 'BookOpen', and 'Pencil' are imported from 'lucide-react'.",
+    "jsx_snippet": "<SheetHeader className=\"pr-12 text-left space-y-5 pb-6 border-b border-border/40 relative\">\n  <div className=\"flex flex-col gap-4\">\n    {/* Context Row: ID + Status */}\n    <div className=\"flex flex-wrap items-center gap-2 pt-1\">\n      <Badge variant=\"outline\" className=\"font-mono text-[10px] sm:text-xs font-medium text-muted-foreground bg-muted/30 px-2 py-0.5 rounded-md border-border/50\" data-testid=\"lead-id-badge\">\n        {lead.lead_id || 'LEAD-XXX'}\n      </Badge>\n      <Badge className=\"text-[10px] sm:text-xs rounded-full px-2.5 py-0.5 font-medium shadow-none\" variant={lead.status === 'Interested' ? 'default' : 'secondary'} data-testid=\"lead-status-badge\">\n        {lead.status || 'New'}\n      </Badge>\n    </div>\n\n    {/* Primary Identity */}\n    <div className=\"space-y-1.5\">\n      <SheetTitle className=\"font-sora text-2xl sm:text-3xl font-semibold tracking-tight text-foreground leading-[1.15] break-words line-clamp-3\" data-testid=\"lead-name-heading\">\n        {lead.name || 'Unknown Lead'}\n      </SheetTitle>\n\n      {/* Meta Information */}\n      <div className=\"flex flex-col gap-2 mt-3\">\n        {lead.company && (\n          <div className=\"flex items-center text-sm text-muted-foreground font-medium\" data-testid=\"lead-company-line\">\n            <Building2 className=\"w-4 h-4 mr-2 opacity-60 shrink-0\" />\n            <span className=\"truncate\">{lead.company}</span>\n          </div>\n        )}\n        <div className=\"flex items-center text-sm text-muted-foreground group w-fit cursor-pointer transition-colors hover:text-foreground\" data-testid=\"lead-service-line\">\n          <BookOpen className=\"w-4 h-4 mr-2 opacity-60 shrink-0 group-hover:opacity-100 transition-opacity\" />\n          <span className=\"truncate mr-1 border-b border-transparent group-hover:border-border transition-colors\">\n            {lead.service_interested || 'No service selected'}\n          </span>\n          <button className=\"opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 p-1.5 rounded-md hover:bg-muted\" data-testid=\"edit-service-button\" aria-label=\"Edit Service\">\n            <Pencil className=\"w-3.5 h-3.5\" />\n          </button>\n        </div>\n      </div>\n    </div>\n\n    {/* Action Row */}\n    <div className=\"pt-2 flex items-center gap-3\">\n      {/* Replace hasRole check with your app's actual authorization logic */}\n      {hasRole(ROLES.MANAGE_LEADS) && (\n        <Button variant=\"outline\" size=\"sm\" className=\"h-9 px-4 text-xs sm:text-sm font-medium bg-background shadow-sm hover:bg-muted transition-all rounded-lg\" data-testid=\"edit-lead-button\">\n          <Pencil className=\"w-3.5 h-3.5 mr-2\" />\n          Edit details\n        </Button>\n      )}\n    </div>\n  </div>\n</SheetHeader>"
   }
 }
