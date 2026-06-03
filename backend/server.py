@@ -6197,18 +6197,18 @@ async def get_lead_funnel(current_user: dict = Depends(get_current_user)):
     # actually exists in the industry's lead_statuses list (so counts > 0
     # are possible) and culminates in the conversion status.
     FUNNEL_BY_INDUSTRY = {
-        "education": ["New", "Contacted", "Interested", "Admission Done"],
-        "it_software": ["New", "Contacted", "Demo Done", "Won"],
-        "real_estate": ["New", "Contacted", "Site Visited", "Booked"],
-        "healthcare": ["New", "Contacted", "Consulted", "Completed"],
-        "insurance": ["New", "Contacted", "Quote Sent", "Issued"],
-        "travel": ["New", "Itinerary Sent", "Quote Sent", "Confirmed"],
-        "retail": ["New", "Contacted", "Cart Added", "Delivered"],
-        "fitness": ["New", "Trial Booked", "Trial Done", "Joined"],
-        "admission_consultancy": ["New Inquiry", "Counseling Done", "Application Submitted", "Admission Confirmed"],
-        "generic": ["New", "Contacted", "Qualified", "Won"],
+        "education": ["New", "Contacted", "Interested", "Application Sent", "Admission Done"],
+        "it_software": ["New", "Contacted", "Demo Done", "Proposal Sent", "Won"],
+        "real_estate": ["New", "Contacted", "Site Visited", "Token Paid", "Booked"],
+        "healthcare": ["New", "Contacted", "Consulted", "Treatment Ongoing", "Completed"],
+        "insurance": ["New", "Contacted", "Quote Sent", "Proposal Sent", "Issued"],
+        "travel": ["New", "Itinerary Sent", "Quote Sent", "Token Paid", "Confirmed"],
+        "retail": ["New", "Contacted", "Cart Added", "Ordered", "Delivered"],
+        "fitness": ["New", "Trial Booked", "Trial Done", "Member", "Joined"],
+        "admission_consultancy": ["New Inquiry", "Counseling Done", "Application Submitted", "Fee Payment", "Admission Confirmed"],
+        "generic": ["New", "Contacted", "Qualified", "Proposal Sent", "Won"],
     }
-    stages = FUNNEL_BY_INDUSTRY.get(industry, ["New", "Contacted", "Interested", "Admission Done"])
+    stages = FUNNEL_BY_INDUSTRY.get(industry, ["New", "Contacted", "Interested", "Application Sent", "Admission Done"])
     # Last stage label = industry's conversion verb (e.g. Won, Booked, Admitted)
     display_labels = {
         stages[-1]: terms.get("conversion_verb", stages[-1]),
