@@ -156,25 +156,28 @@ export default function DashboardLayout({ children }) {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const markAllRead = async () => {
-    const unread = notifications.filter((n) => !n.read);
-    await Promise.all(unread.map((n) => axios.put(`${API}/notifications/${n._id}/read`).catch(() => {})));
-    setNotifications(notifications.map((n) => ({ ...n, read: true })));
+    try {
+      await axios.post(`${API}/notifications/mark-all-read`);
+      setNotifications(notifications.map((n) => ({ ...n, read: true })));
+    } catch (e) { /* ignore */ }
   };
 
   const openNotif = async (notif) => {
     if (!notif.read) {
       await axios.put(`${API}/notifications/${notif._id}/read`).catch(() => {});
+      setNotifications((prev) => prev.map((n) => (n._id === notif._id ? { ...n, read: true } : n)));
     }
     setShowNotifPanel(false);
     if (notif.type === 'ticket_status' || notif.type === 'ticket_reply') {
       navigate('/support');
-    } else if (notif.type === 'lead_assigned' || notif.type === 'lead_transferred') {
-      // Deep-link to specific lead if backend included lead_id, else open Leads list
+    } else if (notif.type === 'lead_assigned' || notif.type === 'lead_transferred' || notif.type === 'lead_comment' || notif.type === 'lead_attachment') {
       navigate(notif.lead_id ? `/leads?leadId=${notif.lead_id}` : '/leads');
     } else if (notif.type === 'task_assigned') {
       navigate('/tasks');
-    } else if (notif.type === 'lead_comment') {
-      navigate(notif.lead_id ? `/leads?leadId=${notif.lead_id}` : '/leads');
+    } else if (notif.type === 'demo_assigned' || notif.type === 'demo_updated' || notif.type === 'demo_reminder') {
+      navigate('/demos');
+    } else if (notif.type === 'followup_digest') {
+      navigate('/followups');
     }
   };
 

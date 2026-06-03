@@ -295,6 +295,140 @@ async def send_web_push(user_id: str, title: str, body: str, url: str = "/", tag
             logger.error(f"Web push unexpected error: {e}")
 
 
+# ==================== Notification Scheduler (followup digest + demo reminders) ====================
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from zoneinfo import ZoneInfo
+_scheduler: Optional[AsyncIOScheduler] = None
+
+
+async def _send_demo_reminders():
+    """Every minute: find Scheduled demos starting in ~30 mins that haven't been
+    reminded yet, push the owner."""
+    now_utc = datetime.now(timezone.utc)
+    today_str = now_utc.date().isoformat()
+    try:
+        demos = await db.demos.find({
+            "status": "Scheduled",
+            "scheduled_date": today_str,
+            "reminder_sent_at": {"$exists": False},
+        }).to_list(500)
+    except Exception as e:
+        logger.warning(f"Demo reminder query failed: {e}")
+        return
+    for d in demos:
+        try:
+            org = await db.organizations.find_one({"_id": d["organization_id"]}, {"timezone": 1})
+            tz_name = (org or {}).get("timezone") or "Asia/Kolkata"
+            try:
+                tz = ZoneInfo(tz_name)
+            except Exception:
+                tz = ZoneInfo("Asia/Kolkata")
+            local_now = now_utc.astimezone(tz)
+            # Parse scheduled HH:MM in local tz
+            hh, mm = (d.get("scheduled_time") or "00:00").split(":")[:2]
+            scheduled_local = local_now.replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
+            mins_until = (scheduled_local - local_now).total_seconds() / 60
+            # Fire reminder when 25-35 minutes away
+            if 25 <= mins_until <= 35:
+                owner_id = d.get("demo_owner_id")
+                if owner_id:
+                    await send_web_push(
+                        owner_id,
+                        title=f"Demo in {int(mins_until)} mins",
+                        body=f"With {d.get('lead_name')} at {d.get('scheduled_time')} ({d.get('demo_mode')})",
+                        url="/demos",
+                        tag=f"demo-rem-{d['_id']}",
+                    )
+                    await db.notifications.insert_one({
+                        "user_id": owner_id,
+                        "message": f"Reminder: Demo with {d.get('lead_name')} starts at {d.get('scheduled_time')}",
+                        "type": "demo_reminder",
+                        "demo_id": str(d["_id"]),
+                        "lead_id": d.get("lead_id"),
+                        "read": False,
+                        "organization_id": d["organization_id"],
+                        "created_at": now_utc,
+                    })
+                    await db.demos.update_one({"_id": d["_id"]}, {"$set": {"reminder_sent_at": now_utc}})
+        except Exception as e:
+            logger.warning(f"Demo reminder fail for {d.get('_id')}: {e}")
+
+
+async def _send_morning_followup_digest():
+    """Runs every 10 minutes. For each org's timezone where local time is currently
+    between 08:00–08:09, push each user a "You have N follow-ups today" digest.
+    Dedupe per user per local-date via the followup_digest_sent collection."""
+    now_utc = datetime.now(timezone.utc)
+    try:
+        orgs = await db.organizations.find({}, {"_id": 1, "timezone": 1}).to_list(2000)
+    except Exception as e:
+        logger.warning(f"Digest org query failed: {e}")
+        return
+    # Group orgs by timezone
+    tz_buckets: dict[str, list] = {}
+    for o in orgs:
+        tz_name = o.get("timezone") or "Asia/Kolkata"
+        tz_buckets.setdefault(tz_name, []).append(o["_id"])
+    for tz_name, org_ids in tz_buckets.items():
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            continue
+        local_now = now_utc.astimezone(tz)
+        if local_now.hour != 8 or local_now.minute >= 10:
+            continue
+        local_date = local_now.date().isoformat()
+        # Find users in these orgs that haven't been digested today
+        users = await db.users.find(
+            {"organization_id": {"$in": org_ids}, "active": {"$ne": False}},
+            {"_id": 1, "name": 1, "organization_id": 1, "role": 1},
+        ).to_list(5000)
+        for u in users:
+            uid = str(u["_id"])
+            already = await db.followup_digest_sent.find_one({"user_id": uid, "local_date": local_date})
+            if already:
+                continue
+            # Count follow-ups due today for this user
+            count = await db.followups.count_documents({
+                "organization_id": u["organization_id"],
+                "assigned_to": uid,
+                "status": {"$ne": "completed"},
+                "followup_date": local_date,
+            })
+            if count <= 0:
+                # Mark anyway so we don't keep checking; skip sending zero
+                await db.followup_digest_sent.insert_one({"user_id": uid, "local_date": local_date, "count": 0, "sent_at": now_utc})
+                continue
+            body = f"You have {count} follow-up{'s' if count > 1 else ''} due today. Tap to start."
+            await send_web_push(
+                uid,
+                title="Good morning — your follow-ups",
+                body=body,
+                url="/followups",
+                tag=f"followup-digest-{local_date}",
+            )
+            await db.notifications.insert_one({
+                "user_id": uid,
+                "message": body,
+                "type": "followup_digest",
+                "read": False,
+                "organization_id": u["organization_id"],
+                "created_at": now_utc,
+            })
+            await db.followup_digest_sent.insert_one({"user_id": uid, "local_date": local_date, "count": count, "sent_at": now_utc})
+
+
+def start_notification_scheduler():
+    global _scheduler
+    if _scheduler and _scheduler.running:
+        return
+    _scheduler = AsyncIOScheduler(timezone="UTC")
+    _scheduler.add_job(_send_demo_reminders, "interval", minutes=1, id="demo_reminders", max_instances=1, coalesce=True)
+    _scheduler.add_job(_send_morning_followup_digest, "interval", minutes=10, id="followup_digest", max_instances=1, coalesce=True)
+    _scheduler.start()
+    logger.info("Notification scheduler started (demo reminders + 8 AM followup digest)")
+
+
 # ==================== Pydantic Models ====================
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -992,6 +1126,13 @@ async def startup_db():
     # Webhook logs
     await db.webhook_logs.create_index([("organization_id", 1), ("created_at", -1)])
     await db.webhook_logs.create_index([("organization_id", 1), ("source", 1), ("status", 1)])
+    # Push subscriptions
+    await db.push_subscriptions.create_index("endpoint", unique=True)
+    await db.push_subscriptions.create_index([("user_id", 1), ("active", 1)])
+    # Demo reminder dedupe
+    await db.demos.create_index([("reminder_sent_at", 1)], sparse=True)
+    # Start the background scheduler (followup digest + demo reminders)
+    start_notification_scheduler()
     logger.info("Database initialized and indexes created")
 
 # ==================== Auth Routes ====================
@@ -3246,6 +3387,21 @@ async def mark_notification_read(notif_id: str, current_user: dict = Depends(get
         raise HTTPException(status_code=404, detail="Notification not found")
     
     return {"message": "Notification marked as read"}
+
+
+@api_router.post("/notifications/mark-all-read")
+async def mark_all_notifications_read(current_user: dict = Depends(get_current_user)):
+    result = await db.notifications.update_many(
+        {"user_id": current_user["id"], "read": False},
+        {"$set": {"read": True}},
+    )
+    return {"message": "All marked as read", "modified": result.modified_count}
+
+
+@api_router.get("/notifications/unread-count")
+async def notifications_unread_count(current_user: dict = Depends(get_current_user)):
+    count = await db.notifications.count_documents({"user_id": current_user["id"], "read": False})
+    return {"count": count}
 
 # ==================== Lead Source Routes ====================
 @api_router.post("/lead-sources")
