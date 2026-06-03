@@ -38,7 +38,9 @@ const EVENT_META = {
   lead_created: { icon: UserPlus, color: 'violet', title: 'Lead created' },
   status_changed: { icon: RefreshCw, color: 'blue', title: 'Status changed' },
   assigned: { icon: UserPlus, color: 'indigo', title: 'Assigned' },
+  assigned_changed: { icon: ArrowRightLeft, color: 'indigo', title: 'Assignee changed' },
   transferred: { icon: ArrowRightLeft, color: 'amber', title: 'Transferred' },
+  temperature_changed: { icon: CircleDot, color: 'amber', title: 'Temperature changed' },
   followup_added: { icon: Calendar, color: 'sky', title: 'Follow-up scheduled' },
   followup_completed: { icon: CheckCircle2, color: 'emerald', title: 'Follow-up completed' },
   followup_missed: { icon: AlertCircle, color: 'amber', title: 'Follow-up missed' },
@@ -47,8 +49,23 @@ const EVENT_META = {
   demo_scheduled: { icon: Video, color: 'fuchsia', title: 'Demo scheduled' },
   demo_updated: { icon: Video, color: 'amber', title: 'Demo updated' },
   demo_completed: { icon: CheckCircle2, color: 'teal', title: 'Demo completed' },
+  task_assigned: { icon: CheckCircle2, color: 'sky', title: 'Task assigned' },
+  task_status_changed: { icon: RefreshCw, color: 'blue', title: 'Task status changed' },
+  call_logged: { icon: Phone, color: 'teal', title: 'Call logged' },
   admission_recorded: { icon: Trophy, color: 'emerald', title: 'Converted' },
   lead_lost: { icon: XCircle, color: 'red', title: 'Marked as lost' },
+};
+
+// Convert snake_case event type to a friendly Title Case label as last-resort fallback.
+const humanizeEventType = (t) =>
+  (t || 'event').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+// Render a payload field value in a readable way (no raw JSON for users).
+const renderValue = (v) => {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
 };
 
 const COLOR_CLASS = {
@@ -338,8 +355,42 @@ const EventBody = ({ event }) => {
         </div>
       );
     }
-    default:
-      return <p className="text-sm text-slate-500">{JSON.stringify(p)}</p>;
+    case 'temperature_changed': {
+      // payload e shape varies — try {from, to} OR {old_temperature, new_temperature}
+      const from = p.from || p.old_temperature || p.previous;
+      const to = p.to || p.new_temperature || p.value;
+      const TEMP_STYLE = {
+        hot: 'bg-red-100 text-red-700',
+        warm: 'bg-amber-100 text-amber-700',
+        cold: 'bg-blue-100 text-blue-700',
+      };
+      const Pill = ({ v }) => (
+        <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${TEMP_STYLE[(v || '').toLowerCase()] || 'bg-slate-100 text-slate-700'}`}>
+          {(v || '—').toString().replace(/^./, (c) => c.toUpperCase())}
+        </span>
+      );
+      return (
+        <p className="text-sm text-slate-700 flex items-center gap-1.5 flex-wrap">
+          <Pill v={from} /> <ArrowRightLeft className="w-3 h-3 text-slate-400" /> <Pill v={to} />
+        </p>
+      );
+    }
+    default: {
+      // Friendly fallback for any event type without a dedicated renderer.
+      // Show key:value pairs instead of raw JSON so users don't see internal fields.
+      const entries = Object.entries(p || {}).filter(([k, v]) => v !== null && v !== undefined && v !== '');
+      if (!entries.length) return null;
+      return (
+        <div className="text-sm text-slate-700 space-y-0.5">
+          {entries.map(([k, v]) => (
+            <div key={k} className="flex items-baseline gap-1.5 flex-wrap">
+              <span className="text-xs text-slate-500 capitalize">{k.replace(/_/g, ' ')}:</span>
+              <span className="font-medium text-slate-800">{renderValue(v)}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
   }
 };
 
@@ -503,7 +554,7 @@ export default function LeadTimeline({ leadId, refreshKey }) {
     <div className="space-y-0" data-testid="lead-timeline">
       {Composer}
       {events.map((e, idx) => {
-        const meta = EVENT_META[e.event_type] || { icon: CircleDot, color: 'slate', title: e.event_type };
+        const meta = EVENT_META[e.event_type] || { icon: CircleDot, color: 'slate', title: humanizeEventType(e.event_type) };
         const Icon = meta.icon;
         const isLast = idx === events.length - 1;
         return (
