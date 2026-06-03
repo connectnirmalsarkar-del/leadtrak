@@ -10,6 +10,21 @@ const Toaster = ({
     <Sonner
       theme={theme}
       className="toaster group"
+      // Push toasts BELOW the iOS notch / Android status bar via env() safe-area.
+      // We use sonner's `offset` and `mobileOffset` props which compute spacing
+      // from the chosen position edge — pass calc() with env() for safe areas.
+      offset={{
+        top: 'calc(16px + env(safe-area-inset-top, 0px))',
+        bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+        left: 'calc(16px + env(safe-area-inset-left, 0px))',
+        right: 'calc(16px + env(safe-area-inset-right, 0px))',
+      }}
+      mobileOffset={{
+        top: 'calc(16px + env(safe-area-inset-top, 0px))',
+        bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+        left: 'calc(16px + env(safe-area-inset-left, 0px))',
+        right: 'calc(16px + env(safe-area-inset-right, 0px))',
+      }}
       toastOptions={{
         classNames: {
           toast:
