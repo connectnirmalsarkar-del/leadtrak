@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 17 regression test for today's 15 features. Backend: 22/22 pytest cases PASSED (CORS widget, attachments + RBAC + size/mime guards, avatar/logo compression, push subscribe/unsubscribe/public-key/test, notifications list/unread-count/mark-all-read, widget layout PATCH valid/invalid/RBAC, 5-stage funnel, edit demo with empty-body 400 + share.whatsapp containing updated link). Frontend: 13 testid checks executed - tab count badges (Demos/Followups/Tasks) render correctly with accurate counts; landing page mobile fits 390px (no overflow); floating cards hidden at 1024px laptop; lead widget cards render. 4 frontend issues found - see frontend_issues.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/dashboard/funnel", "issue": "Console errors during page load: multiple 404s from frontend resources (likely missing icons/assets). Did not affect funnel JSON response."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "DashboardLayout (bell dropdown)", "issue": "Clicking [data-testid='notifications-btn'] does NOT render the [data-testid='notif-panel'] or [data-testid='mark-all-read-btn']. Only the bell button testid exists in DOM. Either the popover isn't opening on click or the testids on the panel/mark-all-read button are missing.", "selector": "data-testid='notif-panel', data-testid='mark-all-read-btn'", "priority": "HIGH"},
+      {"component": "BookDemoDialog (edit mode)", "issue": "Clicking [data-testid='demo-edit-btn-{id}'] on /demos does NOT open a dialog. No [role=dialog] title appears and [data-testid='edit-demo-submit-btn'] is absent. Demo edit dialog appears to not mount in edit mode despite trigger having correct testid. Backend PUT /api/demos/{id} works fine (verified separately).", "selector": "data-testid='edit-demo-submit-btn'", "priority": "HIGH"},
+      {"component": "LeadWidgetPage (compact preview)", "issue": "Selecting the 'Compact' layout card does NOT render [data-testid='preview-layout-compact']. Only preview-layout-standard appears in DOM; two-column also rendered correctly in the first pass. The compact branch in the live preview block is missing/wrong.", "selector": "data-testid='preview-layout-compact'", "priority": "MEDIUM"},
+      {"component": "DashboardLayout sidebar (mobile)", "issue": "At 390x844px after opening sidebar via [data-testid='sidebar-open-btn'], the inner nav reports scrollHeight=844, clientHeight=844, overflowY='visible'. The mobile sidebar scroll fix is NOT applied - the nav element does not have overflowY:auto and content does not become scrollable when it exceeds viewport. Risk: sidebar items at the bottom may be unreachable on shorter devices.", "selector": "nav inside [role=dialog][data-testid=mobile-sidebar] or [data-sheet-content]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard (all pages)", "issues": ["Console flooded with Recharts width(-1)/height(-1) warnings on every chart - container width/height not measured properly on initial render. Cosmetic but noisy."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration17_today_features.py",
+    "/app/test_reports/pytest/iteration17.xml"
+  ],
+  "action_items": [
+    "Fix bell-icon dropdown: ensure clicking notifications-btn renders the popover and that the panel container has data-testid='notif-panel' and the bulk-read button has data-testid='mark-all-read-btn' (verify the dropdown is actually mounted into DOM, not just toggled by CSS).",
+    "Fix Edit Demo: clicking demo-edit-btn-{id} should open BookDemoDialog in edit mode. Currently no dialog mounts. Verify the click handler sets the open prop AND that BookDemoDialog renders the data-testid='edit-demo-submit-btn' on its submit button when in edit mode.",
+    "Fix LeadWidgetPage compact preview: the preview block must render an element with data-testid='preview-layout-compact' when currentLayout==='compact'. Only standard/two-column branches currently emit the testid.",
+    "Mobile sidebar scroll: ensure the inner nav inside the mobile Sheet has overflow-y:auto AND a max-height so content longer than the viewport scrolls. Currently overflowY='visible' on the discovered nav element."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 7787 lines - well over the 700-line guideline. Split into routers/modules (auth, leads, demos, widget, notifications, push, uploads).",
+    "Lots of console errors on every authenticated page: 3x 404s on resource fetches (likely PWA icons or missing /api endpoints). Investigate and either remove the requests or add the resources.",
+    "Recharts containers spam width(-1)/height(-1) warnings on first paint - wrap charts with proper min-h/min-w or fixed aspect ratio.",
+    "Edit-demo + bell-dropdown + compact-layout-preview all rely on data-testids documented in the PRD but missing in DOM at runtime. Suggest a runtime audit/test to assert each required testid is present after the relevant interaction."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration17_today_features.py"
+  ],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "60% (9/15 checks passed - tab badges, layout-cards-render, landing-mobile, laptop-floats-hidden ok; 4 UI bugs noted)"},
+  "test_credentials": "Used orgadmin@demo.com / Demo@123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Test created 1 demo (CORS Test lead 9999000001 scheduled 2026-12-25), 1 widget lead, multiple uploaded avatars/logos for orgadmin. PDF attachment 'regression.pdf' uploaded on lead used in tests. Cleanup not performed - safe to leave for next run.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest file lives at /app/backend/tests/test_iteration17_today_features.py and uses cookie-based requests.Session() since /api/auth/login sets httpOnly cookies (no access_token JSON field). When testing PUT /api/demos/{id} the response body.share.whatsapp is URL-encoded - decode with urllib.parse.unquote before substring assertions. Demo create payload requires: lead_id, demo_owner_id (any user id), scheduled_date YYYY-MM-DD, scheduled_time HH:MM, demo_mode, demo_link, agenda (NOT scheduled_at/mode/link). Frontend: Notifications API in headless Chrome is 'denied' not 'default' so enable-push-btn won't render - that's expected.",
+  "rca of the issue": "Bell dropdown / Edit demo dialog / compact preview - frontend appears to either (a) have data-testids only on success/loading sub-states that didn't trigger in test viewport, or (b) the click handlers aren't wired - both BookDemoDialog edit-mode and bell popover lack any [role=dialog] / [role=menu] rendered after click. Reproduction: login as orgadmin -> /demos -> click first Edit button -> no dialog. /dashboard -> click bell -> no panel. Mobile sidebar scroll missing overflow-y:auto on the rendered nav element."
+}
