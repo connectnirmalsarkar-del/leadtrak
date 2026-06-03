@@ -248,6 +248,12 @@ const EventBody = ({ event }) => {
       const isPdf = mime === 'application/pdf';
       const FIcon = isImg ? ImageIcon : (isPdf ? FileText : FileSpreadsheet);
       const sizeKb = p.size ? (p.size / 1024).toFixed(1) : '';
+      // Use our backend proxy endpoint for downloads — it streams the file
+      // from Cloudinary with `Content-Disposition: attachment; filename="..."`
+      // headers. iOS Safari/PWA needs this to save with correct extension and
+      // open via "Open in…" / "Save to Files". Cloudinary's own fl_attachment
+      // is broken for raw uploads (returns content-disposition: inline).
+      const dlUrl = `${API}/attachments/download/${event._id}`;
       return (
         <div className="bg-indigo-50/60 border border-indigo-200 rounded-md p-2.5 space-y-2" data-testid="timeline-attachment">
           <div className="flex items-center gap-2.5">
@@ -260,7 +266,7 @@ const EventBody = ({ event }) => {
             </div>
             {p.url && (
               <a
-                href={p.download_url || p.url}
+                href={dlUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 download={p.filename || true}

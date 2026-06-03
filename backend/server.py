@@ -2489,19 +2489,29 @@ async def add_lead_attachment(
         raise HTTPException(status_code=500, detail="Upload failed")
 
     secure_url = result.get("secure_url") or ""
-    # iOS Safari / PWA refuses to OPEN raw-resource Cloudinary URLs even though it
-    # downloads them — the response lacks a Content-Disposition header. Insert
-    # the `fl_attachment` delivery flag (with the original filename) so Cloudinary
-    # serves the file with `Content-Disposition: attachment; filename=...`,
-    # which makes iOS save it with the correct extension AND let the user open
-    # it through "Open in…" / "Save to Files".
+    # iOS Safari / PWA refuses to OPEN raw-resource Cloudinary URLs even though
+    # it downloads them — the response lacks a Content-Disposition header. Add
+    # the `fl_attachment` delivery flag (WITH the original filename including
+    # extension) so Cloudinary serves the file as
+    # `Content-Disposition: attachment; filename="signed_contract.pdf"`. The
+    # extension MUST be in the value or iOS will save the file without one and
+    # refuse to open it with "Unknown file type".
     download_url = secure_url
-    safe_name = (file.filename or "attachment").replace("/", "_").replace("?", "_")
+    safe_name = (file.filename or "attachment").replace("/", "_").replace("?", "_").replace(" ", "_")
+    # Ensure there is an extension — fall back from mime if filename has none.
+    if "." not in safe_name:
+        ext_from_mime = {
+            "application/pdf": ".pdf",
+            "image/jpeg": ".jpg",
+            "image/jpg": ".jpg",
+            "application/vnd.ms-excel": ".xls",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+        }.get(file.content_type, "")
+        safe_name = f"{safe_name}{ext_from_mime}"
     if secure_url and "/upload/" in secure_url:
-        # URL-safe filename for the Cloudinary transformation segment
         from urllib.parse import quote
-        fname_no_ext = safe_name.rsplit(".", 1)[0] if "." in safe_name else safe_name
-        flag = f"fl_attachment:{quote(fname_no_ext, safe='')}"
+        # Pass full filename (with extension) to fl_attachment
+        flag = f"fl_attachment:{quote(safe_name, safe='')}"
         download_url = secure_url.replace("/upload/", f"/upload/{flag}/", 1)
 
     payload = {
@@ -2538,6 +2548,65 @@ async def add_lead_attachment(
         )
 
     return {"message": "File attached", "lead_id": str(lid), **payload}
+
+
+@api_router.get("/attachments/download/{event_id}")
+async def download_lead_attachment(event_id: str, current_user: dict = Depends(get_current_user)):
+    """Backend-proxied download for a timeline attachment. Streams the file from
+    Cloudinary with proper `Content-Disposition: attachment; filename=...` headers
+    so iOS Safari/PWA can save the file with the correct extension and open it
+    via "Open in…" / "Save to Files". Cloudinary's own `fl_attachment` flag
+    is ignored on raw uploads, hence this proxy."""
+    import httpx
+    from fastapi.responses import StreamingResponse
+    from urllib.parse import quote
+
+    org_id = ObjectId(current_user["organization_id"])
+    try:
+        evt = await db.lead_timeline.find_one({
+            "_id": safe_object_id(event_id, "event_id"),
+            "organization_id": org_id,
+            "event_type": "lead_attachment",
+        })
+    except Exception:
+        evt = None
+    if not evt:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    # RBAC: counselor/telecaller can only download for their own leads
+    if current_user["role"] in ("counselor", "telecaller"):
+        lead = await db.leads.find_one({"_id": evt.get("lead_id"), "organization_id": org_id}, {"assigned_to": 1})
+        if not lead or lead.get("assigned_to") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="You can only download attachments for leads assigned to you")
+
+    payload = evt.get("payload", {})
+    url = payload.get("url")
+    if not url:
+        raise HTTPException(status_code=404, detail="Attachment URL missing")
+
+    filename = payload.get("filename") or "attachment"
+    mime = payload.get("mime_type") or "application/octet-stream"
+
+    try:
+        client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
+        resp = await client.get(url)
+        if resp.status_code != 200:
+            await client.aclose()
+            raise HTTPException(status_code=502, detail="Failed to fetch source file")
+        content = resp.content
+        await client.aclose()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Attachment proxy fetch failed: {e}")
+        raise HTTPException(status_code=502, detail="Failed to fetch source file")
+
+    # RFC 5987 filename* for non-ASCII support
+    headers = {
+        "Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quote(filename)}",
+        "Cache-Control": "private, no-store",
+    }
+    return StreamingResponse(iter([content]), media_type=mime, headers=headers)
 
 
 @api_router.get("/reports/caller-leads/{user_id}")
