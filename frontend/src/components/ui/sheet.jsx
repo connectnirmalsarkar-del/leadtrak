@@ -48,6 +48,7 @@ const SheetContent = React.forwardRef(({ side = "right", className, children, st
     <SheetOverlay />
     <SheetPrimitive.Content
       ref={ref}
+      data-sheet-content="true"
       className={cn(sheetVariants({ side }), className)}
       style={{
         paddingTop: `calc(1.5rem + env(safe-area-inset-top, 0px))`,
@@ -56,6 +57,7 @@ const SheetContent = React.forwardRef(({ side = "right", className, children, st
       }}
       {...props}>
       <SheetPrimitive.Close
+        data-testid="sheet-close-btn"
         className="absolute right-4 top-[calc(1rem+env(safe-area-inset-top,0px))] rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary z-10">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>

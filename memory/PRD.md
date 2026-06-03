@@ -59,6 +59,25 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Public Lead Capture Widget (`/api/widget/lead/{token}`)
 - ✅ Super Admin Platform Organizations management
 
+### 📱 Hotfix — Side Sheet Safe-Area on iOS / Android PWA (2026-06-03) ✅ COMPLETE
+**Bug:** On lead detail side tray opened from `/leads` (and any other right-side Sheet), the drawer didn't fill the full viewport on iOS PWA / Android — leaving a visible gap at the bottom where the underlying leads table peeked through, and an unintended ~8 px gap on the sides.
+
+**Root cause:** Global mobile CSS rule in `index.css` (`@media (max-width: 640px) { [role="dialog"] { max-width: calc(100vw - 16px); max-height: calc(100dvh - 32px - safe-areas); } }`) was also targeting side sheets, since Radix `<SheetContent>` renders with `role="dialog"`. The constraint was correct for centered modal dialogs but completely wrong for full-screen drawers.
+
+**Fix:**
+1. `sheet.jsx`: Added `data-sheet-content="true"` attribute to `<SheetContent>` so we can distinguish drawers from centered dialogs.
+2. `index.css`:
+   - Changed the mobile dialog constraint selector from `[role="dialog"]` to `[role="dialog"]:not([data-sheet-content])` — centered modals still constrained, sheets exempt.
+   - Added a dedicated `[data-sheet-content]` rule pinning `top: 0; bottom: 0; height: 100dvh; max-height: 100dvh` so sheets always fill the visual viewport (uses `dvh` to handle iOS standalone PWA correctly).
+   - On mobile, sheets also forced to `width: 100vw` so no edge gap.
+3. Service-worker bumped to `leadtrak-v89-sheet-safearea`.
+
+**Verified (Playwright, iPhone 14 Pro simulated viewport 393×852):**
+- Sheet bounding box: `top=0, bottom=852, height=852, width=393` ✓
+- Sheet fills viewport vertically AND horizontally ✓
+- X close button still positioned correctly with `top: calc(1rem + env(safe-area-inset-top))` so it never sits under the notch ✓
+- Centered modal dialogs (e.g., BookDemo dialog) remain correctly constrained with the 16px / 32px margins ✓
+
 ### ✏️ Feature — Edit Demo / Re-share Link via WhatsApp (2026-06-02) ✅ COMPLETE
 **Use case:** After booking a demo, the meeting link is often missing or changes later. Users needed to update the link and re-send it to the client via WhatsApp/email without re-booking.
 
