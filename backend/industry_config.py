@@ -99,7 +99,6 @@ INDUSTRY_CONFIG = {
             "conversion_action": "Book Appointment",
             "pipeline": "Patient Pipeline",
             "revenue_label": "Treatment Revenue",
-            "company_label": "Hospital / Clinic",
         },
         "default_sources": ["Website", "Google Ad", "Walk-in", "Referral", "Insurance Network", "WhatsApp"],
         "default_lead_statuses": ["New", "Contacted", "Phone Not Received", "Not Reachable", "Wrong Number", "Consulted", "Treatment Ongoing", "Completed", "Lost"],
@@ -119,7 +118,6 @@ INDUSTRY_CONFIG = {
             "conversion_action": "Issue Policy",
             "pipeline": "Policy Pipeline",
             "revenue_label": "Premium",
-            "company_label": "Employer",
         },
         "default_sources": ["Website", "Cold Call", "Referral", "Walk-in", "Agent Network", "WhatsApp"],
         "default_lead_statuses": [
@@ -143,7 +141,6 @@ INDUSTRY_CONFIG = {
             "conversion_action": "Confirm Booking",
             "pipeline": "Booking Pipeline",
             "revenue_label": "Trip Value",
-            "company_label": "Company",
         },
         "default_sources": ["Website", "Google Ad", "Instagram", "Facebook Ad", "Referral", "Walk-in", "WhatsApp"],
         "default_lead_statuses": [
@@ -167,7 +164,6 @@ INDUSTRY_CONFIG = {
             "conversion_action": "Place Order",
             "pipeline": "Sales Pipeline",
             "revenue_label": "Order Value",
-            "company_label": "Business",
         },
         "default_sources": ["Website", "Instagram", "Facebook Ad", "Walk-in", "Referral", "Marketplace", "WhatsApp"],
         "default_lead_statuses": [
@@ -191,7 +187,6 @@ INDUSTRY_CONFIG = {
             "conversion_action": "Activate Membership",
             "pipeline": "Membership Pipeline",
             "revenue_label": "Membership Revenue",
-            "company_label": "Studio / Gym",
         },
         "default_sources": ["Website", "Instagram", "Walk-in", "Referral", "Google Ad", "WhatsApp"],
         "default_lead_statuses": [
@@ -215,7 +210,6 @@ INDUSTRY_CONFIG = {
             "conversion_action": "Confirm Admission",
             "pipeline": "Admission Pipeline",
             "revenue_label": "Commission Earned",
-            "company_label": "Current School / College",
         },
         "default_sources": ["Walk-in", "Reference", "Facebook Ad", "Education Fair", "College Tie-up", "Direct Inquiry", "WhatsApp"],
         "default_lead_statuses": [

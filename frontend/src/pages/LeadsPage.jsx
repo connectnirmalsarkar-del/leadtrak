@@ -962,11 +962,12 @@ export default function LeadsPage() {
                     </button>
                   )}
                   </div>
-                  {/* Industry-aware "company" line (Institution / Project / Hospital / etc.)
-                      Hidden for education industry — the org itself IS the institute, so
-                      collecting another institute name per lead is redundant. Other industries
-                      (admission_consultancy, IT, real estate, etc.) genuinely need it. */}
-                  {(user?.industry !== 'education') && (() => {
+                  {/* Industry-aware "company" line. Only shown for industries where the
+                      lead genuinely belongs to a separate org (B2B sales, real estate
+                      buyer's interested project, generic catch-all). Hidden for B2C-style
+                      industries where the lead is the end user, and for admission_consultancy
+                      where the dedicated `target_college` field already covers this. */}
+                  {(['it_software', 'real_estate', 'generic'].includes(user?.industry)) && (() => {
                     const companyLabel = user?.terminology?.company_label || user?.terms?.company_label || 'Company';
                     if (selectedLead.company_name) {
                       return (
