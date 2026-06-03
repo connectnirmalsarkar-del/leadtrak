@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API, useAuth } from '@/context/AuthContext';
 import { useTerminology } from '@/lib/terminology';
-import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare, Upload, Download, ArrowRightLeft, AlertCircle, Clock, Activity, Video, Pencil } from 'lucide-react';
+import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare, Upload, Download, ArrowRightLeft, AlertCircle, Clock, Activity, Video, Pencil, BookOpen, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -915,92 +915,114 @@ export default function LeadsPage() {
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto" data-testid="lead-detail-drawer">
           {selectedLead && (
             <>
-              <SheetHeader className="pr-10 space-y-2 mt-1 sm:mt-0">
-                <div className="flex items-center gap-2 flex-wrap pr-2">
-                  <span className="text-[10px] sm:text-xs font-mono text-slate-500 tracking-wider">{selectedLead.lead_id}</span>
-                  <Badge variant="outline" className={`${statusBadgeClass(selectedLead.status)} text-[10px] px-2 py-0 h-5 sm:h-6`}>{selectedLead.status}</Badge>
+              <SheetHeader className="pr-12 text-left space-y-4 pb-5 border-b border-slate-200/70 relative">
+                {/* Eyebrow: Lead ID + Status */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="font-mono text-[10px] sm:text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md tracking-wider" data-testid="lead-id-badge">
+                    {selectedLead.lead_id}
+                  </span>
+                  <Badge variant="outline" className={`${statusBadgeClass(selectedLead.status)} text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-medium`}>
+                    {selectedLead.status}
+                  </Badge>
                 </div>
-                <div className="flex items-start justify-between gap-2">
-                  <SheetTitle className="flex-1 min-w-0 text-base sm:text-2xl leading-snug pr-1 break-words" style={{fontFamily: 'Sora'}}>{selectedLead.name}</SheetTitle>
-                  {['super_admin', 'org_admin', 'manager', 'counselor', 'telecaller'].includes(user?.role) && (
+
+                {/* Primary Identity */}
+                <SheetTitle
+                  className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 leading-[1.15] break-words"
+                  style={{fontFamily: 'Sora', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden'}}
+                  data-testid="lead-name-heading"
+                >
+                  {selectedLead.name}
+                </SheetTitle>
+
+                {/* Meta Information */}
+                <SheetDescription asChild>
+                  <div className="space-y-2">
+                    {/* Service / Course line */}
+                    {selectedLead.course_interested ? (
+                      <div className="group flex items-center gap-2 text-sm text-slate-600 w-fit max-w-full" data-testid="lead-service-line">
+                        <BookOpen className="w-4 h-4 opacity-60 shrink-0" />
+                        <span className="truncate">{selectedLead.course_interested}</span>
+                        <button
+                          type="button"
+                          onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
+                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-violet-700 shrink-0"
+                          title="Change service"
+                          data-testid="edit-service-icon"
+                          aria-label="Edit service"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
+                        className="inline-flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-800 italic underline-offset-2 hover:underline"
+                        data-testid="set-service-link"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        No service selected yet — click to set
+                      </button>
+                    )}
+
+                    {/* Industry-aware company line. Only shown for industries where the
+                        lead genuinely belongs to a separate org (B2B sales, real estate
+                        buyer's interested project, generic catch-all). Hidden for B2C-style
+                        industries where the lead is the end user, and for admission_consultancy
+                        where the dedicated `target_college` field already covers this. */}
+                    {(['it_software', 'real_estate', 'generic'].includes(user?.industry)) && (() => {
+                      const companyLabel = user?.terminology?.company_label || user?.terms?.company_label || 'Company';
+                      if (selectedLead.company_name) {
+                        return (
+                          <div className="group flex items-center gap-2 text-sm text-slate-600 w-fit max-w-full" data-testid="lead-company-line">
+                            <Building2 className="w-4 h-4 opacity-60 shrink-0" />
+                            <span className="truncate font-medium text-slate-700" title={selectedLead.company_name}>
+                              {selectedLead.company_name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
+                              className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-violet-700 shrink-0"
+                              title={`Change ${companyLabel.toLowerCase()}`}
+                              data-testid="edit-company-icon"
+                              aria-label={`Edit ${companyLabel.toLowerCase()}`}
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      }
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
+                          className="inline-flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-800 italic underline-offset-2 hover:underline"
+                          data-testid="set-company-link"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          Add {companyLabel.toLowerCase()}
+                        </button>
+                      );
+                    })()}
+                  </div>
+                </SheetDescription>
+
+                {/* Action Row */}
+                {['super_admin', 'org_admin', 'manager', 'counselor', 'telecaller'].includes(user?.role) && (
+                  <div className="flex items-center gap-2 pt-1">
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 px-2 text-[11px] flex-shrink-0 mt-0.5"
+                      className="h-9 px-3.5 text-xs font-medium bg-white shadow-sm hover:bg-slate-50 active:scale-[0.98] transition-all rounded-lg"
                       onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
                       data-testid="edit-lead-btn"
                       title="Edit lead details"
                     >
-                      <Pencil className="w-3 h-3 mr-1" /> Edit
+                      <Pencil className="w-3.5 h-3.5 mr-1.5" /> Edit details
                     </Button>
-                  )}
-                </div>
-                <SheetDescription className="space-y-1">
-                  <div>
-                  {selectedLead.course_interested ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      {selectedLead.course_interested}
-                      <button
-                        type="button"
-                        onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
-                        className="text-slate-400 hover:text-violet-700 transition-colors"
-                        title="Change service"
-                        data-testid="edit-service-icon"
-                      >
-                        <Pencil className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
-                      className="text-violet-600 hover:text-violet-800 italic underline-offset-2 hover:underline inline-flex items-center gap-1"
-                      data-testid="set-service-link"
-                    >
-                      <Pencil className="w-3 h-3" />
-                      No service selected yet — click to set
-                    </button>
-                  )}
                   </div>
-                  {/* Industry-aware "company" line. Only shown for industries where the
-                      lead genuinely belongs to a separate org (B2B sales, real estate
-                      buyer's interested project, generic catch-all). Hidden for B2C-style
-                      industries where the lead is the end user, and for admission_consultancy
-                      where the dedicated `target_college` field already covers this. */}
-                  {(['it_software', 'real_estate', 'generic'].includes(user?.industry)) && (() => {
-                    const companyLabel = user?.terminology?.company_label || user?.terms?.company_label || 'Company';
-                    if (selectedLead.company_name) {
-                      return (
-                        <div className="flex items-start gap-1.5 text-xs text-slate-600 mt-0.5" data-testid="lead-company-line">
-                          <span className="text-slate-400 text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap mt-0.5">{companyLabel}</span>
-                          <span className="font-medium text-slate-800 normal-case break-words flex-1" title={selectedLead.company_name}>
-                            {selectedLead.company_name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
-                            className="text-slate-400 hover:text-violet-700 transition-colors flex-shrink-0 mt-0.5"
-                            title={`Change ${companyLabel.toLowerCase()}`}
-                            data-testid="edit-company-icon"
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
-                        </div>
-                      );
-                    }
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
-                        className="text-violet-600 hover:text-violet-800 italic underline-offset-2 hover:underline inline-flex items-center gap-1 text-xs"
-                        data-testid="set-company-link"
-                      >
-                        <Pencil className="w-3 h-3" />
-                        Add {companyLabel.toLowerCase()}
-                      </button>
-                    );
-                  })()}
-                </SheetDescription>
+                )}
               </SheetHeader>
 
               <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
