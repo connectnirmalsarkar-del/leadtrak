@@ -2225,9 +2225,28 @@ async def add_lead_attachment(
         logger.error(f"Cloudinary lead-attachment upload failed: {e}")
         raise HTTPException(status_code=500, detail="Upload failed")
 
+    secure_url = result.get("secure_url") or ""
+    # iOS Safari / PWA refuses to OPEN raw-resource Cloudinary URLs even though it
+    # downloads them — the response lacks a Content-Disposition header. Insert
+    # the `fl_attachment` delivery flag (with the original filename) so Cloudinary
+    # serves the file with `Content-Disposition: attachment; filename=...`,
+    # which makes iOS save it with the correct extension AND let the user open
+    # it through "Open in…" / "Save to Files".
+    download_url = secure_url
+    safe_name = (file.filename or "attachment").replace("/", "_").replace("?", "_")
+    if secure_url and "/upload/" in secure_url:
+        # URL-safe filename for the Cloudinary transformation segment
+        from urllib.parse import quote
+        fname_no_ext = safe_name.rsplit(".", 1)[0] if "." in safe_name else safe_name
+        flag = f"fl_attachment:{quote(fname_no_ext, safe='')}"
+        download_url = secure_url.replace("/upload/", f"/upload/{flag}/", 1)
+
     payload = {
-        "filename": file.filename or "attachment",
-        "url": result.get("secure_url"),
+        "filename": safe_name,
+        # `url` = browser-friendly viewable URL (inline)
+        "url": secure_url,
+        # `download_url` = forces Content-Disposition: attachment with correct filename — works on iOS
+        "download_url": download_url,
         "public_id": result.get("public_id"),
         "resource_type": resource_type,
         "mime_type": file.content_type,

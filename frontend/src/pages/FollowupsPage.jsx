@@ -369,7 +369,7 @@ export default function FollowupsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-slate-100">
+        <TabsList className="bg-slate-100 flex flex-wrap h-auto sm:h-10 sm:flex-nowrap gap-1 w-full sm:w-auto">
           <TabsTrigger value="today" data-testid="tab-today">
             Today
             <span

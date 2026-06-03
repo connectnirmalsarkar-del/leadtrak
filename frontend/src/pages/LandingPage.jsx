@@ -201,15 +201,16 @@ export default function LandingPage() {
             transition={{ duration: 0.8, delay: 0.6 }}
             className="mt-20 relative max-w-5xl mx-auto"
           >
-            <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-violet-200/50 border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-800 p-3">
-              <div className="flex items-center gap-2 mb-3 px-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
-                <div className="w-2.5 h-2.5 rounded-full bg-yellow-400"></div>
-                <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
-                <span className="text-xs text-slate-400 ml-2 font-mono">leadtrak.app/dashboard</span>
+            <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-violet-200/50 border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-800 p-2 sm:p-3">
+              <div className="flex items-center gap-2 mb-2 sm:mb-3 px-2">
+                <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-red-400"></div>
+                <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-yellow-400"></div>
+                <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-green-400"></div>
+                <span className="text-[10px] sm:text-xs text-slate-400 ml-2 font-mono truncate">leadtrak.app/dashboard</span>
               </div>
-              <div className="bg-slate-50 rounded-lg p-6 grid grid-cols-12 gap-4">
-                <div className="col-span-3 bg-slate-900 rounded-lg p-4 space-y-3">
+              <div className="bg-slate-50 rounded-lg p-3 sm:p-6 grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4">
+                {/* Sidebar — hide on mobile, show on sm+ */}
+                <div className="hidden sm:block sm:col-span-3 bg-slate-900 rounded-lg p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 bg-violet-600 rounded-md flex items-center justify-center">
                       <Zap className="w-3.5 h-3.5 text-white" />
@@ -222,24 +223,25 @@ export default function LandingPage() {
                     </div>
                   ))}
                 </div>
-                <div className="col-span-9 space-y-3">
-                  <div className="grid grid-cols-4 gap-2">
+                {/* Main content */}
+                <div className="sm:col-span-9 space-y-2 sm:space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
                       { l: 'Total Leads', v: '2,847', t: '+18%' },
                       { l: 'Today', v: '142', t: '+24%' },
                       { l: 'Follow-ups', v: '38', t: '-5%' },
                       { l: 'Conversions', v: '973', t: '+22%' },
                     ].map((s) => (
-                      <div key={s.l} className="bg-white rounded-md p-2.5 border border-slate-200">
-                        <p className="text-[9px] text-slate-500 uppercase">{s.l}</p>
-                        <p className="text-base font-bold text-slate-900 mt-0.5 font-mono">{s.v}</p>
+                      <div key={s.l} className="bg-white rounded-md p-2 sm:p-2.5 border border-slate-200">
+                        <p className="text-[9px] text-slate-500 uppercase truncate">{s.l}</p>
+                        <p className="text-sm sm:text-base font-bold text-slate-900 mt-0.5 font-mono">{s.v}</p>
                         <p className="text-[10px] text-emerald-600">{s.t}</p>
                       </div>
                     ))}
                   </div>
-                  <div className="bg-white rounded-md p-3 border border-slate-200">
+                  <div className="bg-white rounded-md p-2.5 sm:p-3 border border-slate-200">
                     <p className="text-[10px] text-slate-500 uppercase mb-2">Lead Trend</p>
-                    <div className="flex items-end gap-1 h-16">
+                    <div className="flex items-end gap-1 h-14 sm:h-16">
                       {[40, 55, 45, 70, 60, 80, 65, 90, 75, 100, 85, 95].map((h, i) => (
                         <div
                           key={i}

@@ -126,7 +126,7 @@ export default function DemosPage() {
       </div>
 
       <Tabs value={scope} onValueChange={setScope}>
-        <TabsList data-testid="demos-tabs">
+        <TabsList data-testid="demos-tabs" className="flex flex-wrap h-auto sm:h-10 sm:flex-nowrap gap-1 w-full sm:w-auto">
           <TabsTrigger value="mine" data-testid="demos-tab-mine">
             My {demoLabel}
             <span

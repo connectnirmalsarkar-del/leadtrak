@@ -221,7 +221,16 @@ export default function DashboardLayout({ children }) {
           </button>
         </div>
 
-        <nav className="px-4 py-6 space-y-1 overflow-y-auto h-[calc(100vh-4rem)] custom-scrollbar">
+        <nav
+          className="px-4 py-6 space-y-1 overflow-y-auto custom-scrollbar"
+          style={{
+            // Full viewport minus header (4rem) and the user-agent safe-areas
+            // applied to the parent <aside> via pt-safe / pb-safe. Without
+            // subtracting the safe areas the nav extends below the visible
+            // viewport on iOS PWA and the last items can't be scrolled to.
+            height: 'calc(100dvh - 4rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))',
+          }}
+        >
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 px-4 mb-2">Main</p>
           {navItems
             .filter((item) => !item.feature || user?.features?.[item.feature] !== false)

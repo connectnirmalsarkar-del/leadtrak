@@ -260,7 +260,7 @@ const EventBody = ({ event }) => {
             </div>
             {p.url && (
               <a
-                href={p.url}
+                href={p.download_url || p.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 download={p.filename || true}
