@@ -915,26 +915,26 @@ export default function LeadsPage() {
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto" data-testid="lead-detail-drawer">
           {selectedLead && (
             <>
-              <SheetHeader className="pr-10 space-y-2">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
+              <SheetHeader className="pr-10 space-y-2 mt-1 sm:mt-0">
+                <div className="flex items-center gap-2 flex-wrap pr-2">
                   <span className="text-[10px] sm:text-xs font-mono text-slate-500 tracking-wider">{selectedLead.lead_id}</span>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {['super_admin', 'org_admin', 'manager', 'counselor', 'telecaller'].includes(user?.role) && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-6 px-2 text-[11px]"
-                        onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
-                        data-testid="edit-lead-btn"
-                        title="Edit lead details"
-                      >
-                        <Pencil className="w-3 h-3 mr-1" /> Edit
-                      </Button>
-                    )}
-                    <Badge variant="outline" className={`${statusBadgeClass(selectedLead.status)} text-[10px] px-2 py-0 h-6`}>{selectedLead.status}</Badge>
-                  </div>
+                  <Badge variant="outline" className={`${statusBadgeClass(selectedLead.status)} text-[10px] px-2 py-0 h-5 sm:h-6`}>{selectedLead.status}</Badge>
                 </div>
-                <SheetTitle className="text-lg sm:text-2xl leading-tight pr-2 break-words" style={{fontFamily: 'Sora'}}>{selectedLead.name}</SheetTitle>
+                <div className="flex items-start justify-between gap-2">
+                  <SheetTitle className="flex-1 min-w-0 text-base sm:text-2xl leading-snug pr-1 break-words" style={{fontFamily: 'Sora'}}>{selectedLead.name}</SheetTitle>
+                  {['super_admin', 'org_admin', 'manager', 'counselor', 'telecaller'].includes(user?.role) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px] flex-shrink-0 mt-0.5"
+                      onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
+                      data-testid="edit-lead-btn"
+                      title="Edit lead details"
+                    >
+                      <Pencil className="w-3 h-3 mr-1" /> Edit
+                    </Button>
+                  )}
+                </div>
                 <SheetDescription className="space-y-1">
                   <div>
                   {selectedLead.course_interested ? (
