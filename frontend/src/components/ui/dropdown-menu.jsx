@@ -44,19 +44,33 @@ const DropdownMenuSubContent = React.forwardRef(({ className, ...props }, ref) =
 DropdownMenuSubContent.displayName =
   DropdownMenuPrimitive.SubContent.displayName
 
-const DropdownMenuContent = React.forwardRef(({ className, sideOffset = 4, ...props }, ref) => (
+const _useSafePadding = () => React.useMemo(() => {
+  if (typeof window === 'undefined') return { top: 8, bottom: 8, left: 8, right: 8 };
+  const cs = getComputedStyle(document.documentElement);
+  const read = (n) => { const v = parseInt(cs.getPropertyValue(n).trim(), 10); return Number.isFinite(v) ? v : 0; };
+  return { top: read('--safe-area-top') + 8, bottom: read('--safe-area-bottom') + 8, left: 8, right: 8 };
+}, []);
+
+const DropdownMenuContent = React.forwardRef(({ className, sideOffset = 4, ...props }, ref) => {
+  const safePadding = _useSafePadding();
+  return (
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
+      collisionPadding={safePadding}
+      style={{
+        maxHeight: 'min(var(--radix-dropdown-menu-content-available-height), calc(100dvh - var(--safe-area-top, 0px) - var(--safe-area-bottom, 0px) - 24px))',
+      }}
       className={cn(
-        "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
+        "z-50 min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-dropdown-menu-content-transform-origin]",
         className
       )}
       {...props} />
   </DropdownMenuPrimitive.Portal>
-))
+  );
+})
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName
 
 const DropdownMenuItem = React.forwardRef(({ className, inset, ...props }, ref) => (
