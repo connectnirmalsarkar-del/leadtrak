@@ -6647,6 +6647,8 @@ async def public_widget_config(widget_token: str):
         })
     branding = org.get("branding", {}) or {}
     logo_url = branding.get("logo_url") or org.get("logo_url") or ""
+    # Widget layout: "compact" (essentials only) | "two-column" (default, paired) | "standard" (legacy single col)
+    widget_layout = org.get("widget_layout") or "two-column"
     return {
         "org_name": org.get("name", ""),
         "logo_url": logo_url,
@@ -6656,7 +6658,32 @@ async def public_widget_config(widget_token: str):
         "fields": industry_fields,
         "states": sorted(states),
         "services": services,
+        "layout": widget_layout,
     }
+
+
+@api_router.patch("/widget/settings")
+async def update_widget_settings(
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin-only: update widget settings (currently just `layout`).
+    Layout options: 'compact' | 'two-column' | 'standard'."""
+    if current_user["role"] not in ("super_admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can configure the widget")
+    allowed_layouts = {"compact", "two-column", "standard"}
+    updates = {}
+    if "layout" in payload:
+        if payload["layout"] not in allowed_layouts:
+            raise HTTPException(status_code=400, detail=f"Invalid layout. Use one of: {sorted(allowed_layouts)}")
+        updates["widget_layout"] = payload["layout"]
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    await db.organizations.update_one(
+        {"_id": ObjectId(current_user["organization_id"])},
+        {"$set": updates},
+    )
+    return {"message": "Widget settings updated", **updates}
 
 
 @api_router.get("/widget/cities/{widget_token}")

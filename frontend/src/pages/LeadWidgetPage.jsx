@@ -102,38 +102,90 @@ export default function LeadWidgetPage() {
       if(xhr.status!==200) return;
       var cfg=JSON.parse(xhr.responseText);
       brand=cfg.primary_color||brand;
+      var layout=cfg.layout||"two-column"; // "compact" | "two-column" | "standard"
       var serviceNames=(cfg.services||[]).map(function(s){return s.name;});
-      var card=el("div",{style:{maxWidth:"420px",margin:"0 auto",border:"1px solid #E2E8F0",borderRadius:"16px",padding:"28px",background:"#fff",boxShadow:"0 8px 30px rgba(15,23,42,0.08)",fontFamily:"-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"}});
+      var card=el("div",{style:{maxWidth:"460px",margin:"0 auto",border:"1px solid #E2E8F0",borderRadius:"16px",padding:"28px",background:"#fff",boxShadow:"0 8px 30px rgba(15,23,42,0.08)",fontFamily:"-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"}});
       // Header
       var brandTag=el("div",{style:{display:"inline-block",padding:"4px 10px",background:brand+"15",color:brand,fontSize:"10px",fontWeight:"700",letterSpacing:"1.5px",borderRadius:"100px",marginBottom:"10px",textTransform:"uppercase"}},["Request a Callback"]);
       card.appendChild(brandTag);
       card.appendChild(el("h3",{style:{margin:"0 0 6px",fontSize:"22px",fontWeight:"700",color:"#0F172A",letterSpacing:"-0.3px"}},["Speak with our team"]));
       card.appendChild(el("p",{style:{margin:"0 0 22px",fontSize:"13px",color:"#64748B",lineHeight:"1.5"}},["Drop your details and we'll reach out within 1 working hour to help you with "+(cfg.terms&&cfg.terms.offering?cfg.terms.offering.toLowerCase():"your inquiry")+"."]));
       var form=el("form",{id:"ltf"});
-      form.appendChild(input("name","Your name","text",true,"Full name"));
-      form.appendChild(input("mobile","Mobile number","tel",true,"10-digit mobile"));
-      form.appendChild(input("email","Email","email",false,"name@example.com"));
-      // Industry fields
-      (cfg.fields||[]).forEach(function(f){
-        if(f.type==="service-select"){
-          if(serviceNames.length>0){
-            var w=el("div",{style:{marginBottom:"12px"}});
-            w.appendChild(el("label",{style:{display:"block",fontSize:"12px",fontWeight:"600",color:"#475569",marginBottom:"5px"}},[f.label+(f.required?" *":"")]));
-            var s=selectField(f.name,f.label,serviceNames,f.required);
-            w.appendChild(s); form.appendChild(w);
-          } else {
-            form.appendChild(input(f.name,f.label,"text",!!f.required,f.placeholder||""));
+
+      // Layout helpers ------------------------------------------------------
+      // pairRow builds a responsive 2-col row that collapses to 1-col under 420px
+      function pairRow(){
+        var r=el("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"0px"}});
+        // Mobile collapse: media query via window width
+        if(window.innerWidth<420) r.style.gridTemplateColumns="1fr";
+        return r;
+      }
+      // ensure marginBottom on cells inside a pair row is 12px each
+      function wrapCell(node){ node.style.marginBottom="12px"; return node; }
+      // Append node(s) — in two-column mode pair them; otherwise append directly.
+      var queue=[];
+      function smartAppend(node){
+        if(layout==="two-column"){
+          queue.push(node);
+          if(queue.length===2){
+            var row=pairRow();
+            row.appendChild(wrapCell(queue[0]));
+            row.appendChild(wrapCell(queue[1]));
+            form.appendChild(row);
+            queue=[];
           }
-        } else if(f.type==="select"){
-          var w2=el("div",{style:{marginBottom:"12px"}});
-          w2.appendChild(el("label",{style:{display:"block",fontSize:"12px",fontWeight:"600",color:"#475569",marginBottom:"5px"}},[f.label+(f.required?" *":"")]));
-          var s2=selectField(f.name,f.label,f.options,f.required);
-          w2.appendChild(s2); form.appendChild(w2);
         } else {
-          form.appendChild(input(f.name,f.label,f.type||"text",!!f.required,f.placeholder||""));
+          form.appendChild(node);
         }
-      });
-    // State + City cascading
+      }
+      function flushQueue(){
+        if(layout!=="two-column") return;
+        while(queue.length){
+          // Flush a single leftover field full-width
+          var row=el("div",{style:{display:"grid",gridTemplateColumns:"1fr",marginBottom:"0px"}});
+          row.appendChild(wrapCell(queue.shift()));
+          form.appendChild(row);
+        }
+      }
+
+      // Essentials always rendered ----------------------------------------
+      smartAppend(input("name","Your name","text",true,"Full name"));
+      smartAppend(input("mobile","Mobile number","tel",true,"10-digit mobile"));
+      smartAppend(input("email","Email","email",false,"name@example.com"));
+
+      // Service dropdown (always rendered when services exist) ------------
+      var serviceField=(cfg.fields||[]).filter(function(f){return f.type==="service-select";})[0];
+      if(serviceField && serviceNames.length>0){
+        var sw=el("div");
+        sw.appendChild(el("label",{style:{display:"block",fontSize:"12px",fontWeight:"600",color:"#475569",marginBottom:"5px"}},[serviceField.label+(serviceField.required?" *":"")]));
+        var ss=selectField(serviceField.name,serviceField.label,serviceNames,serviceField.required);
+        sw.appendChild(ss);
+        smartAppend(sw);
+      }
+
+      // Industry-specific extra fields (only when layout !== "compact") ---
+      if(layout!=="compact"){
+        (cfg.fields||[]).forEach(function(f){
+          if(f.type==="service-select") return; // already rendered above
+          var node;
+          if(f.type==="select"){
+            var w2=el("div");
+            w2.appendChild(el("label",{style:{display:"block",fontSize:"12px",fontWeight:"600",color:"#475569",marginBottom:"5px"}},[f.label+(f.required?" *":"")]));
+            var s2=selectField(f.name,f.label,f.options,f.required);
+            w2.appendChild(s2);
+            node=w2;
+          } else {
+            node=input(f.name,f.label,f.type||"text",!!f.required,f.placeholder||"");
+            // smartAppend wraps will reset marginBottom; explicit reset
+            node.style.marginBottom="0px";
+          }
+          smartAppend(node);
+        });
+      }
+      flushQueue();
+    // State + City cascading (skip in compact mode for max conversion)
+    var citySel = null;
+    if(layout!=="compact"){
     var stateRow=el("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}});
     var stateWrap=el("div"); stateWrap.appendChild(el("label",{style:{display:"block",fontSize:"12px",fontWeight:"600",color:"#475569",marginBottom:"5px"}},["State"]));
     var stateSel=el("select",{name:"state",style:{width:"100%",padding:"11px 13px",border:"1px solid #CBD5E1",borderRadius:"10px",fontSize:"14px",boxSizing:"border-box",outline:"none",background:"#fff"}});
@@ -141,7 +193,7 @@ export default function LeadWidgetPage() {
     (cfg.states||[]).forEach(function(s){ stateSel.appendChild(el("option",{value:s},[s])); });
     stateWrap.appendChild(stateSel);
     var cityWrap=el("div"); cityWrap.appendChild(el("label",{style:{display:"block",fontSize:"12px",fontWeight:"600",color:"#475569",marginBottom:"5px"}},["City"]));
-    var citySel=el("select",{name:"city",style:{width:"100%",padding:"11px 13px",border:"1px solid #CBD5E1",borderRadius:"10px",fontSize:"14px",boxSizing:"border-box",outline:"none",background:"#fff",color:"#94A3B8"}});
+    citySel=el("select",{name:"city",style:{width:"100%",padding:"11px 13px",border:"1px solid #CBD5E1",borderRadius:"10px",fontSize:"14px",boxSizing:"border-box",outline:"none",background:"#fff",color:"#94A3B8"}});
     citySel.disabled=true; citySel.appendChild(el("option",{value:""},["Select state first"]));
     cityWrap.appendChild(citySel);
     stateSel.addEventListener("change",function(){
@@ -156,6 +208,7 @@ export default function LeadWidgetPage() {
     });
     stateRow.appendChild(stateWrap); stateRow.appendChild(cityWrap);
     form.appendChild(stateRow);
+    }
 
     // Submit
     var btn=el("button",{type:"submit",style:{width:"100%",padding:"13px",background:brand,color:"#fff",border:"0",borderRadius:"10px",fontSize:"14px",fontWeight:"700",cursor:"pointer",letterSpacing:".2px",transition:"opacity .15s"}},["Request a Callback →"]);
@@ -183,7 +236,8 @@ export default function LeadWidgetPage() {
         if(p.status>=200&&p.status<300){
           msg.textContent="✓ Thanks! Our team will reach out shortly.";
           msg.style.color=success; msg.style.display="block";
-          form.reset(); citySel.innerHTML=""; citySel.disabled=true; citySel.appendChild(el("option",{value:""},["Select state first"]));
+          form.reset();
+          if(citySel){ citySel.innerHTML=""; citySel.disabled=true; citySel.appendChild(el("option",{value:""},["Select state first"])); }
         } else {
           msg.textContent="Something went wrong, please try again."; msg.style.color=danger; msg.style.display="block";
         }
@@ -205,6 +259,25 @@ export default function LeadWidgetPage() {
   };
 
   const previewBrand = config?.primary_color || '#7C3AED';
+  const currentLayout = config?.layout || 'two-column';
+  const isAdmin = ['super_admin', 'org_admin'].includes(user?.role);
+  const [savingLayout, setSavingLayout] = useState(false);
+
+  const changeLayout = async (newLayout) => {
+    if (newLayout === currentLayout || !isAdmin) return;
+    setSavingLayout(true);
+    try {
+      await axios.patch(`${API}/widget/settings`, { layout: newLayout });
+      // Reload config so the embed code regenerates with new layout
+      const { data: cfgRes } = await axios.get(`${API}/widget/config/${token}`);
+      setConfig(cfgRes);
+      toast.success(`Layout switched to ${newLayout.replace('-', ' ')}. Copy the snippet again.`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update layout');
+    } finally {
+      setSavingLayout(false);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-[1440px]" data-testid="lead-widget-page">
@@ -227,6 +300,71 @@ export default function LeadWidgetPage() {
           </div>
         )}
       </div>
+
+      {/* Layout selector — admin can choose how the form is presented on external sites */}
+      {config && isAdmin && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5" data-testid="widget-layout-selector">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm" style={{ fontFamily: 'Sora' }}>Form layout</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Choose how the form looks on customers' websites. Switch any time — just re-copy the snippet.</p>
+            </div>
+            {savingLayout && <span className="text-xs text-slate-500">Saving…</span>}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              {
+                key: 'compact',
+                title: 'Compact',
+                tagline: 'Highest conversion',
+                desc: 'Name, mobile, email & service only. Industry & location fields hidden.',
+                badge: '4 fields',
+                badgeColor: 'emerald',
+              },
+              {
+                key: 'two-column',
+                title: 'Two-column',
+                tagline: 'Recommended',
+                desc: 'All industry fields rendered in a paired 2-column grid. Looks professional, fits compact spaces.',
+                badge: 'Paired grid',
+                badgeColor: 'violet',
+              },
+              {
+                key: 'standard',
+                title: 'Standard',
+                tagline: 'Legacy',
+                desc: 'All industry fields stacked in a single column. Use only if your site is very narrow (<400 px).',
+                badge: 'Single col',
+                badgeColor: 'slate',
+              },
+            ].map((opt) => {
+              const active = currentLayout === opt.key;
+              const ringColor = opt.badgeColor === 'violet' ? 'ring-violet-500' : opt.badgeColor === 'emerald' ? 'ring-emerald-500' : 'ring-slate-500';
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => changeLayout(opt.key)}
+                  disabled={savingLayout}
+                  className={`relative text-left p-3.5 rounded-lg border-2 transition-all ${active ? `border-violet-500 bg-violet-50/50 ring-2 ring-offset-1 ${ringColor}` : 'border-slate-200 hover:border-slate-300 bg-white'} disabled:opacity-50 disabled:cursor-wait`}
+                  data-testid={`widget-layout-${opt.key}`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-semibold text-slate-900 text-sm">{opt.title}</span>
+                    {active && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-violet-700 bg-violet-100 px-1.5 py-0.5 rounded">
+                        <Check className="w-3 h-3" /> Active
+                      </span>
+                    )}
+                  </div>
+                  <p className={`text-[10px] font-bold uppercase tracking-wider mb-1.5 ${opt.badgeColor === 'violet' ? 'text-violet-700' : opt.badgeColor === 'emerald' ? 'text-emerald-700' : 'text-slate-500'}`}>{opt.tagline} · {opt.badge}</p>
+                  <p className="text-xs text-slate-600 leading-relaxed">{opt.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Embed code */}
