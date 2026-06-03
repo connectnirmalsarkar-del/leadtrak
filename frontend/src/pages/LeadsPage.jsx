@@ -915,15 +915,15 @@ export default function LeadsPage() {
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto" data-testid="lead-detail-drawer">
           {selectedLead && (
             <>
-              <SheetHeader className="pr-10">
-                <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                  <span className="text-xs font-mono text-slate-500">{selectedLead.lead_id}</span>
-                  <div className="flex items-center gap-2">
+              <SheetHeader className="pr-10 space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[10px] sm:text-xs font-mono text-slate-500 tracking-wider">{selectedLead.lead_id}</span>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
                     {['super_admin', 'org_admin', 'manager', 'counselor', 'telecaller'].includes(user?.role) && (
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 px-2 text-xs"
+                        className="h-6 px-2 text-[11px]"
                         onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
                         data-testid="edit-lead-btn"
                         title="Edit lead details"
@@ -931,10 +931,10 @@ export default function LeadsPage() {
                         <Pencil className="w-3 h-3 mr-1" /> Edit
                       </Button>
                     )}
-                    <Badge variant="outline" className={`${statusBadgeClass(selectedLead.status)} flex-shrink-0`}>{selectedLead.status}</Badge>
+                    <Badge variant="outline" className={`${statusBadgeClass(selectedLead.status)} text-[10px] px-2 py-0 h-6`}>{selectedLead.status}</Badge>
                   </div>
                 </div>
-                <SheetTitle className="text-xl sm:text-2xl pr-2" style={{fontFamily: 'Sora'}}>{selectedLead.name}</SheetTitle>
+                <SheetTitle className="text-lg sm:text-2xl leading-tight pr-2 break-words" style={{fontFamily: 'Sora'}}>{selectedLead.name}</SheetTitle>
                 <SheetDescription className="space-y-1">
                   <div>
                   {selectedLead.course_interested ? (
@@ -971,13 +971,15 @@ export default function LeadsPage() {
                     const companyLabel = user?.terminology?.company_label || user?.terms?.company_label || 'Company';
                     if (selectedLead.company_name) {
                       return (
-                        <div className="inline-flex items-center gap-1.5 text-xs text-slate-600" data-testid="lead-company-line">
-                          <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">{companyLabel}:</span>
-                          <span className="font-medium text-slate-800">{selectedLead.company_name}</span>
+                        <div className="flex items-start gap-1.5 text-xs text-slate-600 mt-0.5" data-testid="lead-company-line">
+                          <span className="text-slate-400 text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap mt-0.5">{companyLabel}</span>
+                          <span className="font-medium text-slate-800 normal-case break-words flex-1" title={selectedLead.company_name}>
+                            {selectedLead.company_name}
+                          </span>
                           <button
                             type="button"
                             onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
-                            className="text-slate-400 hover:text-violet-700 transition-colors"
+                            className="text-slate-400 hover:text-violet-700 transition-colors flex-shrink-0 mt-0.5"
                             title={`Change ${companyLabel.toLowerCase()}`}
                             data-testid="edit-company-icon"
                           >
