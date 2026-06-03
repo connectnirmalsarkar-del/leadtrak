@@ -47,12 +47,40 @@ const SelectScrollDownButton = React.forwardRef(({ className, ...props }, ref) =
 SelectScrollDownButton.displayName =
   SelectPrimitive.ScrollDownButton.displayName
 
-const SelectContent = React.forwardRef(({ className, children, position = "popper", ...props }, ref) => (
+const SelectContent = React.forwardRef(({ className, children, position = "popper", ...props }, ref) => {
+  // Read iOS safe-area insets at render time so we can pass numeric collision
+  // padding to Radix (it does NOT accept CSS strings here). Falls back to 0
+  // on non-iOS browsers.
+  const safePadding = React.useMemo(() => {
+    if (typeof window === 'undefined') return { top: 0, bottom: 0, left: 8, right: 8 };
+    const root = document.documentElement;
+    const cs = getComputedStyle(root);
+    const readPx = (name, fallback = 0) => {
+      const v = cs.getPropertyValue(name).trim();
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    return {
+      top: readPx('--safe-area-top', 0) + 8,
+      bottom: readPx('--safe-area-bottom', 0) + 8,
+      left: 8,
+      right: 8,
+    };
+  }, []);
+  return (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
+      // Keep the dropdown clear of iOS notch + home indicator. collisionPadding
+      // pushes the popper away from those edges; the inline maxHeight caps the
+      // viewport so it always remains scrollable on small phones where Radix's
+      // own --radix-select-content-available-height occasionally overshoots.
+      collisionPadding={safePadding}
+      style={{
+        maxHeight: 'min(var(--radix-select-content-available-height), calc(100dvh - var(--safe-area-top, 0px) - var(--safe-area-bottom, 0px) - 24px))',
+      }}
       className={cn(
-        "relative z-50 max-h-[--radix-select-content-available-height] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-select-content-transform-origin]",
+        "relative z-50 min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-select-content-transform-origin]",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className
@@ -68,7 +96,8 @@ const SelectContent = React.forwardRef(({ className, children, position = "poppe
       <SelectScrollDownButton />
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
-))
+  );
+})
 SelectContent.displayName = SelectPrimitive.Content.displayName
 
 const SelectLabel = React.forwardRef(({ className, ...props }, ref) => (
