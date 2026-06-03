@@ -417,69 +417,132 @@ export default function LeadWidgetPage() {
               Drop your details and we'll reach out within 1 working hour to help you with {config?.terms?.offering?.toLowerCase() || 'your inquiry'}.
             </p>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">Your name *</label>
-                <input className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none" placeholder="Full name" />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">Mobile number *</label>
-                <input className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none" placeholder="10-digit mobile" />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">Email</label>
-                <input className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none" placeholder="name@example.com" />
-              </div>
-              {/* Industry-specific fields */}
-              {(config?.fields || []).map((f) => {
-                const isServiceSelect = f.type === 'service-select';
-                const serviceNames = (config?.services || []).map((s) => s.name);
-                const fallbackToText = isServiceSelect && serviceNames.length === 0;
-                return (
-                  <div key={f.name}>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">
-                      {f.label}{f.required ? ' *' : ''}
-                    </label>
-                    {(isServiceSelect && !fallbackToText) ? (
-                      <select className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none bg-white">
-                        <option>Select…</option>
-                        {serviceNames.map((s) => <option key={s}>{s}</option>)}
-                      </select>
-                    ) : f.type === 'select' ? (
-                      <select className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none bg-white">
-                        <option>Select…</option>
-                        {(f.options || []).map((o) => <option key={o}>{o}</option>)}
-                      </select>
-                    ) : (
-                      <input type={f.type === 'service-select' ? 'text' : (f.type || 'text')} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none" placeholder={f.placeholder || ''} />
-                    )}
-                    {fallbackToText && (
-                      <p className="text-[10px] text-amber-700 mt-1">No services in catalog yet — falls back to text input. Add services in <strong>Services</strong> page.</p>
-                    )}
+            <div className="space-y-3" data-testid={`preview-layout-${currentLayout}`}>
+              {(() => {
+                // Build list of all field nodes once, then arrange by layout
+                const nameNode = (
+                  <div key="name">
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">Your name *</label>
+                    <input className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none" placeholder="Full name" />
                   </div>
                 );
-              })}
-              {/* State + City */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">State</label>
-                  <Select value={previewState} onValueChange={(v) => { setPreviewState(v); setPreviewCity(''); }}>
-                    <SelectTrigger className="h-[42px] text-sm" data-testid="preview-state-select"><SelectValue placeholder="Select state" /></SelectTrigger>
-                    <SelectContent>
-                      {(config?.states || []).map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">City</label>
-                  <Select value={previewCity} onValueChange={setPreviewCity} disabled={!previewState}>
-                    <SelectTrigger className="h-[42px] text-sm" data-testid="preview-city-select"><SelectValue placeholder={previewState ? 'Select city' : 'Select state first'} /></SelectTrigger>
-                    <SelectContent>
-                      {previewCities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                const mobileNode = (
+                  <div key="mobile">
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">Mobile number *</label>
+                    <input className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none" placeholder="10-digit mobile" />
+                  </div>
+                );
+                const emailNode = (
+                  <div key="email">
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">Email</label>
+                    <input className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none" placeholder="name@example.com" />
+                  </div>
+                );
+
+                const serviceNames = (config?.services || []).map((s) => s.name);
+                const industryFields = (config?.fields || []);
+                const serviceField = industryFields.find((f) => f.type === 'service-select');
+                const otherIndustryFields = industryFields.filter((f) => f.type !== 'service-select');
+
+                const renderIndustryField = (f) => {
+                  const isServiceSelect = f.type === 'service-select';
+                  const fallbackToText = isServiceSelect && serviceNames.length === 0;
+                  return (
+                    <div key={f.name}>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">
+                        {f.label}{f.required ? ' *' : ''}
+                      </label>
+                      {(isServiceSelect && !fallbackToText) ? (
+                        <select className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none bg-white">
+                          <option>Select…</option>
+                          {serviceNames.map((s) => <option key={s}>{s}</option>)}
+                        </select>
+                      ) : f.type === 'select' ? (
+                        <select className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none bg-white">
+                          <option>Select…</option>
+                          {(f.options || []).map((o) => <option key={o}>{o}</option>)}
+                        </select>
+                      ) : (
+                        <input type={f.type === 'service-select' ? 'text' : (f.type || 'text')} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-100 outline-none" placeholder={f.placeholder || ''} />
+                      )}
+                      {fallbackToText && (
+                        <p className="text-[10px] text-amber-700 mt-1">No services in catalog yet — falls back to text input. Add services in <strong>Services</strong> page.</p>
+                      )}
+                    </div>
+                  );
+                };
+
+                const stateNode = (
+                  <div key="state">
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">State</label>
+                    <Select value={previewState} onValueChange={(v) => { setPreviewState(v); setPreviewCity(''); }}>
+                      <SelectTrigger className="h-[42px] text-sm" data-testid="preview-state-select"><SelectValue placeholder="Select state" /></SelectTrigger>
+                      <SelectContent>
+                        {(config?.states || []).map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+                const cityNode = (
+                  <div key="city">
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1.5">City</label>
+                    <Select value={previewCity} onValueChange={setPreviewCity} disabled={!previewState}>
+                      <SelectTrigger className="h-[42px] text-sm" data-testid="preview-city-select"><SelectValue placeholder={previewState ? 'Select city' : 'Select state first'} /></SelectTrigger>
+                      <SelectContent>
+                        {previewCities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+
+                // ---- COMPACT: 4 essential fields only ----
+                if (currentLayout === 'compact') {
+                  return (
+                    <>
+                      {nameNode}
+                      {mobileNode}
+                      {emailNode}
+                      {serviceField && serviceNames.length > 0 && renderIndustryField(serviceField)}
+                    </>
+                  );
+                }
+
+                // ---- TWO-COLUMN: pair fields into 2-col grid ----
+                if (currentLayout === 'two-column') {
+                  // Build ordered list of nodes
+                  const allNodes = [nameNode, mobileNode, emailNode];
+                  if (serviceField) allNodes.push(renderIndustryField(serviceField));
+                  otherIndustryFields.forEach((f) => allNodes.push(renderIndustryField(f)));
+                  allNodes.push(stateNode, cityNode);
+
+                  // Group into pairs
+                  const rows = [];
+                  for (let i = 0; i < allNodes.length; i += 2) {
+                    const pair = allNodes.slice(i, i + 2);
+                    rows.push(
+                      <div key={`row-${i}`} className="grid grid-cols-2 gap-2.5">
+                        {pair}
+                        {pair.length === 1 && <div />}
+                      </div>
+                    );
+                  }
+                  return <>{rows}</>;
+                }
+
+                // ---- STANDARD: legacy single column ----
+                return (
+                  <>
+                    {nameNode}
+                    {mobileNode}
+                    {emailNode}
+                    {industryFields.map((f) => renderIndustryField(f))}
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {stateNode}
+                      {cityNode}
+                    </div>
+                  </>
+                );
+              })()}
 
               <button
                 className="w-full py-3 rounded-lg text-white text-sm font-bold tracking-wide mt-1 hover:opacity-90 transition-opacity"
