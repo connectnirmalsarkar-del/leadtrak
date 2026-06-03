@@ -27,7 +27,6 @@ INDUSTRY_CONFIG = {
             "conversion_action": "Convert to Admission",
             "pipeline": "Admission Pipeline",
             "revenue_label": "Fees Collected",
-            "company_label": "Institution",
         },
         "default_sources": ["Website", "Facebook Ad", "Google Ad", "Walk-in", "Referral", "Cold Call", "WhatsApp"],
         "default_lead_statuses": [

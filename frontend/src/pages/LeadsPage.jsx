@@ -962,8 +962,11 @@ export default function LeadsPage() {
                     </button>
                   )}
                   </div>
-                  {/* Industry-aware "company" line (Institution / Project / Hospital / etc.) */}
-                  {(() => {
+                  {/* Industry-aware "company" line (Institution / Project / Hospital / etc.)
+                      Hidden for education industry — the org itself IS the institute, so
+                      collecting another institute name per lead is redundant. Other industries
+                      (admission_consultancy, IT, real estate, etc.) genuinely need it. */}
+                  {(user?.industry !== 'education') && (() => {
                     const companyLabel = user?.terminology?.company_label || user?.terms?.company_label || 'Company';
                     if (selectedLead.company_name) {
                       return (
