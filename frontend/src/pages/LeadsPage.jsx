@@ -935,7 +935,8 @@ export default function LeadsPage() {
                   </div>
                 </div>
                 <SheetTitle className="text-xl sm:text-2xl pr-2" style={{fontFamily: 'Sora'}}>{selectedLead.name}</SheetTitle>
-                <SheetDescription>
+                <SheetDescription className="space-y-1">
+                  <div>
                   {selectedLead.course_interested ? (
                     <span className="inline-flex items-center gap-1.5">
                       {selectedLead.course_interested}
@@ -960,6 +961,39 @@ export default function LeadsPage() {
                       No service selected yet — click to set
                     </button>
                   )}
+                  </div>
+                  {/* Industry-aware "company" line (Institution / Project / Hospital / etc.) */}
+                  {(() => {
+                    const companyLabel = user?.terminology?.company_label || user?.terms?.company_label || 'Company';
+                    if (selectedLead.company_name) {
+                      return (
+                        <div className="inline-flex items-center gap-1.5 text-xs text-slate-600" data-testid="lead-company-line">
+                          <span className="text-slate-400 font-medium uppercase tracking-wider text-[10px]">{companyLabel}:</span>
+                          <span className="font-medium text-slate-800">{selectedLead.company_name}</span>
+                          <button
+                            type="button"
+                            onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
+                            className="text-slate-400 hover:text-violet-700 transition-colors"
+                            title={`Change ${companyLabel.toLowerCase()}`}
+                            data-testid="edit-company-icon"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => { setEditLead({ ...selectedLead, wa_different: !!(selectedLead.whatsapp_number && selectedLead.whatsapp_number !== selectedLead.mobile) }); setShowEditDialog(true); }}
+                        className="text-violet-600 hover:text-violet-800 italic underline-offset-2 hover:underline inline-flex items-center gap-1 text-xs"
+                        data-testid="set-company-link"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Add {companyLabel.toLowerCase()}
+                      </button>
+                    );
+                  })()}
                 </SheetDescription>
               </SheetHeader>
 
