@@ -254,6 +254,47 @@ async def log_lead_event(
         "created_at": datetime.now(timezone.utc),
     })
 
+# ==================== Web Push Helper (VAPID) ====================
+from pywebpush import webpush, WebPushException
+
+
+async def send_web_push(user_id: str, title: str, body: str, url: str = "/", tag: str = None):
+    """Send a Web Push notification to every active subscription owned by user_id.
+
+    Silently skips when VAPID keys are not configured. Removes subscriptions
+    that the push service reports as Gone (404/410)."""
+    vapid_private = os.environ.get("VAPID_PRIVATE_KEY")
+    vapid_subject = os.environ.get("VAPID_SUBJECT", "mailto:hello@leadtrak.in")
+    if not vapid_private:
+        return
+    subs = await db.push_subscriptions.find({"user_id": user_id, "active": True}).to_list(20)
+    if not subs:
+        return
+    payload = json.dumps({"title": title, "body": body, "url": url, "tag": tag or "default"})
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": sub["endpoint"],
+                    "keys": {"p256dh": sub["keys"]["p256dh"], "auth": sub["keys"]["auth"]},
+                },
+                data=payload,
+                vapid_private_key=vapid_private,
+                vapid_claims={"sub": vapid_subject},
+            )
+        except WebPushException as e:
+            status = getattr(e.response, "status_code", None) if e.response else None
+            if status in (404, 410):
+                # Subscription gone — deactivate
+                await db.push_subscriptions.update_one(
+                    {"_id": sub["_id"]}, {"$set": {"active": False}}
+                )
+            else:
+                logger.warning(f"Web push failed for user={user_id} status={status}: {e}")
+        except Exception as e:
+            logger.error(f"Web push unexpected error: {e}")
+
+
 # ==================== Pydantic Models ====================
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -1116,6 +1157,73 @@ async def logout(response: Response):
 async def get_me(current_user: dict = Depends(get_current_user)):
     return current_user
 
+# ==================== Web Push: Subscribe / Unsubscribe / Test ====================
+class PushSubKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class PushSubscribeIn(BaseModel):
+    endpoint: str
+    keys: PushSubKeys
+    expirationTime: Optional[int] = None
+    user_agent: Optional[str] = None
+
+
+@api_router.get("/push/public-key")
+async def push_public_key():
+    return {"public_key": os.environ.get("VAPID_PUBLIC_KEY", "")}
+
+
+@api_router.post("/push/subscribe")
+async def push_subscribe(
+    body: PushSubscribeIn,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    doc = {
+        "user_id": current_user["id"],
+        "organization_id": ObjectId(current_user["organization_id"]),
+        "endpoint": body.endpoint,
+        "keys": {"p256dh": body.keys.p256dh, "auth": body.keys.auth},
+        "expiration_time": body.expirationTime,
+        "user_agent": body.user_agent or request.headers.get("user-agent"),
+        "active": True,
+        "last_seen_at": datetime.now(timezone.utc),
+    }
+    existing = await db.push_subscriptions.find_one({"endpoint": body.endpoint})
+    if existing:
+        await db.push_subscriptions.update_one({"_id": existing["_id"]}, {"$set": doc})
+    else:
+        doc["created_at"] = datetime.now(timezone.utc)
+        await db.push_subscriptions.insert_one(doc)
+    return {"message": "Subscribed to push notifications"}
+
+
+@api_router.post("/push/unsubscribe")
+async def push_unsubscribe(body: dict, current_user: dict = Depends(get_current_user)):
+    endpoint = body.get("endpoint")
+    if not endpoint:
+        raise HTTPException(status_code=400, detail="endpoint required")
+    await db.push_subscriptions.update_one(
+        {"endpoint": endpoint, "user_id": current_user["id"]},
+        {"$set": {"active": False}},
+    )
+    return {"message": "Unsubscribed"}
+
+
+@api_router.post("/push/test")
+async def push_test(current_user: dict = Depends(get_current_user)):
+    await send_web_push(
+        current_user["id"],
+        title="Leadtrak push works! 🎉",
+        body=f"Hi {current_user.get('name', 'there')} — you'll now get real-time alerts.",
+        url="/dashboard",
+        tag="test",
+    )
+    return {"message": "Test push sent. Check your device."}
+
+
 # ==================== Industries (multi-industry support) ====================
 @api_router.get("/industries")
 async def get_industries():
@@ -1574,6 +1682,13 @@ async def create_lead(data: LeadCreate, current_user: dict = Depends(get_current
             "organization_id": org_id,
             "created_at": datetime.now(timezone.utc)
         })
+        await send_web_push(
+            assignee,
+            title="New lead assigned",
+            body=f"'{data.name}' is now on your plate",
+            url=f"/leads?openLead={result.inserted_id}",
+            tag=f"lead-{result.inserted_id}",
+        )
 
     return lead_doc
 
@@ -2169,6 +2284,13 @@ async def add_lead_comment(lead_id: str, data: LeadCommentCreate, current_user: 
             "organization_id": org_id,
             "created_at": datetime.now(timezone.utc),
         })
+        await send_web_push(
+            lead["assigned_to"],
+            title=f"Comment from {current_user.get('name')}",
+            body=f"'{lead.get('name')}': {note[:100]}",
+            url=f"/leads?openLead={lid}",
+            tag=f"lead-{lid}",
+        )
 
     return {"message": "Comment added", "lead_id": str(lid)}
 
@@ -2266,6 +2388,13 @@ async def add_lead_attachment(
             "organization_id": org_id,
             "created_at": datetime.now(timezone.utc),
         })
+        await send_web_push(
+            lead["assigned_to"],
+            title=f"{current_user.get('name')} attached a file",
+            body=f"'{lead.get('name')}' · {payload['filename']}",
+            url=f"/leads?openLead={lid}",
+            tag=f"lead-{lid}",
+        )
 
     return {"message": "File attached", "lead_id": str(lid), **payload}
 
@@ -2413,6 +2542,13 @@ async def create_demo(data: DemoCreate, current_user: dict = Depends(get_current
             "organization_id": org_id,
             "created_at": datetime.now(timezone.utc),
         })
+        await send_web_push(
+            str(owner_oid),
+            title=f"Demo scheduled with {lead.get('name')}",
+            body=f"{data.scheduled_date} at {data.scheduled_time} · {data.demo_mode}",
+            url="/demos",
+            tag=f"demo-{result.inserted_id}",
+        )
 
     share = _build_demo_share_links(lead, demo_doc)
     out = _serialize_demo(demo_doc)
@@ -2543,6 +2679,13 @@ async def update_demo(demo_id: str, data: DemoEdit, current_user: dict = Depends
             "organization_id": org_id,
             "created_at": datetime.now(timezone.utc),
         })
+        await send_web_push(
+            demo_doc["demo_owner_id"],
+            title=f"Demo updated by {current_user.get('name')}",
+            body=f"'{demo_doc.get('lead_name')}' · {demo_doc.get('scheduled_date')} at {demo_doc.get('scheduled_time')}",
+            url="/demos",
+            tag=f"demo-{did}",
+        )
 
     out = _serialize_demo(demo_doc)
     out["share"] = _build_demo_share_links(lead or {}, demo_doc)

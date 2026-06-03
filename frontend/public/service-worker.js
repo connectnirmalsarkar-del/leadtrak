@@ -1,6 +1,6 @@
 // Leadtrak Service Worker
 // IMPORTANT: Bump CACHE_NAME on every release to force the browser to fetch fresh CSS/JS
-const CACHE_NAME = 'leadtrak-v97-mobile-pwa-pack';
+const CACHE_NAME = 'leadtrak-v98-web-push';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -90,5 +90,57 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => cached);
     })
+  );
+});
+
+
+// ==================== Web Push handlers ====================
+// Receive a push from the server, show a native OS notification.
+// `event.waitUntil` is critical on iOS — without it the worker can be killed
+// before showNotification resolves.
+self.addEventListener('push', (event) => {
+  let payload = { title: 'Leadtrak', body: '', url: '/', tag: 'default' };
+  if (event.data) {
+    try {
+      payload = { ...payload, ...event.data.json() };
+    } catch (e) {
+      payload.body = event.data.text();
+    }
+  }
+  const options = {
+    body: payload.body,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: { url: payload.url || '/' },
+    tag: payload.tag,
+    renotify: true,
+    requireInteraction: false,
+    vibrate: [80, 40, 80],
+  };
+  event.waitUntil(self.registration.showNotification(payload.title, options));
+});
+
+// Open / focus the app at the deep link when the notification is tapped.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    (async () => {
+      const all = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+      // Try to focus an existing client of the same origin and navigate it.
+      for (const c of all) {
+        try {
+          if (new URL(c.url).origin === self.location.origin) {
+            await c.focus();
+            if ('navigate' in c) {
+              try { await c.navigate(target); } catch (e) { /* ignore — some browsers block */ }
+            }
+            return;
+          }
+        } catch (e) { /* ignore url parse */ }
+      }
+      // No window — open a new one
+      if (clients.openWindow) await clients.openWindow(target);
+    })(),
   );
 });

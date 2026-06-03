@@ -1,13 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { API, useAuth } from '@/context/AuthContext';
-import { Lock, User, Mail, Shield, CheckCircle2, Camera, Trash2, Loader2 } from 'lucide-react';
+import { Lock, User, Mail, Shield, CheckCircle2, Camera, Trash2, Loader2, Bell, BellOff, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import {
+  isPushSupported,
+  getCurrentPushSubscription,
+  enablePushNotifications,
+  disablePushNotifications,
+  sendTestPush,
+} from '@/utils/pushNotifications';
 
 export default function ProfilePage() {
   const { user, checkAuth } = useAuth();
@@ -31,6 +38,73 @@ export default function ProfilePage() {
   const [newPwd, setNewPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // --- Push notifications state ---
+  const pushSupported = isPushSupported();
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushChecking, setPushChecking] = useState(true);
+  const [pushSaving, setPushSaving] = useState(false);
+  const [permission, setPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  );
+  const isIOSStandalone =
+    typeof window !== 'undefined' &&
+    /iP(ad|hone|od)/.test(navigator.userAgent) &&
+    !window.navigator.standalone;
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!pushSupported) {
+        if (alive) setPushChecking(false);
+        return;
+      }
+      try {
+        const sub = await getCurrentPushSubscription();
+        if (alive) setPushEnabled(!!sub);
+      } catch (e) { /* ignore */ }
+      if (alive) setPushChecking(false);
+    })();
+    return () => { alive = false; };
+  }, [pushSupported]);
+
+  const handleEnablePush = async () => {
+    setPushSaving(true);
+    try {
+      await enablePushNotifications();
+      setPushEnabled(true);
+      setPermission(Notification.permission);
+      toast.success('Push notifications enabled. We sent a welcome push — check your device!');
+      // Auto-fire a test so the user immediately sees a notification land
+      try { await sendTestPush(); } catch (e) { /* ignore */ }
+    } catch (e) {
+      toast.error(e.message || 'Could not enable push notifications');
+    } finally {
+      setPushSaving(false);
+    }
+  };
+
+  const handleDisablePush = async () => {
+    setPushSaving(true);
+    try {
+      await disablePushNotifications();
+      setPushEnabled(false);
+      toast.success('Push notifications disabled.');
+    } catch (e) {
+      toast.error('Could not disable push');
+    } finally {
+      setPushSaving(false);
+    }
+  };
+
+  const handleTestPush = async () => {
+    try {
+      await sendTestPush();
+      toast.success('Test push sent — give it a few seconds.');
+    } catch (e) {
+      toast.error('Failed to send test push');
+    }
+  };
 
   const initials = (name || user?.name || '?')
     .split(' ')
@@ -250,6 +324,81 @@ export default function ProfilePage() {
           </Button>
         </div>
       </form>
+
+      {/* Push notifications */}
+      <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4" data-testid="push-settings-card">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2" style={{ fontFamily: 'Sora' }}>
+              <Bell className="w-5 h-5 text-violet-600" />
+              Push notifications
+            </h2>
+            <p className="text-sm text-slate-500 mt-0.5">Get real-time alerts on your device — lead assignments, comments, demo bookings & more.</p>
+          </div>
+          {pushEnabled && (
+            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100" data-testid="push-status-badge">
+              <CheckCircle2 className="w-3 h-3 mr-1" /> Enabled
+            </Badge>
+          )}
+        </div>
+
+        {!pushSupported && (
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm text-amber-900">
+            Your browser does not support push notifications.{' '}
+            {isIOSStandalone && (
+              <>
+                <strong>On iPhone/iPad:</strong> open this page in Safari → tap the share icon → "Add to Home Screen". Then open Leadtrak from the home screen icon and try again.
+              </>
+            )}
+          </div>
+        )}
+
+        {pushSupported && permission === 'denied' && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-900">
+            Notifications are blocked in your browser settings. To enable, click the 🔒 icon in your address bar → allow notifications.
+          </div>
+        )}
+
+        {pushSupported && permission !== 'denied' && !pushChecking && (
+          <div className="flex flex-wrap items-center gap-2">
+            {!pushEnabled ? (
+              <Button
+                onClick={handleEnablePush}
+                disabled={pushSaving}
+                className="bg-violet-700 hover:bg-violet-800 text-white"
+                data-testid="enable-push-btn"
+              >
+                {pushSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bell className="w-4 h-4 mr-2" />}
+                Enable push notifications
+              </Button>
+            ) : (
+              <>
+                <Button
+                  onClick={handleTestPush}
+                  variant="outline"
+                  data-testid="test-push-btn"
+                >
+                  <Send className="w-4 h-4 mr-2" /> Send test push
+                </Button>
+                <Button
+                  onClick={handleDisablePush}
+                  disabled={pushSaving}
+                  variant="outline"
+                  className="text-red-700 hover:bg-red-50 border-red-200"
+                  data-testid="disable-push-btn"
+                >
+                  {pushSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <BellOff className="w-4 h-4 mr-2" />}
+                  Disable
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
+        <p className="text-[11px] text-slate-400">
+          Tip: On iOS, push requires iOS 16.4+ and the app installed via "Add to Home Screen".
+        </p>
+      </div>
 
       {/* Change password */}
       <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-xl p-6 space-y-5" data-testid="change-password-form">
