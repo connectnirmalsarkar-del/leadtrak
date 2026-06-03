@@ -59,6 +59,27 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Public Lead Capture Widget (`/api/widget/lead/{token}`)
 - ✅ Super Admin Platform Organizations management
 
+### 🔢 Feature — Demos Tab Count Badges (2026-06-03) ✅ COMPLETE
+**Use case:** User reported on `leadtrak.in`: "EKHANE MY DEMO, UPCOMING, COMPLETED, ALL AI GULOR PASE NUMBER DEKHACHE NA KONO… BUJHA JACCHE NA AT E GLANCE KI DEMO UPCOMING ACCHE, KOTO HOYA GECHE". User wanted at-a-glance count visibility next to each tab.
+
+**Frontend (`DemosPage.jsx`):**
+- ✅ Added `counts` state `{ mine, upcoming, completed, all }`
+- ✅ Single API call to `/demos?scope=all` computes all 4 counts client-side (efficient, no extra requests)
+- ✅ Upcoming logic = `status === 'Scheduled' && scheduled_date >= today` (timezone-safe)
+- ✅ Counts refresh on scope change + after demo create/edit/complete
+- ✅ Pill-shaped color-coded badges next to each tab label:
+  - My Demos: violet (matches active tab)
+  - Upcoming: amber
+  - Completed: emerald
+  - All: slate
+- ✅ Active tab's badge inverts to violet-bg/white-text for emphasis
+- ✅ Service-worker bumped to `leadtrak-v90-demo-tab-counts`
+
+**Verified (Playwright):**
+- Counts rendered: `mine=3, upcoming=1, completed=1, all=3` ✅
+- All 4 badges visible with proper styling
+- AI image analysis confirms: pill-shaped, color-coded, accurate numbers
+
 ### 📊 Bug Fix — Dashboard Lead Funnel Now Counts Real Completed Demos (2026-06-03) ✅ COMPLETE
 **Bug:** User reported on production (`leadtrak.in`): "2 demos completed but funnel shows only 1 in Demo Done". When a demo was marked Complete and admin set lead status to something other than "Demo Done" (e.g. "Contacted", "Interested", "Won"), the funnel still counted only leads whose **current status text** literally equaled "Demo Done" — under-counting actual demo activity.
 

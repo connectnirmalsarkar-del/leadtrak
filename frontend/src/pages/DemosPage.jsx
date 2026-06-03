@@ -32,6 +32,7 @@ export default function DemosPage() {
     ? user.lead_statuses
     : [];
   const [demos, setDemos] = useState([]);
+  const [counts, setCounts] = useState({ mine: 0, upcoming: 0, completed: 0, all: 0 });
   const [scope, setScope] = useState('mine');
   const [activeDemo, setActiveDemo] = useState(null);
   const [completeForm, setCompleteForm] = useState({ outcome: 'interested', feedback: '', recording_url: '', lead_status: '' });
@@ -44,6 +45,32 @@ export default function DemosPage() {
       setDemos(data);
     } catch (e) {
       toast.error('Failed to load demos');
+    }
+  };
+
+  // Compute counts for every tab in a single request — only relies on the "all" scope.
+  // Cheaper than firing 4 requests and gives accurate at-a-glance numbers in the tab labels.
+  const fetchCounts = async () => {
+    try {
+      const { data } = await axios.get(`${API}/demos`, { params: { scope: 'all' } });
+      const list = Array.isArray(data) ? data : [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const isUpcoming = (d) => {
+        if (d.status !== 'Scheduled' || !d.scheduled_date) return false;
+        const dt = new Date(d.scheduled_date);
+        if (isNaN(dt.getTime())) return true; // be permissive
+        return dt >= today;
+      };
+      const mineId = user?.id;
+      setCounts({
+        mine: list.filter((d) => d.demo_owner_id === mineId || d.scheduled_by_id === mineId).length,
+        upcoming: list.filter(isUpcoming).length,
+        completed: list.filter((d) => d.status === 'Completed').length,
+        all: list.length,
+      });
+    } catch (e) {
+      // non-blocking — keep zeros
     }
   };
 
@@ -60,7 +87,7 @@ export default function DemosPage() {
     }
   };
 
-  useEffect(() => { fetchDemos(); }, [scope]);
+  useEffect(() => { fetchDemos(); fetchCounts(); }, [scope]);
   useEffect(() => { fetchUsers(); }, []);
 
   const canEdit = (d) => {
@@ -84,6 +111,7 @@ export default function DemosPage() {
       toast.success('Demo marked complete');
       setActiveDemo(null);
       fetchDemos();
+      fetchCounts();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to complete demo');
     }
@@ -99,10 +127,42 @@ export default function DemosPage() {
 
       <Tabs value={scope} onValueChange={setScope}>
         <TabsList data-testid="demos-tabs">
-          <TabsTrigger value="mine" data-testid="demos-tab-mine">My {demoLabel}</TabsTrigger>
-          <TabsTrigger value="upcoming" data-testid="demos-tab-upcoming">Upcoming</TabsTrigger>
-          <TabsTrigger value="completed" data-testid="demos-tab-completed">Completed</TabsTrigger>
-          <TabsTrigger value="all" data-testid="demos-tab-all">All</TabsTrigger>
+          <TabsTrigger value="mine" data-testid="demos-tab-mine">
+            My {demoLabel}
+            <span
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums ${scope === 'mine' ? 'bg-violet-700 text-white' : 'bg-slate-200 text-slate-700'}`}
+              data-testid="demos-tab-mine-count"
+            >
+              {counts.mine}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="upcoming" data-testid="demos-tab-upcoming">
+            Upcoming
+            <span
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums ${scope === 'upcoming' ? 'bg-violet-700 text-white' : 'bg-amber-100 text-amber-700'}`}
+              data-testid="demos-tab-upcoming-count"
+            >
+              {counts.upcoming}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="completed" data-testid="demos-tab-completed">
+            Completed
+            <span
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums ${scope === 'completed' ? 'bg-violet-700 text-white' : 'bg-emerald-100 text-emerald-700'}`}
+              data-testid="demos-tab-completed-count"
+            >
+              {counts.completed}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="all" data-testid="demos-tab-all">
+            All
+            <span
+              className={`ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums ${scope === 'all' ? 'bg-violet-700 text-white' : 'bg-slate-200 text-slate-700'}`}
+              data-testid="demos-tab-all-count"
+            >
+              {counts.all}
+            </span>
+          </TabsTrigger>
         </TabsList>
         <TabsContent value={scope} className="mt-4">
           <div className="grid gap-3">
@@ -235,7 +295,7 @@ export default function DemosPage() {
         onOpenChange={(o) => !o && setEditingDemo(null)}
         demo={editingDemo}
         users={users}
-        onBooked={() => { fetchDemos(); }}
+        onBooked={() => { fetchDemos(); fetchCounts(); }}
       />
     </div>
   );
