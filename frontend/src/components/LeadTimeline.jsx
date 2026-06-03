@@ -64,6 +64,67 @@ const COLOR_CLASS = {
   red: 'bg-red-100 text-red-700 border-red-200',
 };
 
+// Inline button that downloads a timeline attachment WITHOUT navigating away
+// from the PWA — fetches the file as a Blob via the backend proxy and triggers
+// a download via an in-memory object URL. This keeps iOS PWA users on the
+// dashboard (the older `<a href>` approach caused the PWA to navigate to the
+// download URL and the user got stuck with no back button on iOS).
+const AttachmentDownloadButton = ({ eventId, filename, mime }) => {
+  const [busy, setBusy] = useState(false);
+  const handleClick = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await axios.get(`${API}/attachments/download/${eventId}`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([res.data], { type: mime || res.headers['content-type'] || 'application/octet-stream' });
+      const objectUrl = URL.createObjectURL(blob);
+      // Try Web Share API first — gives the native iOS "save to Files / share" sheet
+      // and stays inside the PWA. Fallback to <a download> click.
+      const file = (typeof File !== 'undefined') ? new File([blob], filename || 'attachment', { type: blob.type }) : null;
+      let shared = false;
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: filename });
+          shared = true;
+        } catch (err) { /* user cancelled or unsupported — fall through */ }
+      }
+      if (!shared) {
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = filename || 'attachment';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+    } catch (err) {
+      const msg = err?.response?.status === 403
+        ? "You can't download this attachment"
+        : (err?.response?.status === 404 ? 'Attachment not found' : 'Download failed');
+      toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={busy}
+      className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:text-indigo-900 px-2 py-1 rounded hover:bg-indigo-100 transition-colors flex-shrink-0 disabled:opacity-60 disabled:cursor-wait"
+      data-testid="timeline-attachment-download"
+      aria-label={`Download ${filename || 'attachment'}`}
+    >
+      <Download className={`w-3.5 h-3.5 ${busy ? 'animate-pulse' : ''}`} />
+      {busy ? 'Downloading…' : 'Download'}
+    </button>
+  );
+};
+
 const EventBody = ({ event }) => {
   const p = event.payload || {};
   switch (event.event_type) {
@@ -248,12 +309,6 @@ const EventBody = ({ event }) => {
       const isPdf = mime === 'application/pdf';
       const FIcon = isImg ? ImageIcon : (isPdf ? FileText : FileSpreadsheet);
       const sizeKb = p.size ? (p.size / 1024).toFixed(1) : '';
-      // Use our backend proxy endpoint for downloads — it streams the file
-      // from Cloudinary with `Content-Disposition: attachment; filename="..."`
-      // headers. iOS Safari/PWA needs this to save with correct extension and
-      // open via "Open in…" / "Save to Files". Cloudinary's own fl_attachment
-      // is broken for raw uploads (returns content-disposition: inline).
-      const dlUrl = `${API}/attachments/download/${event._id}`;
       return (
         <div className="bg-indigo-50/60 border border-indigo-200 rounded-md p-2.5 space-y-2" data-testid="timeline-attachment">
           <div className="flex items-center gap-2.5">
@@ -265,16 +320,11 @@ const EventBody = ({ event }) => {
               <p className="text-[11px] text-slate-500">{sizeKb && `${sizeKb} KB · `}{(mime.split('/')[1] || 'file').toUpperCase()}</p>
             </div>
             {p.url && (
-              <a
-                href={dlUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                download={p.filename || true}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:text-indigo-900 px-2 py-1 rounded hover:bg-indigo-100 transition-colors flex-shrink-0"
-                data-testid="timeline-attachment-download"
-              >
-                <Download className="w-3.5 h-3.5" /> Download
-              </a>
+              <AttachmentDownloadButton
+                eventId={event._id}
+                filename={p.filename || 'attachment'}
+                mime={mime}
+              />
             )}
           </div>
           {isImg && p.url && (
