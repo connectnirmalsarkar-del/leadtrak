@@ -72,7 +72,12 @@ export default function TasksPage() {
     <div className="bg-slate-50 rounded-md p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className={`text-sm font-semibold text-slate-700`} style={{fontFamily: 'Sora'}}>{title}</h3>
-        <span className={`text-xs px-2 py-0.5 rounded-md ${color}`}>{items.length}</span>
+        <span
+          className={`inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums ${color}`}
+          data-testid={`tasks-${status}-count`}
+        >
+          {items.length}
+        </span>
       </div>
       <div className="space-y-3">
         {items.length === 0 ? (
