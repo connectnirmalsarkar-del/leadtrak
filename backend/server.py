@@ -6216,9 +6216,35 @@ async def get_lead_funnel(current_user: dict = Depends(get_current_user)):
     base_filter = {"organization_id": org_id}
     if current_user["role"] in ("counselor", "telecaller"):
         base_filter["assigned_to"] = current_user["id"]
+
+    # For demo-style milestone stages, count distinct leads that have at least one
+    # COMPLETED demo (regardless of the lead's current text status). This way a
+    # demo that's already been completed but whose lead was later moved to a
+    # different status (e.g. "Interested", "Negotiation", "Won") still contributes
+    # to the "Demo Done" funnel bucket — which is what users actually expect.
+    DEMO_MILESTONE_STAGES = {
+        "Demo Done", "Trial Done", "Site Visited", "Consulted", "Counseling Done"
+    }
+    completed_demo_lead_ids: list = []
+    if any(s in DEMO_MILESTONE_STAGES for s in stages):
+        raw_ids = await db.demos.distinct(
+            "lead_id",
+            {"organization_id": org_id, "status": "Completed"},
+        )
+        for lid in raw_ids:
+            try:
+                completed_demo_lead_ids.append(ObjectId(lid))
+            except Exception:
+                continue
+
     counts = {}
     for stage in stages:
-        counts[stage] = await db.leads.count_documents({**base_filter, "status": stage})
+        if stage in DEMO_MILESTONE_STAGES and completed_demo_lead_ids:
+            counts[stage] = await db.leads.count_documents(
+                {**base_filter, "_id": {"$in": completed_demo_lead_ids}}
+            )
+        else:
+            counts[stage] = await db.leads.count_documents({**base_filter, "status": stage})
     total = sum(counts.values()) or 1
     return [
         {

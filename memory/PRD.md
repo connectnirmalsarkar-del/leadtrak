@@ -59,6 +59,18 @@ Build a modern SaaS-based Education CRM and Lead Management System similar to Le
 - ✅ Public Lead Capture Widget (`/api/widget/lead/{token}`)
 - ✅ Super Admin Platform Organizations management
 
+### 📊 Bug Fix — Dashboard Lead Funnel Now Counts Real Completed Demos (2026-06-03) ✅ COMPLETE
+**Bug:** User reported on production (`leadtrak.in`): "2 demos completed but funnel shows only 1 in Demo Done". When a demo was marked Complete and admin set lead status to something other than "Demo Done" (e.g. "Contacted", "Interested", "Won"), the funnel still counted only leads whose **current status text** literally equaled "Demo Done" — under-counting actual demo activity.
+
+**Root cause:** `GET /api/dashboard/funnel` in `server.py` bucketed leads by `lead.status` field only. So demo-milestone tracking depended on the user manually keeping every lead's status set to "Demo Done" — which is fragile and doesn't reflect business reality.
+
+**Fix:** Dedicated handling for demo-milestone stages (`Demo Done`, `Trial Done`, `Site Visited`, `Consulted`, `Counseling Done`):
+- Aggregate distinct `lead_id`s from the `demos` collection where `status="Completed"`
+- Count leads in the org matching that set (respecting counselor/telecaller RBAC)
+- All other stages (New / Contacted / Won / etc.) unchanged — still status-based
+
+**Verified end-to-end:** With 2 completed demos where one lead's current status was "Contacted" (NOT "Demo Done"), the funnel API now correctly returns `Demo Done: 2` (was 1 before). All other stages preserved.
+
 ### 📱 Hotfix — Side Sheet Safe-Area on iOS / Android PWA (2026-06-03) ✅ COMPLETE
 **Bug:** On lead detail side tray opened from `/leads` (and any other right-side Sheet), the drawer didn't fill the full viewport on iOS PWA / Android — leaving a visible gap at the bottom where the underlying leads table peeked through, and an unintended ~8 px gap on the sides.
 
