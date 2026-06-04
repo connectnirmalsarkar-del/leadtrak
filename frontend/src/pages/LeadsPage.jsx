@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API, useAuth } from '@/context/AuthContext';
 import { useTerminology } from '@/lib/terminology';
@@ -97,6 +97,7 @@ export default function LeadsPage() {
   const t = useTerminology();
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   // Use industry-specific statuses from /auth/me. While user is still
   // loading (null), keep this empty so we don't briefly flash a generic
   // fallback list that's different from the real one.
@@ -185,10 +186,12 @@ export default function LeadsPage() {
     if (lead) {
       setSelectedLead(lead);
       if (wantTab) setActiveTab(wantTab);
-      // Clean the URL so a refresh doesn't keep re-opening
-      window.history.replaceState({}, '', '/leads');
+      // Clean the URL via React Router so the next bell-click on the same
+      // lead also triggers this effect (replaceState on raw window.history
+      // bypassed Router's internal state, making subsequent clicks no-ops).
+      navigate('/leads', { replace: true });
     }
-  }, [leads, location.search]);
+  }, [leads, location.search, navigate]);
 
   const [states, setStates] = useState([]);
   const [citiesForState, setCitiesForState] = useState([]);
