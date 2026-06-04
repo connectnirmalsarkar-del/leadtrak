@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { API, useAuth } from '@/context/AuthContext';
-import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -208,8 +207,7 @@ export default function ActivityFeedPage() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6" data-testid="activity-feed-page">
+    <div className="space-y-6" data-testid="activity-feed-page">
         {/* Page header */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
@@ -368,6 +366,5 @@ export default function ActivityFeedPage() {
           ))
         )}
       </div>
-    </DashboardLayout>
   );
 }
