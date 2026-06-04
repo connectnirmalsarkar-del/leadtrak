@@ -32,9 +32,21 @@ axios.interceptors.response.use(
   async (error) => {
     const original = error.config || {};
     const status = error.response?.status;
-    const isAuthEndpoint = (original.url || '').includes('/auth/');
-    // Only act on 401 from a non-auth endpoint; auth endpoints handle their own errors
-    if (status !== 401 || original._retry || isAuthEndpoint) {
+    // Only skip silent refresh for endpoints that mint/clear cookies themselves
+    // (login, register, refresh, logout, forgot/reset password). `/auth/me`
+    // is a normal protected endpoint — it MUST go through the refresh flow,
+    // otherwise PWA users get logged out after the 1-hour access_token expires.
+    const url = original.url || '';
+    const skipRefreshEndpoints = [
+      '/auth/login',
+      '/auth/register',
+      '/auth/refresh',
+      '/auth/logout',
+      '/auth/forgot-password',
+      '/auth/reset-password',
+    ];
+    const isSkipEndpoint = skipRefreshEndpoints.some((p) => url.includes(p));
+    if (status !== 401 || original._retry || isSkipEndpoint) {
       return Promise.reject(error);
     }
     original._retry = true;
@@ -75,8 +87,15 @@ export const AuthProvider = ({ children }) => {
       // Show a single toast (deduplicate by id) so multiple inflight 401s
       // don't spam the user. Also: PWA users normally never see this because
       // their refresh_token is valid for 7 days and renews silently.
-      toast.error('Session expired — please sign in again', { id: 'auth-expired' });
-      setUser(false);
+      // Only show the toast if the user *was* authenticated — otherwise a
+      // first-time visitor lands on /login and seeing "Session expired" is
+      // confusing.
+      setUser((prev) => {
+        if (prev && typeof prev === 'object') {
+          toast.error('Session expired — please sign in again', { id: 'auth-expired' });
+        }
+        return false;
+      });
       try {
         if (typeof navigator !== 'undefined' && typeof navigator.clearAppBadge === 'function') {
           navigator.clearAppBadge().catch(() => {});
