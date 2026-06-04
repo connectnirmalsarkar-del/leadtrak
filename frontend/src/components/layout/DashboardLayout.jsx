@@ -38,6 +38,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTerminology } from '@/lib/terminology';
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard';
 import InstallPWAPrompt from '@/components/pwa/InstallPWAPrompt';
+import { timeAgo as fmtTimeAgo } from '@/utils/datetime';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -447,7 +448,7 @@ export default function DashboardLayout({ children }) {
                               {!n.read && <span className="w-2 h-2 rounded-full bg-violet-600 mt-1.5 flex-shrink-0"></span>}
                               <p className={`text-xs ${n.read ? 'text-slate-600' : 'text-slate-900 font-medium'} flex-1`}>{n.message}</p>
                             </div>
-                            <p className="text-[10px] text-slate-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                            <p className="text-[10px] text-slate-400 mt-1">{fmtTimeAgo(n.created_at)}</p>
                           </button>
                         ))
                       )}

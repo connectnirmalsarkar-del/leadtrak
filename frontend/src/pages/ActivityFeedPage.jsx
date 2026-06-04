@@ -26,6 +26,7 @@ import {
   ShuffleIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { parseBackendDate, timeAgo as fmtTimeAgo } from '@/utils/datetime';
 
 // ---------------------------------------------------------------------------
 // Event → display config
@@ -72,18 +73,7 @@ const RANGE_OPTIONS = [
 // Helpers
 // ---------------------------------------------------------------------------
 function formatTime(iso) {
-  try {
-    const d = new Date(iso);
-    const now = new Date();
-    const diff = (now - d) / 1000;
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-  } catch (e) {
-    return '';
-  }
+  return fmtTimeAgo(iso);
 }
 
 function summarizeEvent(item) {
@@ -188,7 +178,8 @@ export default function ActivityFeedPage() {
     yesterday.setDate(yesterday.getDate() - 1);
 
     filtered.forEach((it) => {
-      const d = new Date(it.created_at);
+      const d = parseBackendDate(it.created_at);
+      if (!d) return;
       const ds = new Date(d);
       ds.setHours(0, 0, 0, 0);
       let label;
