@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API } from '@/context/AuthContext';
-import { Plus, Trash2, User, KeyRound } from 'lucide-react';
+import { Plus, Trash2, User, KeyRound, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,6 +25,8 @@ const roleColors = {
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [editingUser, setEditingUser] = useState(null); // null | { _id, name, email, role, mobile, reports_to }
+  const [editSaving, setEditSaving] = useState(false);
   const [tempPassword, setTempPassword] = useState('');
   const [form, setForm] = useState({ name: '', email: '', role: 'counselor', mobile: '', reports_to: '' });
 
@@ -88,6 +90,47 @@ export default function UsersPage() {
       toast.success(`Password reset for ${user.name}. Share the new password securely.`);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to reset password');
+    }
+  };
+
+  const openEdit = (u) => {
+    setEditingUser({
+      _id: u._id,
+      name: u.name || '',
+      email: u.email || '',
+      role: u.role,
+      mobile: u.mobile || '',
+      reports_to: u.reports_to || '',
+    });
+  };
+
+  const handleEditSave = async () => {
+    if (!editingUser) return;
+    const e = editingUser;
+    if (!e.name.trim()) { toast.error('Name is required'); return; }
+    if (!e.email.trim()) { toast.error('Email is required'); return; }
+    setEditSaving(true);
+    try {
+      const payload = {
+        name: e.name.trim(),
+        email: e.email.trim(),
+        mobile: e.mobile.trim() || null,
+        role: e.role,
+      };
+      // Only send reports_to if the role supports it; otherwise clear it
+      if (['counselor', 'telecaller', 'manager'].includes(e.role)) {
+        payload.reports_to = e.reports_to || '';
+      } else {
+        payload.reports_to = '';
+      }
+      await axios.put(`${API}/users/${e._id}`, payload);
+      toast.success(`${payload.name} updated`);
+      setEditingUser(null);
+      fetchUsers();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to update member');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -242,6 +285,17 @@ export default function UsersPage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => openEdit(u)}
+                            data-testid={`edit-user-${u._id}`}
+                            title="Edit member"
+                          >
+                            <Pencil className="w-4 h-4 text-slate-700" />
+                          </Button>
+                        )}
+                        {u.role !== 'super_admin' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => handleResetPassword(u)}
                             data-testid={`reset-password-${u._id}`}
                             title="Reset password"
@@ -250,7 +304,7 @@ export default function UsersPage() {
                           </Button>
                         )}
                         {u.role !== 'super_admin' && (
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(u._id)} data-testid={`delete-user-${u._id}`}>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(u._id)} data-testid={`delete-user-${u._id}`} title="Delete member">
                             <Trash2 className="w-4 h-4 text-red-600" />
                           </Button>
                         )}
@@ -263,6 +317,93 @@ export default function UsersPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* ============ EDIT TEAM MEMBER DIALOG ============ */}
+      <Dialog open={!!editingUser} onOpenChange={(o) => { if (!o) setEditingUser(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Team Member</DialogTitle>
+            <DialogDescription>Update {editingUser?.name}'s profile details.</DialogDescription>
+          </DialogHeader>
+          {editingUser && (
+            <>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Full Name *</Label>
+                  <Input
+                    value={editingUser.name}
+                    onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                    data-testid="edit-user-name-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email *</Label>
+                  <Input
+                    type="email"
+                    value={editingUser.email}
+                    onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                    data-testid="edit-user-email-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Mobile</Label>
+                  <Input
+                    value={editingUser.mobile}
+                    onChange={(e) => setEditingUser({ ...editingUser, mobile: e.target.value })}
+                    placeholder="+91XXXXXXXXXX"
+                    data-testid="edit-user-mobile-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Role *</Label>
+                  <Select
+                    value={editingUser.role}
+                    onValueChange={(v) => setEditingUser({
+                      ...editingUser,
+                      role: v,
+                      reports_to: v === 'org_admin' ? '' : editingUser.reports_to,
+                    })}
+                  >
+                    <SelectTrigger data-testid="edit-user-role-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map((r) => <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-slate-500">Changing role may affect what this user can access immediately.</p>
+                </div>
+                {['counselor', 'telecaller', 'manager'].includes(editingUser.role) && managers.filter((m) => m._id !== editingUser._id).length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Reports To</Label>
+                    <Select
+                      value={editingUser.reports_to || 'none'}
+                      onValueChange={(v) => setEditingUser({ ...editingUser, reports_to: v === 'none' ? '' : v })}
+                    >
+                      <SelectTrigger data-testid="edit-user-reports-to-select"><SelectValue placeholder="(Unassigned)" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— Unassigned —</SelectItem>
+                        {managers.filter((m) => m._id !== editingUser._id).map((m) => (
+                          <SelectItem key={m._id} value={m._id}>{m.name} ({m.role.replace('_', ' ')})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingUser(null)} disabled={editSaving}>Cancel</Button>
+                <Button
+                  onClick={handleEditSave}
+                  className="bg-violet-700 hover:bg-violet-800 text-white"
+                  disabled={editSaving}
+                  data-testid="save-user-edit-btn"
+                >
+                  {editSaving ? 'Saving…' : 'Save Changes'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

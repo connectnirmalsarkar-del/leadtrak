@@ -566,6 +566,7 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
+    email: Optional[str] = None
     role: Optional[str] = None
     mobile: Optional[str] = None
     reports_to: Optional[str] = None
@@ -3909,6 +3910,18 @@ async def update_user(user_id: str, data: UserUpdate, current_user: dict = Depen
     
     org_id = ObjectId(current_user["organization_id"])
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+    # Normalize email + ensure uniqueness within the org
+    if "email" in update_data:
+        new_email = (update_data["email"] or "").strip().lower()
+        if not new_email:
+            raise HTTPException(status_code=400, detail="Email cannot be empty")
+        update_data["email"] = new_email
+        clash = await db.users.find_one(
+            {"email": new_email, "organization_id": org_id, "_id": {"$ne": ObjectId(user_id)}},
+            {"_id": 1},
+        )
+        if clash:
+            raise HTTPException(status_code=400, detail="Another team member with this email already exists")
     # Convert reports_to to ObjectId if provided as string
     if "reports_to" in update_data:
         if update_data["reports_to"] == "":

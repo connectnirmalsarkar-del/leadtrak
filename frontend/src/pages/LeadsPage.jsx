@@ -862,9 +862,9 @@ export default function LeadsPage() {
                     </TableCell>
                   )}
                   <TableCell className="text-sm text-slate-600 whitespace-nowrap">{lead.lead_source}</TableCell>
-                  <TableCell className="text-sm whitespace-nowrap" data-testid={`lead-caller-${lead._id}`}>
+                  <TableCell className="text-xs whitespace-nowrap" data-testid={`lead-caller-${lead._id}`}>
                     {lead.assigned_to ? (
-                      <span className="text-slate-700">{users.find((u) => u._id === lead.assigned_to)?.name || 'Unknown'}</span>
+                      <span className="text-slate-700 font-medium">{users.find((u) => u._id === lead.assigned_to)?.name || 'Unknown'}</span>
                     ) : (
                       <span className="text-slate-400 italic">Unassigned</span>
                     )}
