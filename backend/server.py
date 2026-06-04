@@ -295,6 +295,101 @@ async def send_web_push(user_id: str, title: str, body: str, url: str = "/", tag
             logger.error(f"Web push unexpected error: {e}")
 
 
+# ==================== Lead-Activity Notification Fan-out ====================
+# Used by every lead-touching endpoint (status change, comment, attachment,
+# demo create/update/complete, followup add/complete) so the lead owner AND
+# the org managers/admins see real-time activity in their bell + on their
+# phone via web push.
+async def notify_lead_stakeholders(
+    *,
+    lead_id,                       # ObjectId or str — lead being acted on
+    organization_id,               # ObjectId of the org
+    actor: dict,                   # current_user dict (will be excluded from recipients)
+    notif_type: str,               # short type tag stored in notifications.type
+    message: str,                  # one-line bell text shown in the dropdown
+    push_title: str,               # title for the OS-level push notification
+    push_body: str,                # body for the OS push
+    url: str = None,               # deep-link path. Defaults to /leads?openLead=<lead_id>
+    extra: dict = None,            # any extra fields to persist on the notification doc
+    include_owner: bool = True,    # notify the lead's `assigned_to` user
+    include_managers: bool = True, # notify managers
+    include_admins: bool = True,   # notify org admins
+):
+    try:
+        org_oid = organization_id if isinstance(organization_id, ObjectId) else ObjectId(organization_id)
+        lid_str = str(lead_id)
+
+        # Resolve lead owner (if requested)
+        recipients: set[str] = set()
+        if include_owner:
+            try:
+                lid_oid = lead_id if isinstance(lead_id, ObjectId) else ObjectId(lead_id)
+                lead_doc = await db.leads.find_one({"_id": lid_oid}, {"assigned_to": 1})
+                if lead_doc and lead_doc.get("assigned_to"):
+                    recipients.add(str(lead_doc["assigned_to"]))
+            except Exception as e:
+                logger.warning(f"notify_lead_stakeholders: lead owner lookup failed: {e}")
+
+        # Resolve all managers + admins of this org
+        roles = []
+        if include_managers:
+            roles.append("manager")
+        if include_admins:
+            roles += ["org_admin", "super_admin"]
+        if roles:
+            try:
+                async for u in db.users.find(
+                    {"organization_id": org_oid, "role": {"$in": roles}},
+                    {"_id": 1},
+                ):
+                    recipients.add(str(u["_id"]))
+            except Exception as e:
+                logger.warning(f"notify_lead_stakeholders: role lookup failed: {e}")
+
+        # Exclude the actor — no self-notifications
+        actor_id = (actor or {}).get("id")
+        if actor_id:
+            recipients.discard(str(actor_id))
+
+        if not recipients:
+            return
+
+        deep_link = url or f"/leads?openLead={lid_str}"
+        now_utc = datetime.now(timezone.utc)
+        base_doc = {
+            "type": notif_type,
+            "message": message,
+            "lead_id": lid_str,
+            "read": False,
+            "organization_id": org_oid,
+            "created_at": now_utc,
+            "actor_id": actor_id,
+            "actor_name": (actor or {}).get("name"),
+            "url": deep_link,
+            **(extra or {}),
+        }
+
+        # Persist one bell notification per recipient + send push.
+        for uid in recipients:
+            try:
+                await db.notifications.insert_one({**base_doc, "user_id": uid})
+            except Exception as e:
+                logger.warning(f"notify_lead_stakeholders: bell insert failed for {uid}: {e}")
+            try:
+                await send_web_push(
+                    uid,
+                    title=push_title,
+                    body=push_body,
+                    url=deep_link,
+                    tag=f"lead-{lid_str}",
+                )
+            except Exception as e:
+                logger.warning(f"notify_lead_stakeholders: web push failed for {uid}: {e}")
+    except Exception as e:
+        # Defensive — never let a notification failure break the parent API call
+        logger.error(f"notify_lead_stakeholders fatal: {e}")
+
+
 # ==================== Notification Scheduler (followup digest + demo reminders) ====================
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from zoneinfo import ZoneInfo
@@ -2057,6 +2152,16 @@ async def update_lead(lead_id: str, data: LeadUpdate, current_user: dict = Depen
             current_user,
             org_id,
         )
+        # Fan-out: notify owner + managers/admins (excluding actor)
+        await notify_lead_stakeholders(
+            lead_id=lid,
+            organization_id=org_id,
+            actor=current_user,
+            notif_type="lead_status_changed",
+            message=f"{current_user.get('name')} changed status of '{current.get('name')}' from {current.get('status')} → {new_status}",
+            push_title=f"{current.get('name')}: {current.get('status')} → {new_status}",
+            push_body=f"Updated by {current_user.get('name')}",
+        )
     if "assigned_to" in update_data and current.get("assigned_to") != update_data["assigned_to"]:
         await log_lead_event(
             lead_id,
@@ -2414,23 +2519,17 @@ async def add_lead_comment(lead_id: str, data: LeadCommentCreate, current_user: 
         org_id,
     )
 
-    # Notify the assigned counselor if the commenter is someone else
-    if data.notify_assignee and lead.get("assigned_to") and lead["assigned_to"] != current_user["id"]:
-        await db.notifications.insert_one({
-            "user_id": lead["assigned_to"],
-            "message": f"{current_user.get('name')} commented on lead '{lead.get('name')}': {note[:120]}{'…' if len(note) > 120 else ''}",
-            "type": "lead_comment",
-            "lead_id": str(lid),
-            "read": False,
-            "organization_id": org_id,
-            "created_at": datetime.now(timezone.utc),
-        })
-        await send_web_push(
-            lead["assigned_to"],
-            title=f"Comment from {current_user.get('name')}",
-            body=f"'{lead.get('name')}': {note[:100]}",
-            url=f"/leads?openLead={lid}",
-            tag=f"lead-{lid}",
+    # Notify the assigned counselor + managers/admins (excluding the commenter)
+    if data.notify_assignee:
+        snippet = f"{note[:120]}{'…' if len(note) > 120 else ''}"
+        await notify_lead_stakeholders(
+            lead_id=lid,
+            organization_id=org_id,
+            actor=current_user,
+            notif_type="lead_comment",
+            message=f"{current_user.get('name')} commented on lead '{lead.get('name')}': {snippet}",
+            push_title=f"Comment from {current_user.get('name')}",
+            push_body=f"'{lead.get('name')}': {note[:100]}",
         )
 
     return {"message": "Comment added", "lead_id": str(lid)}
@@ -2528,24 +2627,16 @@ async def add_lead_attachment(
     }
     await log_lead_event(lid, "lead_attachment", payload, current_user, org_id)
 
-    # Notify the assigned counselor if the uploader is someone else
-    if lead.get("assigned_to") and lead["assigned_to"] != current_user["id"]:
-        await db.notifications.insert_one({
-            "user_id": lead["assigned_to"],
-            "message": f"{current_user.get('name')} attached a file to lead '{lead.get('name')}': {payload['filename']}",
-            "type": "lead_attachment",
-            "lead_id": str(lid),
-            "read": False,
-            "organization_id": org_id,
-            "created_at": datetime.now(timezone.utc),
-        })
-        await send_web_push(
-            lead["assigned_to"],
-            title=f"{current_user.get('name')} attached a file",
-            body=f"'{lead.get('name')}' · {payload['filename']}",
-            url=f"/leads?openLead={lid}",
-            tag=f"lead-{lid}",
-        )
+    # Notify owner + managers/admins (excluding uploader)
+    await notify_lead_stakeholders(
+        lead_id=lid,
+        organization_id=org_id,
+        actor=current_user,
+        notif_type="lead_attachment",
+        message=f"{current_user.get('name')} attached a file to lead '{lead.get('name')}': {payload['filename']}",
+        push_title=f"{current_user.get('name')} attached a file",
+        push_body=f"'{lead.get('name')}' · {payload['filename']}",
+    )
 
     return {"message": "File attached", "lead_id": str(lid), **payload}
 
@@ -2742,23 +2833,48 @@ async def create_demo(data: DemoCreate, current_user: dict = Depends(get_current
         current_user, org_id,
     )
 
-    # Notify demo owner
+    # Fan-out: demo owner + lead owner + managers/admins (excluding the scheduler)
+    await notify_lead_stakeholders(
+        lead_id=lid,
+        organization_id=org_id,
+        actor=current_user,
+        notif_type="demo_scheduled",
+        message=f"{current_user.get('name')} scheduled a demo with '{lead.get('name')}' on {data.scheduled_date} at {data.scheduled_time}",
+        push_title=f"Demo scheduled · {lead.get('name')}",
+        push_body=f"{data.scheduled_date} at {data.scheduled_time} · {data.demo_mode}",
+        url="/demos",
+        extra={"demo_id": str(result.inserted_id)},
+    )
+
+    # Also notify the demo owner directly if they're not already a stakeholder (e.g. they're a counselor but not assigned to this lead)
     if str(owner_oid) != current_user["id"]:
-        await db.notifications.insert_one({
-            "user_id": str(owner_oid),
-            "message": f"Demo scheduled with {lead.get('name')} on {data.scheduled_date} at {data.scheduled_time}",
-            "type": "demo_assigned",
-            "read": False,
-            "organization_id": org_id,
-            "created_at": datetime.now(timezone.utc),
-        })
-        await send_web_push(
-            str(owner_oid),
-            title=f"Demo scheduled with {lead.get('name')}",
-            body=f"{data.scheduled_date} at {data.scheduled_time} · {data.demo_mode}",
-            url="/demos",
-            tag=f"demo-{result.inserted_id}",
-        )
+        try:
+            already_notified = await db.notifications.find_one({
+                "user_id": str(owner_oid),
+                "demo_id": str(result.inserted_id),
+                "type": "demo_scheduled",
+            })
+            if not already_notified:
+                await db.notifications.insert_one({
+                    "user_id": str(owner_oid),
+                    "message": f"Demo scheduled with {lead.get('name')} on {data.scheduled_date} at {data.scheduled_time}",
+                    "type": "demo_assigned",
+                    "demo_id": str(result.inserted_id),
+                    "lead_id": str(lid),
+                    "read": False,
+                    "organization_id": org_id,
+                    "url": "/demos",
+                    "created_at": datetime.now(timezone.utc),
+                })
+                await send_web_push(
+                    str(owner_oid),
+                    title=f"Demo scheduled with {lead.get('name')}",
+                    body=f"{data.scheduled_date} at {data.scheduled_time} · {data.demo_mode}",
+                    url="/demos",
+                    tag=f"demo-{result.inserted_id}",
+                )
+        except Exception as e:
+            logger.warning(f"demo owner direct notify failed: {e}")
 
     share = _build_demo_share_links(lead, demo_doc)
     out = _serialize_demo(demo_doc)
@@ -2877,25 +2993,49 @@ async def update_demo(demo_id: str, data: DemoEdit, current_user: dict = Depends
     except Exception as e:
         logger.warning(f"demo_updated timeline log failed: {e}")
 
-    # Notify demo owner if a different user edited their demo
-    if demo_doc.get("demo_owner_id") and demo_doc["demo_owner_id"] != current_user["id"]:
-        await db.notifications.insert_one({
-            "user_id": demo_doc["demo_owner_id"],
-            "message": f"{current_user.get('name')} updated the demo for '{demo_doc.get('lead_name')}' — please review the new details.",
-            "type": "demo_updated",
-            "demo_id": str(did),
-            "lead_id": demo_doc.get("lead_id"),
-            "read": False,
-            "organization_id": org_id,
-            "created_at": datetime.now(timezone.utc),
-        })
-        await send_web_push(
-            demo_doc["demo_owner_id"],
-            title=f"Demo updated by {current_user.get('name')}",
-            body=f"'{demo_doc.get('lead_name')}' · {demo_doc.get('scheduled_date')} at {demo_doc.get('scheduled_time')}",
+    # Fan-out: notify lead owner + managers/admins + demo owner (excluding editor)
+    lead_id_oid = ObjectId(demo_doc["lead_id"]) if demo_doc.get("lead_id") else None
+    if lead_id_oid:
+        await notify_lead_stakeholders(
+            lead_id=lead_id_oid,
+            organization_id=org_id,
+            actor=current_user,
+            notif_type="demo_updated",
+            message=f"{current_user.get('name')} updated the demo for '{demo_doc.get('lead_name')}' — please review the new details",
+            push_title=f"Demo updated · {demo_doc.get('lead_name')}",
+            push_body=f"{demo_doc.get('scheduled_date')} at {demo_doc.get('scheduled_time')} · by {current_user.get('name')}",
             url="/demos",
-            tag=f"demo-{did}",
+            extra={"demo_id": str(did)},
         )
+    # Also ping the demo owner directly if they are NOT the lead owner (avoid double bell — fan-out covers owner role)
+    if demo_doc.get("demo_owner_id") and demo_doc["demo_owner_id"] != current_user["id"]:
+        try:
+            already = await db.notifications.find_one({
+                "user_id": demo_doc["demo_owner_id"],
+                "demo_id": str(did),
+                "type": {"$in": ["demo_updated"]},
+            })
+            if not already:
+                await db.notifications.insert_one({
+                    "user_id": demo_doc["demo_owner_id"],
+                    "message": f"{current_user.get('name')} updated your demo for '{demo_doc.get('lead_name')}' — please review",
+                    "type": "demo_updated",
+                    "demo_id": str(did),
+                    "lead_id": demo_doc.get("lead_id"),
+                    "read": False,
+                    "organization_id": org_id,
+                    "url": "/demos",
+                    "created_at": datetime.now(timezone.utc),
+                })
+                await send_web_push(
+                    demo_doc["demo_owner_id"],
+                    title=f"Demo updated by {current_user.get('name')}",
+                    body=f"'{demo_doc.get('lead_name')}' · {demo_doc.get('scheduled_date')} at {demo_doc.get('scheduled_time')}",
+                    url="/demos",
+                    tag=f"demo-{did}",
+                )
+        except Exception as e:
+            logger.warning(f"demo owner direct update notify failed: {e}")
 
     out = _serialize_demo(demo_doc)
     out["share"] = _build_demo_share_links(lead or {}, demo_doc)
@@ -2965,6 +3105,19 @@ async def complete_demo(demo_id: str, data: DemoComplete, current_user: dict = D
             current_user, org_id,
         )
 
+    # Fan-out: notify owner + managers/admins (excluding the demo presenter)
+    await notify_lead_stakeholders(
+        lead_id=lid,
+        organization_id=org_id,
+        actor=current_user,
+        notif_type="demo_completed",
+        message=f"{current_user.get('name')} marked demo as '{data.outcome}' for '{demo.get('lead_name')}'",
+        push_title=f"Demo {data.outcome} · {demo.get('lead_name')}",
+        push_body=f"Completed by {current_user.get('name')}" + (f" — {data.feedback[:80]}" if data.feedback else ""),
+        url="/demos",
+        extra={"demo_id": demo_id},
+    )
+
     return {"message": "Demo completed", "status": new_status}
 
 
@@ -3011,6 +3164,22 @@ async def complete_followup(followup_id: str, data: FollowupComplete, current_us
         },
         current_user, org_id,
     )
+
+    # Fan-out: notify owner + managers/admins (excluding actor)
+    try:
+        summary_snip = (data.summary or "")[:120]
+        await notify_lead_stakeholders(
+            lead_id=lid,
+            organization_id=org_id,
+            actor=current_user,
+            notif_type="followup_completed",
+            message=f"{current_user.get('name')} completed a followup on '{lead.get('name')}'" + (f": {summary_snip}" if summary_snip else ""),
+            push_title=f"Followup done · {lead.get('name')}",
+            push_body=f"By {current_user.get('name')}" + (f" — {summary_snip[:80]}" if summary_snip else ""),
+            extra={"followup_id": str(fid)},
+        )
+    except Exception as e:
+        logger.warning(f"followup_completed notify fan-out failed: {e}")
 
     # Status change
     if data.new_status and data.new_status != lead.get("status"):
@@ -3134,6 +3303,27 @@ async def create_followup(data: FollowupCreate, current_user: dict = Depends(get
         current_user,
         org_id,
     )
+
+    # Fan-out: owner + managers/admins (excluding actor)
+    try:
+        lid_oid = ObjectId(data.lead_id)
+        lead_for_notif = await db.leads.find_one({"_id": lid_oid}, {"name": 1})
+        lead_name = (lead_for_notif or {}).get("name") or "Lead"
+        when_str = f"{data.followup_date} at {data.followup_time}" if data.followup_time else data.followup_date
+        remarks_snip = (data.remarks or "")[:100]
+        await notify_lead_stakeholders(
+            lead_id=lid_oid,
+            organization_id=org_id,
+            actor=current_user,
+            notif_type="followup_added",
+            message=f"{current_user.get('name')} scheduled a followup for '{lead_name}' on {when_str}",
+            push_title=f"Followup scheduled · {lead_name}",
+            push_body=f"On {when_str} · by {current_user.get('name')}" + (f" — {remarks_snip}" if remarks_snip else ""),
+            url=f"/leads?openLead={data.lead_id}",
+            extra={"followup_id": followup_doc["_id"]},
+        )
+    except Exception as e:
+        logger.warning(f"followup notify fan-out failed: {e}")
 
     return followup_doc
 
@@ -3471,6 +3661,88 @@ async def mark_all_notifications_read(current_user: dict = Depends(get_current_u
 async def notifications_unread_count(current_user: dict = Depends(get_current_user)):
     count = await db.notifications.count_documents({"user_id": current_user["id"], "read": False})
     return {"count": count}
+
+
+# ==================== Activity Feed ====================
+# A cross-lead "what's going on" stream so managers/admins can triage the org
+# at a glance and counselors can see what was done on their own leads without
+# digging through each lead detail. Sourced from `lead_timeline` (the single
+# source of truth for every lead action) — joined with lead name for display.
+@api_router.get("/activity")
+async def get_lead_activity_feed(
+    current_user: dict = Depends(get_current_user),
+    limit: int = 100,
+    skip: int = 0,
+    event_type: Optional[str] = None,    # filter by single event_type or "all"
+    actor_id: Optional[str] = None,      # filter by who did it
+    lead_id: Optional[str] = None,       # focus on a single lead
+    days: Optional[int] = 30,            # only events within the last N days (default 30)
+):
+    """Returns recent lead-timeline events visible to the current user, enriched
+    with lead name. Counselors see only events on their own leads. Managers and
+    admins see everything in the org."""
+    org_id = ObjectId(current_user["organization_id"])
+    query: dict = {"organization_id": org_id}
+
+    if event_type and event_type != "all":
+        query["event_type"] = event_type
+    if actor_id:
+        query["actor_id"] = actor_id
+    if days and isinstance(days, int) and days > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        query["created_at"] = {"$gte": cutoff}
+
+    # Role scoping — counselors/telecallers see only their own leads
+    if current_user["role"] in ("counselor", "telecaller"):
+        my_lead_ids = await db.leads.find(
+            {"organization_id": org_id, "assigned_to": current_user["id"]},
+            {"_id": 1},
+        ).to_list(5000)
+        allowed_ids = [ld["_id"] for ld in my_lead_ids]
+        if not allowed_ids:
+            return {"items": [], "total": 0}
+        query["lead_id"] = {"$in": allowed_ids}
+
+    if lead_id:
+        try:
+            lid_oid = ObjectId(lead_id)
+            # If query already has lead_id (role scoped) ensure intersection
+            if "lead_id" in query and isinstance(query["lead_id"], dict) and "$in" in query["lead_id"]:
+                if lid_oid not in query["lead_id"]["$in"]:
+                    return {"items": [], "total": 0}
+            query["lead_id"] = lid_oid
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid lead_id")
+
+    total = await db.lead_timeline.count_documents(query)
+    cursor = db.lead_timeline.find(query).sort("created_at", -1).skip(max(0, skip)).limit(max(1, min(limit, 200)))
+    raw_events = await cursor.to_list(length=limit)
+
+    # Enrich each event with lead_name in one go (avoid N+1)
+    lead_ids = list({e.get("lead_id") for e in raw_events if e.get("lead_id")})
+    lead_map: dict = {}
+    if lead_ids:
+        async for ld in db.leads.find({"_id": {"$in": lead_ids}}, {"name": 1, "lead_id": 1, "assigned_to": 1, "status": 1}):
+            lead_map[str(ld["_id"])] = ld
+
+    items = []
+    for e in raw_events:
+        lid_str = str(e.get("lead_id")) if e.get("lead_id") else None
+        lead_info = lead_map.get(lid_str) or {}
+        items.append({
+            "id": str(e["_id"]),
+            "event_type": e.get("event_type"),
+            "payload": e.get("payload") or {},
+            "actor_id": e.get("actor_id"),
+            "actor_name": e.get("actor_name"),
+            "actor_role": e.get("actor_role"),
+            "lead_id": lid_str,
+            "lead_name": lead_info.get("name"),
+            "lead_ref": lead_info.get("lead_id"),       # human readable LEAD0001
+            "lead_status": lead_info.get("status"),
+            "created_at": e.get("created_at"),
+        })
+    return {"items": items, "total": total}
 
 # ==================== Lead Source Routes ====================
 @api_router.post("/lead-sources")

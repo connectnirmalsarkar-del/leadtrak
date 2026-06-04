@@ -54,6 +54,7 @@ const navItems = [
   { path: '/demos', label: 'Demos', icon: Video, testId: 'nav-demos', feature: 'demos' },
   { path: '/admissions', labelKey: 'conversions', fallback: 'Conversions', icon: Trophy, testId: 'nav-admissions', feature: 'admissions' },
   { path: '/tasks', label: 'Tasks', icon: CheckSquare, testId: 'nav-tasks' },
+  { path: '/activity', label: 'Activity', icon: Activity, testId: 'nav-activity-feed' },
   { path: '/whatsapp-templates', label: 'WhatsApp', icon: MessageSquare, testId: 'nav-whatsapp' },
   { path: '/reports', label: 'Reports', icon: BarChart3, testId: 'nav-reports', rolesHidden: ['counselor', 'telecaller'] },
 ];
@@ -168,13 +169,25 @@ export default function DashboardLayout({ children }) {
       setNotifications((prev) => prev.map((n) => (n._id === notif._id ? { ...n, read: true } : n)));
     }
     setShowNotifPanel(false);
+    // Prefer the explicit deep-link URL that the backend stamps on every
+    // notification (set by notify_lead_stakeholders). Fall back to type-based
+    // routing for legacy notifications that don't carry a `url`.
+    if (notif.url) {
+      navigate(notif.url);
+      return;
+    }
     if (notif.type === 'ticket_status' || notif.type === 'ticket_reply') {
       navigate('/support');
-    } else if (notif.type === 'lead_assigned' || notif.type === 'lead_transferred' || notif.type === 'lead_comment' || notif.type === 'lead_attachment') {
-      navigate(notif.lead_id ? `/leads?leadId=${notif.lead_id}` : '/leads');
-    } else if (notif.type === 'task_assigned') {
+    } else if ([
+      'lead_assigned', 'lead_transferred', 'lead_comment', 'lead_attachment',
+      'lead_status_changed', 'followup_added', 'followup_completed',
+    ].includes(notif.type)) {
+      navigate(notif.lead_id ? `/leads?openLead=${notif.lead_id}` : '/leads');
+    } else if (notif.type === 'task_assigned' || notif.type === 'task_status_changed') {
       navigate('/tasks');
-    } else if (notif.type === 'demo_assigned' || notif.type === 'demo_updated' || notif.type === 'demo_reminder') {
+    } else if ([
+      'demo_assigned', 'demo_scheduled', 'demo_updated', 'demo_completed', 'demo_reminder',
+    ].includes(notif.type)) {
       navigate('/demos');
     } else if (notif.type === 'followup_digest') {
       navigate('/followups');

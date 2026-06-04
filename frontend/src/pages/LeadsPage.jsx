@@ -169,7 +169,9 @@ export default function LeadsPage() {
   useEffect(() => {
     if (leads.length === 0) return;
     const params = new URLSearchParams(window.location.search);
-    const wantId = params.get('leadId');
+    // Support both `?leadId=` (legacy notification deep-links) and
+    // `?openLead=` (current notify_lead_stakeholders stamps the latter).
+    const wantId = params.get('leadId') || params.get('openLead');
     const wantTab = params.get('tab');
     if (!wantId) return;
     const lead = leads.find((l) => l._id === wantId);
