@@ -1170,3 +1170,51 @@ The Chromium emulator does NOT simulate `env(safe-area-inset-*)` — those retur
 **SW cache:** bumped to `leadtrak-v73-uniform-form-fields-mobile`.
 
 **Note:** When user updates production to v73, hard refresh PWA to confirm the fix is live. The visual uneven-ness was likely a cached old version.
+
+---
+
+## Iteration 18 — Sheet polish + Activity fan-out + auth fixes (Feb 2026)
+
+### 1. Lead Side Sheet header redesign (mobile)
+- Restacked SheetHeader with proper hierarchy (eyebrow: lead_id + status badge → SheetTitle Sora 2xl/3xl → meta lines with edit-on-hover → action row with full "Edit details" button).
+- Long names handled with `-webkit-line-clamp:3` + `break-words`.
+- File: `/app/frontend/src/pages/LeadsPage.jsx`. SW cache → `v112-sheet-header-redesign`.
+
+### 2. Add Lead form duplicate-field fix (IT industry)
+- IT Software industry was rendering Company Name + Designation TWICE because both the dynamic widget-fields map AND the hardcoded `showCompanyCol` block emitted them.
+- Fix: added `company_name` + `designation` to the exclude list of the dynamic map.
+- SW cache → `v113-dedupe-add-lead-fields`.
+
+### 3. PWA logout-on-resume fix (CRITICAL)
+- **Root cause:** `AuthContext.jsx` 401 interceptor used `url.includes('/auth/')` which matched `/auth/me` too, causing the silent refresh to be skipped on the very first call after the 1hr access_token expiry → user dumped to `/login` on every PWA cold start.
+- **Fix:** replaced with explicit skip-list of endpoints that mint/clear cookies themselves (login, register, refresh, logout, forgot/reset password). `/auth/me` now goes through silent refresh.
+- Toast "Session expired" only fires if user was previously authenticated (no scary toast for first-time visitors).
+- File: `/app/frontend/src/context/AuthContext.jsx`. SW cache → `v114-auth-refresh-fix`.
+
+### 4. Activity Notification Fan-out (P0 feature)
+**Reported pain:** "JOKHON KONO UPDATE HOCCHE STATUS, MASSAGE LEKHA HOCCHE TIME LINE E ... tokhon notification lagbe jar lead take jabe and manager ke jabe. ekta na korle bujha jacche na system e ki cholche."
+
+**Implementation:**
+- New backend helper `notify_lead_stakeholders(lead_id, organization_id, actor, notif_type, message, push_title, push_body, url=None, extra=None, include_owner=True, include_managers=True, include_admins=True)` at `server.py:303`.
+- Wired into PUT `/leads/{id}` (status change), POST `/leads/{id}/comments`, POST `/leads/{id}/attachments`, POST `/demos`, PUT `/demos/{id}`, POST `/demos/{id}/complete`, POST `/followups`, POST `/followups/{id}/complete`.
+- Recipients = lead owner ∪ org managers ∪ org_admin/super_admin, MINUS the actor.
+- Persists one row per recipient in `notifications` collection with `url`, `actor_id`, `actor_name`, `lead_id`, etc. Also fires web push to each recipient.
+
+**New Activity Feed endpoint:** `GET /api/activity` returns lead_timeline cross-lead, scoped per role (counselors only see their leads; managers/admins see everything). Filters: event_type, actor_id, lead_id, days, limit, skip.
+
+**New Activity Feed page:** `/activity` route. UI: search, type filter, date-range filter, actor filter (managers/admins), grouped by Today/Yesterday/date heading, click card → deep-link to lead detail sheet.
+
+**Other wiring:**
+- Bell dropdown openNotif() now honors `notif.url` first, falls back to type-based routing for new types.
+- LeadsPage accepts both `?leadId=` (legacy) and `?openLead=` (new) query params.
+
+**Files:**
+- Backend: `/app/backend/server.py` (helper + 8 wiring points + new `/api/activity` endpoint)
+- Frontend new: `/app/frontend/src/pages/ActivityFeedPage.jsx`
+- Frontend modified: `/app/frontend/src/App.js`, `/app/frontend/src/components/layout/DashboardLayout.jsx`, `/app/frontend/src/pages/LeadsPage.jsx`
+
+**Testing (iteration_18.json):** Backend pytest 14/14 PASSED. Frontend smoke 100%. Auth refresh, all 8 fan-out endpoints, role-scoping, filters all verified. **0 critical, 0 minor issues.**
+
+**SW cache:** `v115-activity-fanout`.
+
+---
