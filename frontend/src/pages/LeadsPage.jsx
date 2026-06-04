@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { API, useAuth } from '@/context/AuthContext';
 import { useTerminology } from '@/lib/terminology';
@@ -95,6 +96,7 @@ const statusBadgeClass = (status) => {
 export default function LeadsPage() {
   const t = useTerminology();
   const { user } = useAuth();
+  const location = useLocation();
   // Use industry-specific statuses from /auth/me. While user is still
   // loading (null), keep this empty so we don't briefly flash a generic
   // fallback list that's different from the real one.
@@ -168,7 +170,12 @@ export default function LeadsPage() {
   // Deep-link: open a specific lead from notification or report drill-down
   useEffect(() => {
     if (leads.length === 0) return;
-    const params = new URLSearchParams(window.location.search);
+    // Watch location.search (not just `leads`) so that bell-notification
+    // navigations to /leads?openLead=… work even when the user is ALREADY on
+    // /leads (in which case `leads` doesn't change and the effect wouldn't
+    // re-run if it only depended on leads). This is the main reason PWA users
+    // saw "click bell → nothing happens" — same-route navigations were lost.
+    const params = new URLSearchParams(location.search || window.location.search);
     // Support both `?leadId=` (legacy notification deep-links) and
     // `?openLead=` (current notify_lead_stakeholders stamps the latter).
     const wantId = params.get('leadId') || params.get('openLead');
@@ -181,7 +188,7 @@ export default function LeadsPage() {
       // Clean the URL so a refresh doesn't keep re-opening
       window.history.replaceState({}, '', '/leads');
     }
-  }, [leads]);
+  }, [leads, location.search]);
 
   const [states, setStates] = useState([]);
   const [citiesForState, setCitiesForState] = useState([]);
