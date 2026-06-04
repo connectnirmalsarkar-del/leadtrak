@@ -370,8 +370,21 @@ async def notify_lead_stakeholders(
         }
 
         # Persist one bell notification per recipient + send push.
+        # Idempotency: short-circuit if the same recipient already has a
+        # notification of this type for this lead created within the last 5
+        # seconds (handles accidental double-submits / network retries that
+        # would otherwise produce two identical bell rows).
+        recent_cutoff = now_utc - timedelta(seconds=5)
         for uid in recipients:
             try:
+                duplicate = await db.notifications.find_one({
+                    "user_id": uid,
+                    "type": notif_type,
+                    "lead_id": lid_str,
+                    "created_at": {"$gte": recent_cutoff},
+                })
+                if duplicate:
+                    continue
                 await db.notifications.insert_one({**base_doc, "user_id": uid})
             except Exception as e:
                 logger.warning(f"notify_lead_stakeholders: bell insert failed for {uid}: {e}")
@@ -2530,6 +2543,7 @@ async def add_lead_comment(lead_id: str, data: LeadCommentCreate, current_user: 
             message=f"{current_user.get('name')} commented on lead '{lead.get('name')}': {snippet}",
             push_title=f"Comment from {current_user.get('name')}",
             push_body=f"'{lead.get('name')}': {note[:100]}",
+            url=f"/leads?openLead={lid}&tab=timeline",
         )
 
     return {"message": "Comment added", "lead_id": str(lid)}
@@ -2636,6 +2650,7 @@ async def add_lead_attachment(
         message=f"{current_user.get('name')} attached a file to lead '{lead.get('name')}': {payload['filename']}",
         push_title=f"{current_user.get('name')} attached a file",
         push_body=f"'{lead.get('name')}' · {payload['filename']}",
+        url=f"/leads?openLead={lid}&tab=timeline",
     )
 
     return {"message": "File attached", "lead_id": str(lid), **payload}
@@ -3176,6 +3191,7 @@ async def complete_followup(followup_id: str, data: FollowupComplete, current_us
             message=f"{current_user.get('name')} completed a followup on '{lead.get('name')}'" + (f": {summary_snip}" if summary_snip else ""),
             push_title=f"Followup done · {lead.get('name')}",
             push_body=f"By {current_user.get('name')}" + (f" — {summary_snip[:80]}" if summary_snip else ""),
+            url=f"/leads?openLead={lid}&tab=timeline",
             extra={"followup_id": str(fid)},
         )
     except Exception as e:
@@ -3319,7 +3335,7 @@ async def create_followup(data: FollowupCreate, current_user: dict = Depends(get
             message=f"{current_user.get('name')} scheduled a followup for '{lead_name}' on {when_str}",
             push_title=f"Followup scheduled · {lead_name}",
             push_body=f"On {when_str} · by {current_user.get('name')}" + (f" — {remarks_snip}" if remarks_snip else ""),
-            url=f"/leads?openLead={data.lead_id}",
+            url=f"/leads?openLead={data.lead_id}&tab=timeline",
             extra={"followup_id": followup_doc["_id"]},
         )
     except Exception as e:
@@ -7142,7 +7158,14 @@ async def import_leads_csv(file: UploadFile = File(...), current_user: dict = De
 async def export_leads_excel(current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
     leads = await db.leads.find({"organization_id": org_id}).sort("created_at", -1).to_list(10000)
-    
+
+    # Build a one-shot user map so we can show the caller's name + role on each row
+    # without an N+1 lookup. Includes all org users (callers AND inactive ones,
+    # so historical assignments still resolve).
+    user_map: dict[str, dict] = {}
+    async for u in db.users.find({"organization_id": org_id}, {"name": 1, "email": 1, "role": 1}):
+        user_map[str(u["_id"])] = u
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Leads"
@@ -7151,7 +7174,8 @@ async def export_leads_excel(current_user: dict = Depends(get_current_user)):
     industry = (await db.organizations.find_one({"_id": org_id}, {"industry": 1}) or {}).get("industry", "")
     headers = [
         "Lead ID", "Name", "Mobile", "WhatsApp", "Email", "Course/Service",
-        "Source", "Status", "Temperature", "State", "City",
+        "Source", "Status", "Temperature", "Assigned To (Caller)", "Caller Role",
+        "State", "City",
     ]
     extra_keys = []  # per-industry column keys to append
     if industry == "it_software":
@@ -7169,6 +7193,7 @@ async def export_leads_excel(current_user: dict = Depends(get_current_user)):
     headers += ["Created"]
     ws.append(headers)
     for lead in leads:
+        assignee = user_map.get(str(lead.get("assigned_to") or ""), {}) if lead.get("assigned_to") else {}
         row = [
             lead.get("lead_id", ""),
             lead.get("name", ""),
@@ -7179,6 +7204,8 @@ async def export_leads_excel(current_user: dict = Depends(get_current_user)):
             lead.get("lead_source", ""),
             lead.get("status", ""),
             lead.get("temperature", ""),
+            assignee.get("name", "Unassigned"),
+            assignee.get("role", ""),
             lead.get("state", ""),
             lead.get("city", ""),
         ]

@@ -820,6 +820,7 @@ export default function LeadsPage() {
                 <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Company</TableHead>
               )}
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Source</TableHead>
+              <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Assigned To</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Temp</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Status</TableHead>
               <TableHead className="font-semibold text-xs uppercase tracking-[0.1em]">Created</TableHead>
@@ -828,7 +829,7 @@ export default function LeadsPage() {
           <TableBody>
             {leads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={showCompanyCol ? 8 : 7} className="text-center py-12 text-slate-500">
+                <TableCell colSpan={showCompanyCol ? 9 : 8} className="text-center py-12 text-slate-500">
                   No {t.leads.toLowerCase()} found. Click "Add {t.lead}" to get started.
                 </TableCell>
               </TableRow>
@@ -854,6 +855,13 @@ export default function LeadsPage() {
                     </TableCell>
                   )}
                   <TableCell className="text-sm text-slate-600 whitespace-nowrap">{lead.lead_source}</TableCell>
+                  <TableCell className="text-sm whitespace-nowrap" data-testid={`lead-caller-${lead._id}`}>
+                    {lead.assigned_to ? (
+                      <span className="text-slate-700">{users.find((u) => u._id === lead.assigned_to)?.name || 'Unknown'}</span>
+                    ) : (
+                      <span className="text-slate-400 italic">Unassigned</span>
+                    )}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Badge variant="outline" className={tempBadgeClass(lead.temperature)} data-testid={`temp-badge-${lead._id}`}>
                       {tempEmoji[(lead.temperature || 'warm').toLowerCase()]} {(lead.temperature || 'warm')}
