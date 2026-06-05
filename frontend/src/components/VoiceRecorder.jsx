@@ -62,13 +62,16 @@ export default function VoiceRecorder({ value, onChange, disabled }) {
     const f = e.target.files?.[0];
     if (!f) return;
     const name = (f.name || '').toLowerCase();
-    const allowedExts = ['.mp3', '.m4a', '.wav', '.ogg', '.webm', '.mp4', '.aac', '.opus'];
+    const allowedExts = ['.mp3', '.m4a', '.wav', '.ogg', '.oga', '.webm', '.mp4', '.aac', '.opus', '.amr', '.3gp', '.3gpp'];
     const extOk = allowedExts.some((ext) => name.endsWith(ext));
-    // Browsers sometimes report 'video/mp4' / 'video/webm' for audio-only containers
-    // (especially WhatsApp voice notes exported as .mp4). Accept by extension as fallback.
-    const mimeOk = (f.type || '').startsWith('audio/') || f.type === 'video/webm' || f.type === 'video/mp4';
+    // Browsers sometimes report 'video/mp4' / 'video/webm' / 'video/3gpp'
+    // for audio-only containers (especially WhatsApp voice notes exported as
+    // .mp4 and Android phone recorder output as .3gp). Accept by extension as
+    // a fallback when MIME hints lie.
+    const mimeOk = (f.type || '').startsWith('audio/')
+      || ['video/webm', 'video/mp4', 'video/3gpp'].includes(f.type);
     if (!mimeOk && !extOk) {
-      toast.error('Please choose an audio file (.mp3, .m4a, .wav, .ogg, .webm, .mp4)');
+      toast.error('Please choose an audio file (MP3, M4A, WAV, OGG, AAC, AMR, 3GP, WebM, MP4)');
       return;
     }
     if (f.size > MAX_UPLOAD_BYTES) {
@@ -252,10 +255,20 @@ export default function VoiceRecorder({ value, onChange, disabled }) {
 
       {mode === 'upload' ? (
         <div className="p-4 text-center">
+          {/*
+            File picker MIME hint — IMPORTANT for Android:
+            Using a bare `accept="audio/*"` (the obvious choice) causes Chrome
+            on Android to launch the Sound Recorder intent and hides the
+            Files / Drive / WhatsApp media chooser. Listing explicit MIME
+            types + extensions instead lets Android show the proper file
+            picker (Files / Downloads / Drive / WhatsApp Audio) while still
+            keeping iOS happy.
+            Refs: chromium issue 41384611, MDN <input type=file> accept notes.
+          */}
           <input
             ref={fileInputRef}
             type="file"
-            accept="audio/*,video/mp4,.mp3,.m4a,.wav,.ogg,.webm,.mp4,.aac,.opus"
+            accept="audio/mpeg,audio/mp3,audio/mp4,audio/m4a,audio/x-m4a,audio/wav,audio/x-wav,audio/ogg,audio/webm,audio/aac,audio/opus,audio/3gpp,audio/amr,video/mp4,.mp3,.m4a,.wav,.ogg,.oga,.opus,.webm,.aac,.amr,.3gp,.mp4"
             onChange={handleFileChoose}
             className="hidden"
             data-testid="voice-file-input"
@@ -271,7 +284,10 @@ export default function VoiceRecorder({ value, onChange, disabled }) {
             Choose audio file
           </button>
           <p className="text-[11px] text-slate-500 mt-2">
-            MP3, M4A, WAV, OGG, WebM, MP4 (WhatsApp voice) · max 5 MB
+            MP3, M4A, WAV, OGG, AAC, AMR, 3GP, WebM, MP4 (WhatsApp voice) · max 5 MB
+          </p>
+          <p className="text-[10px] text-slate-400 mt-1">
+            Tip: on Android, tap "Files" or "Browse" in the picker to find WhatsApp / Downloads.
           </p>
         </div>
       ) : (
