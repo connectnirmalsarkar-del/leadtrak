@@ -2007,19 +2007,34 @@ async def get_leads(
     if current_user["role"] in ("counselor", "telecaller"):
         query["assigned_to"] = current_user["id"]
     elif assigned_to:
-        query["assigned_to"] = assigned_to
+        # Special sentinel value from the UI: match leads with no assignee
+        if assigned_to == "unassigned":
+            query["$or"] = [
+                {"assigned_to": None},
+                {"assigned_to": ""},
+                {"assigned_to": {"$exists": False}},
+            ]
+        else:
+            query["assigned_to"] = assigned_to
 
     if status:
         query["status"] = status
     if source:
         query["lead_source"] = source
     if search:
-        query["$or"] = [
+        search_or = [
             {"name": {"$regex": search, "$options": "i"}},
             {"mobile": {"$regex": search, "$options": "i"}},
             {"whatsapp_number": {"$regex": search, "$options": "i"}},
-            {"email": {"$regex": search, "$options": "i"}}
+            {"email": {"$regex": search, "$options": "i"}},
         ]
+        # If we already have an $or clause (from the unassigned filter), AND
+        # the two conditions together via $and so neither clause clobbers the
+        # other.
+        if "$or" in query:
+            query["$and"] = [{"$or": query.pop("$or")}, {"$or": search_or}]
+        else:
+            query["$or"] = search_or
 
     # Pagination guardrails
     page = max(1, int(page or 1))

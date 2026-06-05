@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API, useAuth } from '@/context/AuthContext';
 import { useTerminology } from '@/lib/terminology';
-import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare, Upload, Download, ArrowRightLeft, AlertCircle, Clock, Activity, Video, Pencil, BookOpen, Building2 } from 'lucide-react';
+import { Plus, Search, Filter, MoreHorizontal, Phone, Mail, MapPin, MessageSquare, Upload, Download, ArrowRightLeft, AlertCircle, Clock, Activity, Video, Pencil, BookOpen, Building2, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -115,6 +115,7 @@ export default function LeadsPage() {
   const [users, setUsers] = useState([]);
   const [services, setServices] = useState([]);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterAssignedTo, setFilterAssignedTo] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [totalLeads, setTotalLeads] = useState(0);
@@ -161,12 +162,12 @@ export default function LeadsPage() {
     fetchUsers();
     fetchServices();
     fetchStates();
-  }, [filterStatus, search, page]);
+  }, [filterStatus, filterAssignedTo, search, page]);
 
   // Reset to page 1 whenever the filters/search change
   useEffect(() => {
     setPage(1);
-  }, [filterStatus, search]);
+  }, [filterStatus, filterAssignedTo, search]);
 
   // Deep-link: open a specific lead from notification or report drill-down
   useEffect(() => {
@@ -220,6 +221,7 @@ export default function LeadsPage() {
     try {
       const params = { page, limit: LEADS_PER_PAGE };
       if (filterStatus !== 'all') params.status = filterStatus;
+      if (filterAssignedTo !== 'all') params.assigned_to = filterAssignedTo;
       if (search) params.search = search;
       const { data } = await axios.get(`${API}/leads`, { params });
       // Backend now always returns paginated shape {items, total, page, limit, total_pages}
@@ -815,6 +817,38 @@ export default function LeadsPage() {
             {STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
+        {/* Caller / Counselor / Manager filter — only useful for users who can see other people's leads.
+            Callers (counselor/telecaller) already only see their own assignments, so we hide it for them. */}
+        {!['counselor', 'telecaller'].includes(user?.role) && users.length > 0 && (
+          <Select value={filterAssignedTo} onValueChange={setFilterAssignedTo}>
+            <SelectTrigger className="w-full sm:w-52" data-testid="leads-assignee-filter">
+              <User className="w-4 h-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              <SelectItem value="all">All Team Members</SelectItem>
+              <SelectItem value="unassigned">— Unassigned —</SelectItem>
+              {/* Group by role for quick scanning */}
+              {['org_admin', 'manager', 'counselor', 'telecaller']
+                .map((role) => {
+                  const group = users.filter((u) => u.role === role);
+                  if (group.length === 0) return null;
+                  return (
+                    <div key={role}>
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                        {role.replace('_', ' ')}
+                      </div>
+                      {group.map((u) => (
+                        <SelectItem key={u._id} value={u._id}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </div>
+                  );
+                })}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Leads Table */}

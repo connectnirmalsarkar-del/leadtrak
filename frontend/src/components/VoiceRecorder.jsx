@@ -257,17 +257,18 @@ export default function VoiceRecorder({ value, onChange, disabled }) {
         <div className="p-4 text-center">
           {/*
             File picker MIME hint — IMPORTANT for Android (debugged via user feedback):
-              • `accept="audio/*"` → Android opens MediaStore audio picker which
+              - "audio" + slash + asterisk: Android opens MediaStore audio picker which
                 CANNOT see WhatsApp voice notes (they live in WhatsApp's app-
                 private folder, not indexed by MediaStore).
-              • A specific MIME list like `audio/mpeg,audio/mp4,...` opens
+              - A specific MIME list like audio/mpeg, audio/mp4 etc opens
                 DocumentsUI but many OEMs (Samsung One UI, Xiaomi MIUI, Vivo
                 FunTouch) restrict it to Drive + Recent only — internal storage
                 tab is hidden.
-              • Bare `accept="*/*"` opens the FULL DocumentsUI on every Android
-                build: shows Recent, Downloads, WhatsApp Audio, Internal Storage,
-                SD card, Drive, etc. We then validate the extension in JS
-                (handleFileChoose) and reject non-audio files with a toast.
+              - Bare wildcard ("asterisk" + slash + "asterisk") opens the FULL
+                DocumentsUI on every Android build: shows Recent, Downloads,
+                WhatsApp Audio, Internal Storage, SD card, Drive, etc. We
+                then validate the extension in JS (handleFileChoose) and
+                reject non-audio files with a toast.
             This is the same pattern used by gmail-on-web, slack, etc.
           */}
           <input
