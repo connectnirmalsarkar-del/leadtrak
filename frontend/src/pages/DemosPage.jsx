@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API, useAuth } from '@/context/AuthContext';
-import { Video, Phone, Mail, CheckCircle2, ExternalLink, Calendar, Clock, Pencil, Building2 } from 'lucide-react';
+import { Video, Phone, Mail, CheckCircle2, ExternalLink, Calendar, Clock, Pencil, Building2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -102,6 +102,20 @@ export default function DemosPage() {
   const openComplete = (demo) => {
     setActiveDemo(demo);
     setCompleteForm({ outcome: 'interested', feedback: '', recording_url: '', lead_status: '' });
+  };
+
+  const handleDeleteDemo = async (demo) => {
+    const label = demoLabelSingular.toLowerCase();
+    if (!window.confirm(
+      `Delete this ${label} for ${demo.lead_name} on ${demo.scheduled_date} ${demo.scheduled_time}?\n\nThis cannot be undone.`
+    )) return;
+    try {
+      await axios.delete(`${API}/demos/${demo._id}`);
+      toast.success(`${demoLabelSingular} deleted`);
+      fetchDemos();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || `Failed to delete ${label}`);
+    }
   };
 
   const submitComplete = async () => {
@@ -231,6 +245,18 @@ export default function DemosPage() {
                     <Button size="sm" onClick={() => openComplete(d)} className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid={`demo-complete-btn-${d._id}`}>
                       <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
                       Mark Done
+                    </Button>
+                  )}
+                  {['super_admin', 'org_admin', 'manager'].includes(user?.role) && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 text-rose-600 hover:bg-rose-50 hover:text-rose-700 border-rose-200"
+                      onClick={() => handleDeleteDemo(d)}
+                      data-testid={`demo-delete-btn-${d._id}`}
+                      title="Delete demo"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   )}
                 </div>

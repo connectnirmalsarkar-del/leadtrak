@@ -3226,6 +3226,47 @@ async def update_demo(demo_id: str, data: DemoEdit, current_user: dict = Depends
     return out
 
 
+@api_router.delete("/demos/{demo_id}")
+async def delete_demo(demo_id: str, current_user: dict = Depends(get_current_user)):
+    """Admin-only: remove a demo entry entirely (used to clean up duplicates or
+    cancelled demos that no longer need to live in the history)."""
+    if current_user["role"] not in ("super_admin", "org_admin", "manager"):
+        raise HTTPException(status_code=403, detail="Only admins/managers can delete demos")
+    org_id = ObjectId(current_user["organization_id"])
+    did = safe_object_id(demo_id, "demo_id")
+    demo = await db.demos.find_one({"_id": did, "organization_id": org_id})
+    if not demo:
+        raise HTTPException(status_code=404, detail="Demo not found")
+    await db.demos.delete_one({"_id": did, "organization_id": org_id})
+    # Drop the original demo_scheduled timeline event so the lead history isn't
+    # polluted with a stale reference (audit is still preserved via the
+    # demo_cancelled event we append below).
+    try:
+        await db.lead_timeline.delete_many({
+            "lead_id": ObjectId(demo["lead_id"]) if demo.get("lead_id") else None,
+            "event_type": "demo_scheduled",
+            "payload.demo_id": demo_id,
+        })
+    except Exception as e:
+        logger.warning(f"timeline cleanup on demo delete failed: {e}")
+    try:
+        await log_lead_event(
+            ObjectId(demo["lead_id"]),
+            "demo_cancelled",
+            {
+                "demo_id": demo_id,
+                "reason": "Deleted by admin",
+                "lead_name": demo.get("lead_name"),
+                "scheduled_date": demo.get("scheduled_date"),
+                "scheduled_time": demo.get("scheduled_time"),
+            },
+            current_user, org_id,
+        )
+    except Exception as e:
+        logger.warning(f"timeline cancellation log failed: {e}")
+    return {"ok": True, "demo_id": demo_id}
+
+
 @api_router.post("/demos/{demo_id}/complete")
 async def complete_demo(demo_id: str, data: DemoComplete, current_user: dict = Depends(get_current_user)):
     """Demo presenter marks the demo complete with outcome + feedback."""
