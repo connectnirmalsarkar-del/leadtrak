@@ -256,19 +256,24 @@ export default function VoiceRecorder({ value, onChange, disabled }) {
       {mode === 'upload' ? (
         <div className="p-4 text-center">
           {/*
-            File picker MIME hint — IMPORTANT for Android:
-            Using a bare `accept="audio/*"` (the obvious choice) causes Chrome
-            on Android to launch the Sound Recorder intent and hides the
-            Files / Drive / WhatsApp media chooser. Listing explicit MIME
-            types + extensions instead lets Android show the proper file
-            picker (Files / Downloads / Drive / WhatsApp Audio) while still
-            keeping iOS happy.
-            Refs: chromium issue 41384611, MDN <input type=file> accept notes.
+            File picker MIME hint — IMPORTANT for Android (debugged via user feedback):
+              • `accept="audio/*"` → Android opens MediaStore audio picker which
+                CANNOT see WhatsApp voice notes (they live in WhatsApp's app-
+                private folder, not indexed by MediaStore).
+              • A specific MIME list like `audio/mpeg,audio/mp4,...` opens
+                DocumentsUI but many OEMs (Samsung One UI, Xiaomi MIUI, Vivo
+                FunTouch) restrict it to Drive + Recent only — internal storage
+                tab is hidden.
+              • Bare `accept="*/*"` opens the FULL DocumentsUI on every Android
+                build: shows Recent, Downloads, WhatsApp Audio, Internal Storage,
+                SD card, Drive, etc. We then validate the extension in JS
+                (handleFileChoose) and reject non-audio files with a toast.
+            This is the same pattern used by gmail-on-web, slack, etc.
           */}
           <input
             ref={fileInputRef}
             type="file"
-            accept="audio/mpeg,audio/mp3,audio/mp4,audio/m4a,audio/x-m4a,audio/wav,audio/x-wav,audio/ogg,audio/webm,audio/aac,audio/opus,audio/3gpp,audio/amr,video/mp4,.mp3,.m4a,.wav,.ogg,.oga,.opus,.webm,.aac,.amr,.3gp,.mp4"
+            accept="*/*"
             onChange={handleFileChoose}
             className="hidden"
             data-testid="voice-file-input"
@@ -287,7 +292,7 @@ export default function VoiceRecorder({ value, onChange, disabled }) {
             MP3, M4A, WAV, OGG, AAC, AMR, 3GP, WebM, MP4 (WhatsApp voice) · max 5 MB
           </p>
           <p className="text-[10px] text-slate-400 mt-1">
-            Tip: on Android, tap "Files" or "Browse" in the picker to find WhatsApp / Downloads.
+            On Android: tap the menu (≡) to switch between Downloads, WhatsApp Audio, Drive, etc.
           </p>
         </div>
       ) : (
