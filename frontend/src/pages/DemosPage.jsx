@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API, useAuth } from '@/context/AuthContext';
-import { Video, Phone, Mail, CheckCircle2, ExternalLink, Calendar, Clock, Pencil } from 'lucide-react';
+import { Video, Phone, Mail, CheckCircle2, ExternalLink, Calendar, Clock, Pencil, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -179,6 +179,13 @@ export default function DemosPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-baseline gap-2 mb-1">
                     <h3 className="font-semibold text-slate-900">{d.lead_name}</h3>
+                    {d.lead_company && (
+                      <span className="text-sm text-slate-700 inline-flex items-center gap-1" title={d.lead_company}>
+                        <span className="text-slate-400">·</span>
+                        <Building2 className="w-3 h-3 text-slate-400" />
+                        <span className="font-medium">{d.lead_company}</span>
+                      </span>
+                    )}
                     <span className="text-xs text-slate-400 font-mono">{d.lead_mobile}</span>
                     <Badge variant="outline" className={statusBadge(d.status)}>{d.status}</Badge>
                   </div>

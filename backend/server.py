@@ -2924,11 +2924,39 @@ async def create_demo(data: DemoCreate, current_user: dict = Depends(get_current
     if not owner:
         raise HTTPException(status_code=400, detail="Demo owner not found in your organization")
 
+    # Idempotency guard: a second identical POST (same lead + same scheduled
+    # date/time + same owner + same scheduler) within the last 60 seconds is
+    # almost certainly a double-tap or a retry from the client. Reject it.
+    # NOTE: we intentionally allow a *different* owner / date so legitimate
+    # reschedules and multi-owner demos still work.
+    recent_cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
+    existing = await db.demos.find_one({
+        "lead_id": str(lid),
+        "scheduled_date": data.scheduled_date,
+        "scheduled_time": data.scheduled_time,
+        "demo_owner_id": data.demo_owner_id,
+        "scheduled_by_id": current_user["id"],
+        "organization_id": org_id,
+        "created_at": {"$gte": recent_cutoff},
+    }, {"_id": 1})
+    if existing:
+        # Return the existing one as a 200 so the client treats it as success
+        existing_full = await db.demos.find_one({"_id": existing["_id"]})
+        return _serialize_demo(existing_full)
+
     demo_doc = {
         "lead_id": str(lid),
         "lead_name": lead.get("name"),
         "lead_mobile": lead.get("mobile"),
         "lead_email": lead.get("email"),
+        # Industry-aware secondary line shown next to the lead name on the
+        # demo list. For B2B industries we want the company; for education
+        # admission consultancy the target college; for real estate the
+        # interested project; for travel the package etc. We persist on the
+        # demo doc itself so historical demos remain stable even if the lead
+        # later changes.
+        "lead_company": lead.get("company_name") or lead.get("target_college") or "",
+        "lead_course": lead.get("course_interested") or "",
         "demo_owner_id": data.demo_owner_id,
         "demo_owner_name": owner.get("name"),
         "scheduled_date": data.scheduled_date,
@@ -3034,6 +3062,31 @@ async def list_demos(
     elif scope == "completed":
         query["status"] = "Completed"
     demos = await db.demos.find(query).sort("scheduled_date", -1).to_list(500)
+
+    # Enrich each demo with its lead's industry-aware secondary identifier
+    # (company / target_college). New demos persist these on the demo doc
+    # itself, but historical demos created before this enrichment was added
+    # only have lead_name. Look them up in a single batched find().
+    needs_enrich = [d for d in demos if not d.get("lead_company")]
+    if needs_enrich:
+        lead_oids = []
+        for d in needs_enrich:
+            try:
+                lead_oids.append(ObjectId(d["lead_id"]))
+            except Exception:
+                pass
+        lead_map = {}
+        if lead_oids:
+            async for ld in db.leads.find(
+                {"_id": {"$in": lead_oids}},
+                {"name": 1, "company_name": 1, "target_college": 1, "course_interested": 1},
+            ):
+                lead_map[str(ld["_id"])] = ld
+        for d in needs_enrich:
+            ld = lead_map.get(d.get("lead_id"))
+            if ld:
+                d["lead_company"] = ld.get("company_name") or ld.get("target_college") or ""
+                d.setdefault("lead_course", ld.get("course_interested") or "")
     return [_serialize_demo(d) for d in demos]
 
 
