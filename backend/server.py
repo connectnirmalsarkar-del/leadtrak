@@ -3596,11 +3596,13 @@ async def get_followups(
         followup["_id"] = str(followup["_id"])
         try:
             lead = await db.leads.find_one(
-                {"_id": ObjectId(followup["lead_id"])}, {"name": 1, "mobile": 1}
+                {"_id": ObjectId(followup["lead_id"])},
+                {"name": 1, "mobile": 1, "company_name": 1, "target_college": 1},
             )
             if lead:
                 followup["lead_name"] = lead["name"]
                 followup["lead_mobile"] = lead["mobile"]
+                followup["lead_company"] = lead.get("company_name") or lead.get("target_college") or ""
         except Exception:
             pass
 
@@ -3716,9 +3718,30 @@ async def get_admissions(current_user: dict = Depends(get_current_user)):
     org_id = ObjectId(current_user["organization_id"])
     
     admissions = await db.admissions.find({"organization_id": org_id}, {"organization_id": 0}).sort("created_at", -1).to_list(1000)
-    for admission in admissions:
-        admission["_id"] = str(admission["_id"])
-    
+    # Enrich each row with the originating lead's industry-aware secondary
+    # identifier (company / target_college) so the Deals/Admissions list can
+    # show "Name · Company" beside each conversion.
+    lead_ids = []
+    for a in admissions:
+        a["_id"] = str(a["_id"])
+        if a.get("lead_id"):
+            try:
+                lead_ids.append(ObjectId(a["lead_id"]))
+            except Exception:
+                pass
+    lead_map = {}
+    if lead_ids:
+        async for ld in db.leads.find(
+            {"_id": {"$in": lead_ids}},
+            {"name": 1, "company_name": 1, "target_college": 1, "course_interested": 1},
+        ):
+            lead_map[str(ld["_id"])] = ld
+    for a in admissions:
+        ld = lead_map.get(a.get("lead_id"))
+        if ld:
+            a["lead_name"] = a.get("lead_name") or ld.get("name")
+            a["lead_company"] = ld.get("company_name") or ld.get("target_college") or ""
+
     return admissions
 
 # ==================== Task Routes ====================
@@ -3948,7 +3971,7 @@ async def get_lead_activity_feed(
     lead_ids = list({e.get("lead_id") for e in raw_events if e.get("lead_id")})
     lead_map: dict = {}
     if lead_ids:
-        async for ld in db.leads.find({"_id": {"$in": lead_ids}}, {"name": 1, "lead_id": 1, "assigned_to": 1, "status": 1}):
+        async for ld in db.leads.find({"_id": {"$in": lead_ids}}, {"name": 1, "lead_id": 1, "assigned_to": 1, "status": 1, "company_name": 1, "target_college": 1}):
             lead_map[str(ld["_id"])] = ld
 
     items = []
@@ -3966,6 +3989,7 @@ async def get_lead_activity_feed(
             "lead_name": lead_info.get("name"),
             "lead_ref": lead_info.get("lead_id"),       # human readable LEAD0001
             "lead_status": lead_info.get("status"),
+            "lead_company": lead_info.get("company_name") or lead_info.get("target_college") or "",
             "created_at": e.get("created_at"),
         })
     return {"items": items, "total": total}

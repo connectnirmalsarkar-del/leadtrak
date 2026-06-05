@@ -24,6 +24,7 @@ import {
   Pencil,
   UserPlus2,
   ShuffleIcon,
+  Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseBackendDate, timeAgo as fmtTimeAgo } from '@/utils/datetime';
@@ -319,6 +320,12 @@ export default function ActivityFeedPage() {
                             {it.lead_ref && (
                               <span className="text-[10px] font-mono text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded">
                                 {it.lead_ref}
+                              </span>
+                            )}
+                            {it.lead_company && (
+                              <span className="inline-flex items-center gap-1 text-[11px] text-slate-600" title={it.lead_company}>
+                                <Building2 className="w-3 h-3 text-slate-400" />
+                                <span className="font-medium truncate max-w-[160px]">{it.lead_company}</span>
                               </span>
                             )}
                             {it.lead_status && (

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
 import { API, useAuth } from '@/context/AuthContext';
 import { useTerminology } from '@/lib/terminology';
-import { Plus, GraduationCap, IndianRupee, AlertCircle } from 'lucide-react';
+import { Plus, GraduationCap, IndianRupee, AlertCircle, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -321,7 +321,17 @@ export default function AdmissionsPage() {
             ) : (
               admissions.map((adm) => (
                 <TableRow key={adm._id} data-testid={`admission-row-${adm._id}`}>
-                  <TableCell className="font-medium text-slate-900">{adm.student_name}</TableCell>
+                  <TableCell className="font-medium text-slate-900">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span>{adm.student_name}</span>
+                      {adm.lead_company && (
+                        <span className="inline-flex items-center gap-1 text-xs text-slate-500 font-normal">
+                          <Building2 className="w-3 h-3 text-slate-400" />
+                          <span className="font-medium">{adm.lead_company}</span>
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-sm text-slate-600">{adm.mobile}</TableCell>
                   <TableCell className="text-sm text-slate-700">{adm.course}</TableCell>
                   <TableCell className="font-mono text-sm">₹{adm.fees.toLocaleString('en-IN')}</TableCell>

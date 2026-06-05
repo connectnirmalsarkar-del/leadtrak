@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API, useAuth } from '@/context/AuthContext';
-import { Calendar, Phone, MessageSquare, CheckCircle2, Clock, AlertCircle, Mic, User, Filter } from 'lucide-react';
+import { Calendar, Phone, MessageSquare, CheckCircle2, Clock, AlertCircle, Mic, User, Filter, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -23,6 +23,12 @@ const FollowupCard = ({ followup, onComplete, type }) => {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <p className="font-medium text-slate-900">{followup.lead_name || 'Lead'}</p>
+            {followup.lead_company && (
+              <span className="inline-flex items-center gap-1 text-sm text-slate-600" title={followup.lead_company}>
+                <Building2 className="w-3 h-3 text-slate-400" />
+                <span className="font-medium">{followup.lead_company}</span>
+              </span>
+            )}
             {followup.created_by_name && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 text-[11px] rounded-md" data-testid={`followup-creator-${followup._id}`} title="Created by">
                 <User className="w-3 h-3" />
