@@ -22,6 +22,7 @@ import {
   Image as ImageIcon,
   Download,
   X as XIcon,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -142,7 +143,26 @@ const AttachmentDownloadButton = ({ eventId, filename, mime }) => {
   );
 };
 
-const EventBody = ({ event }) => {
+// Tiny inline button shown next to call/followup voice notes & lead attachments
+// when the current user is an admin. Calls onDelete(eventId) after a confirm.
+const AdminDeleteMediaButton = ({ eventId, label, onDelete }) => (
+  <button
+    type="button"
+    onClick={(e) => {
+      e.stopPropagation();
+      if (!window.confirm(`Delete this ${label}? This cannot be undone.`)) return;
+      onDelete(eventId);
+    }}
+    className="ml-1 inline-flex items-center justify-center w-6 h-6 rounded text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors flex-shrink-0"
+    title={`Delete ${label}`}
+    aria-label={`Delete ${label}`}
+    data-testid={`timeline-delete-media-${eventId}`}
+  >
+    <Trash2 className="w-3.5 h-3.5" />
+  </button>
+);
+
+const EventBody = ({ event, canDeleteMedia, onDeleteMedia }) => {
   const p = event.payload || {};
   switch (event.event_type) {
     case 'lead_created':
@@ -195,7 +215,13 @@ const EventBody = ({ event }) => {
                   {Math.floor(p.voice_recording_duration)}s
                 </span>
               )}
+              {canDeleteMedia && (
+                <AdminDeleteMediaButton eventId={event._id} label="voice recording" onDelete={onDeleteMedia} />
+              )}
             </div>
+          )}
+          {p.media_deleted && !p.voice_recording_url && (
+            <p className="text-[11px] text-slate-400 italic">Voice recording was deleted by {p.media_deleted_by || 'an admin'}.</p>
           )}
           {p.call_disposition && (
             <p className="text-[11px] text-slate-500">
@@ -223,7 +249,12 @@ const EventBody = ({ event }) => {
                   {Math.floor(p.voice_recording_duration)}s
                 </span>
               )}
+              {canDeleteMedia && (
+                <AdminDeleteMediaButton eventId={event._id} label="voice recording" onDelete={onDeleteMedia} />
+              )}
             </div>
+          ) : p.media_deleted ? (
+            <p className="text-[11px] text-slate-400 italic">Voice recording was deleted by {p.media_deleted_by || 'an admin'}.</p>
           ) : (
             <p className="text-[11px] text-slate-400 italic">No voice recording was uploaded for this call.</p>
           )}
@@ -343,6 +374,9 @@ const EventBody = ({ event }) => {
                 mime={mime}
               />
             )}
+            {canDeleteMedia && p.url && (
+              <AdminDeleteMediaButton eventId={event._id} label="attachment" onDelete={onDeleteMedia} />
+            )}
           </div>
           {isImg && p.url && (
             <a href={p.url} target="_blank" rel="noopener noreferrer">
@@ -351,6 +385,9 @@ const EventBody = ({ event }) => {
           )}
           {p.note && (
             <p className="text-xs text-slate-600 italic">"{p.note}"</p>
+          )}
+          {p.media_deleted && !p.url && (
+            <p className="text-[11px] text-rose-600 italic">File was deleted by {p.media_deleted_by || 'an admin'}.</p>
           )}
         </div>
       );
@@ -397,6 +434,7 @@ const EventBody = ({ event }) => {
 export default function LeadTimeline({ leadId, refreshKey }) {
   const { user } = useAuth();
   const formatDate = makeFormatDate(user?.timezone);
+  const canDeleteMedia = ['org_admin', 'super_admin'].includes(user?.role);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
@@ -405,6 +443,16 @@ export default function LeadTimeline({ leadId, refreshKey }) {
   const [pickedFile, setPickedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = React.useRef(null);
+
+  const handleDeleteMedia = async (eventId) => {
+    try {
+      await axios.delete(`${API}/leads/${leadId}/timeline/${eventId}/media`);
+      toast.success('Media deleted');
+      setInnerRefreshKey((k) => k + 1);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to delete');
+    }
+  };
 
   const ACCEPT = '.pdf,.xls,.xlsx,.jpg,.jpeg,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/jpeg';
   const MAX_BYTES = 400 * 1024;
@@ -577,7 +625,7 @@ export default function LeadTimeline({ leadId, refreshKey }) {
                 by <span className="font-medium text-slate-700">{e.actor_name}</span>
                 {e.actor_role && <span className="text-slate-400"> · {e.actor_role.replace('_', ' ')}</span>}
               </p>
-              <EventBody event={e} />
+              <EventBody event={e} canDeleteMedia={canDeleteMedia} onDeleteMedia={handleDeleteMedia} />
             </div>
           </div>
         );

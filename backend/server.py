@@ -2373,6 +2373,106 @@ async def get_lead_timeline(lead_id: str, current_user: dict = Depends(get_curre
     return events
 
 
+# ---------------------------------------------------------------------------
+# Admin-only timeline media deletion
+#
+# Allows org_admin / super_admin to remove a voice recording or attached file
+# from a timeline event (call recording, followup voice note, lead attachment).
+# The event ITSELF is preserved (audit trail) — only the media URL + Cloudinary
+# public_id are unset and the underlying Cloudinary asset is destroyed.
+# ---------------------------------------------------------------------------
+@api_router.delete("/leads/{lead_id}/timeline/{event_id}/media")
+async def delete_timeline_media(
+    lead_id: str,
+    event_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    if current_user["role"] not in ("org_admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can delete timeline media")
+    org_id = ObjectId(current_user["organization_id"])
+    lid = safe_object_id(lead_id, "lead_id")
+    eid = safe_object_id(event_id, "event_id")
+    # Ensure lead belongs to this org
+    lead = await db.leads.find_one({"_id": lid, "organization_id": org_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    # Ensure event belongs to this lead/org
+    event = await db.lead_timeline.find_one({"_id": eid, "lead_id": lid, "organization_id": org_id})
+    if not event:
+        raise HTTPException(status_code=404, detail="Timeline event not found")
+
+    payload = event.get("payload") or {}
+    # Collect Cloudinary public_ids we should try to remove on the storage side
+    public_ids_to_destroy: list[str] = []
+    resource_types: list[str] = []
+    if payload.get("voice_recording_public_id"):
+        public_ids_to_destroy.append(payload["voice_recording_public_id"])
+        resource_types.append("video")  # cloudinary stores audio under 'video' resource type
+    if payload.get("public_id") and event.get("event_type") in ("lead_attachment", "attachment_uploaded"):
+        public_ids_to_destroy.append(payload["public_id"])
+        # Attachments could be image/raw — let cloudinary auto-detect by trying both
+        resource_types.append("auto")
+
+    # Best-effort cloudinary delete (failures shouldn't block the DB update)
+    try:
+        import cloudinary.uploader as _cl_uploader  # noqa: WPS433 (intentional local import)
+        for pid, rtype in zip(public_ids_to_destroy, resource_types):
+            try:
+                if rtype == "auto":
+                    # Try image first, then raw, then video
+                    for r in ("image", "raw", "video"):
+                        try:
+                            res = _cl_uploader.destroy(pid, resource_type=r)
+                            if res.get("result") in ("ok", "not found"):
+                                break
+                        except Exception:
+                            pass
+                else:
+                    _cl_uploader.destroy(pid, resource_type=rtype)
+            except Exception as e:
+                logger.warning(f"Cloudinary destroy failed for {pid}: {e}")
+    except Exception as e:
+        logger.warning(f"Cloudinary uploader import/use failed: {e}")
+
+    # Unset the media-related payload fields. Keep a small breadcrumb so callers
+    # know the media WAS there but was deleted by an admin.
+    payload_updates = {}
+    if "voice_recording_url" in payload or "voice_recording_public_id" in payload:
+        payload_updates["payload.voice_recording_url"] = None
+        payload_updates["payload.voice_recording_public_id"] = None
+        payload_updates["payload.voice_recording_duration"] = None
+        payload_updates["payload.media_deleted"] = True
+    if event.get("event_type") in ("lead_attachment", "attachment_uploaded"):
+        payload_updates["payload.url"] = None
+        payload_updates["payload.public_id"] = None
+        payload_updates["payload.media_deleted"] = True
+
+    if not payload_updates:
+        raise HTTPException(status_code=400, detail="No media on this timeline event")
+
+    payload_updates["payload.media_deleted_by"] = current_user.get("name")
+    payload_updates["payload.media_deleted_at"] = datetime.now(timezone.utc).isoformat()
+
+    await db.lead_timeline.update_one({"_id": eid}, {"$set": payload_updates})
+
+    # Also clear `voice_recording_url` from the corresponding followup doc, if any
+    fu_id = payload.get("followup_id")
+    if fu_id:
+        try:
+            await db.followups.update_one(
+                {"_id": safe_object_id(fu_id, "followup_id"), "lead_id": lid},
+                {"$set": {
+                    "voice_recording_url": None,
+                    "voice_recording_public_id": None,
+                    "voice_recording_duration": None,
+                }},
+            )
+        except Exception as e:
+            logger.warning(f"Followup voice clear failed: {e}")
+
+    return {"ok": True, "event_id": event_id}
+
+
 class LogCallRequest(BaseModel):
     summary: str                                  # what happened on the call (required)
     call_disposition: Optional[str] = "Connected" # Connected, Not Picked, Switched Off, Busy, Wrong Number, Call Back Later
